@@ -1,0 +1,129 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
+
+vi.mock('@/services/api', () => ({
+  default: {
+    get: vi.fn(),
+  },
+}));
+
+import api from '@/services/api';
+import { usePlaceDetailStore, type PlaceDetailResponse } from '@/stores/placeDetail';
+
+const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
+
+const fixture: PlaceDetailResponse = {
+  place: {
+    id: 10,
+    name: '주문진 영진해변 방파제',
+    regionLabel: '강릉시 주문진읍',
+    latitude: 37.8928,
+    longitude: 128.8347,
+    coverImageUrl: 'https://img/1.jpg',
+    workId: 1,
+    workTitle: '도깨비',
+    workEpisode: '1회',
+    sceneTimestamp: '00:24:10',
+    sceneImageUrl: 'https://img/scene-1.jpg',
+    sceneDescription: '도깨비와 은탁이 처음 만난 곳',
+    rating: 4.8,
+    reviewCount: 312,
+    photoCount: 1204,
+    likeCount: 3200,
+    nearbyRestaurantCount: 12,
+    recommendedTimeLabel: '일몰',
+    distanceKm: 0.1,
+    driveTimeMin: 1,
+  },
+  photos: [
+    { id: 1, imageUrl: 'https://img/p1.jpg', authorNickname: 'kim' },
+    { id: 2, imageUrl: 'https://img/p2.jpg', authorNickname: 'lee' },
+    { id: 3, imageUrl: 'https://img/p3.jpg', authorNickname: 'park' },
+  ],
+  related: [
+    {
+      id: 11,
+      name: '주문진 방파제 등대',
+      coverImageUrl: 'https://img/r1.jpg',
+      workEpisode: '1회',
+      regionShort: '강릉시',
+    },
+    {
+      id: 12,
+      name: '안목해변',
+      coverImageUrl: 'https://img/r2.jpg',
+      workEpisode: '3회',
+      regionShort: '강릉시',
+    },
+  ],
+};
+
+describe('placeDetail store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mockApi.get.mockReset();
+  });
+
+  it('fetch happy path populates place/photos/related and clears loading/error', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+
+    const store = usePlaceDetailStore();
+    await store.fetch(10);
+
+    expect(store.place).toEqual(fixture.place);
+    expect(store.photos).toEqual(fixture.photos);
+    expect(store.related).toEqual(fixture.related);
+    expect(store.loading).toBe(false);
+    expect(store.error).toBeNull();
+    const [url] = mockApi.get.mock.calls[0];
+    expect(url).toBe('/api/places/10');
+  });
+
+  it('fetch forwards lat/lng query params when provided', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+
+    const store = usePlaceDetailStore();
+    await store.fetch(10, { lat: 37.5, lng: 127.0 });
+
+    const [url, opts] = mockApi.get.mock.calls[0];
+    expect(url).toBe('/api/places/10');
+    expect(opts?.params).toMatchObject({ lat: 37.5, lng: 127.0 });
+  });
+
+  it('fetch failure surfaces the error message and stops loading', async () => {
+    mockApi.get.mockRejectedValueOnce(new Error('boom'));
+
+    const store = usePlaceDetailStore();
+    await store.fetch(10);
+
+    expect(store.error).toBe('boom');
+    expect(store.loading).toBe(false);
+    expect(store.place).toBeNull();
+  });
+
+  it('toggleLikeLocal flips likedIds membership and isLiked getter', () => {
+    const store = usePlaceDetailStore();
+    expect(store.isLiked(10)).toBe(false);
+
+    store.toggleLikeLocal(10);
+    expect(store.likedIds).toContain(10);
+    expect(store.isLiked(10)).toBe(true);
+
+    store.toggleLikeLocal(10);
+    expect(store.likedIds).not.toContain(10);
+    expect(store.isLiked(10)).toBe(false);
+  });
+
+  it('toggleSaveLocal flips savedIds membership and isSaved getter', () => {
+    const store = usePlaceDetailStore();
+    expect(store.isSaved(10)).toBe(false);
+
+    store.toggleSaveLocal(10);
+    expect(store.savedIds).toContain(10);
+    expect(store.isSaved(10)).toBe(true);
+
+    store.toggleSaveLocal(10);
+    expect(store.savedIds).not.toContain(10);
+    expect(store.isSaved(10)).toBe(false);
+  });
+});
