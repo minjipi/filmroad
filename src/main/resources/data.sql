@@ -146,6 +146,9 @@ INSERT IGNORE INTO users (id, nickname, handle, avatar_url, bio, level, points, 
    '전국 성지 다 털어보는 중', 5, 350, 7, 1200, 234, 186, NOW(), NOW());
 UPDATE users SET level = 5, points = 350, streak_days = 7, followers_count = 1200, following_count = 234, total_photo_count = 186 WHERE id = 1;
 
+-- OAuth 도입(#33) 전까지 데모 유저는 provider=DEMO로 유지. 실 Google 유저는 로그인 시 자동 INSERT.
+UPDATE users SET provider = 'DEMO', provider_id = NULL, email = NULL WHERE id = 1;
+
 INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_work_id, CREATE_DATE, UPDATE_DATE) VALUES
   (1, 'COASTAL_RUNNER', '바다 러너', '바다 성지 5곳 이상 방문', 'waves', 'sky-violet', 1, 'COASTAL_COUNT', 5, NULL, NOW(), NOW()),
   (2, 'STREAK_7', '연속 7일', '7일 연속 성지 방문', 'flame', 'amber-coral', 2, 'STREAK', 7, NULL, NOW(), NOW()),

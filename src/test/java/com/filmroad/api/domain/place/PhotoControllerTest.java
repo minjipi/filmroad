@@ -1,7 +1,9 @@
 package com.filmroad.api.domain.place;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.filmroad.api.domain.auth.JwtTokenService;
 import com.filmroad.api.domain.place.dto.PhotoUploadRequest;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,13 @@ class PhotoControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie demoAccessCookie() {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
+    }
+
     private MockMultipartFile buildMeta(PhotoUploadRequest meta) throws Exception {
         return new MockMultipartFile(
                 "meta", "meta.json", MediaType.APPLICATION_JSON_VALUE,
@@ -53,7 +62,8 @@ class PhotoControllerTest {
 
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
-                        .file(buildMeta(req)))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.code", is(20000)))
@@ -70,7 +80,8 @@ class PhotoControllerTest {
 
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
-                        .file(buildMeta(req)))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40050)));
@@ -85,7 +96,8 @@ class PhotoControllerTest {
 
         mockMvc.perform(multipart("/api/photos")
                         .file(badFile)
-                        .file(buildMeta(req)))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40060)));
     }
@@ -98,7 +110,8 @@ class PhotoControllerTest {
 
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
-                        .file(buildMeta(req)))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.caption", is("오늘의 인증샷")))
                 .andExpect(jsonPath("$.results.visibility", is("FOLLOWERS")))
@@ -113,7 +126,8 @@ class PhotoControllerTest {
 
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
-                        .file(buildMeta(req)))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.stamp.workTitle", is("도깨비")))
                 .andExpect(jsonPath("$.results.stamp.totalCount", greaterThan(0)))

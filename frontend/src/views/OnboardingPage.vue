@@ -46,10 +46,10 @@
           </div>
 
           <div class="auth-btns">
-            <button class="auth-btn apple" type="button" @click="onSocial('apple')">
-              <ion-icon :icon="logoApple" class="ic-18" />Apple로 계속하기
+            <button class="auth-btn google" type="button" @click="onGoogle">
+              <ion-icon :icon="logoGoogle" class="ic-18" />Google로 계속하기
             </button>
-            <button class="auth-btn kakao" type="button" @click="onSocial('kakao')">
+            <button class="auth-btn kakao" type="button" @click="onKakao">
               <ion-icon :icon="chatbubbleEllipsesOutline" class="ic-18" />카카오로 3초 만에 시작
             </button>
             <button class="auth-btn email" type="button" @click="onEmail">
@@ -71,21 +71,23 @@ import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   locationOutline,
   ribbonOutline,
-  logoApple,
+  logoGoogle,
   chatbubbleEllipsesOutline,
   mailOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
-import { useToast } from '@/composables/useToast';
 import { markOnboarded } from '@/composables/useOnboarding';
 
 const router = useRouter();
-const { showInfo } = useToast();
 
-async function onSocial(_provider: 'apple' | 'kakao'): Promise<void> {
-  await showInfo('소셜 로그인 기능은 곧 공개됩니다');
-  markOnboarded();
-  await router.replace('/home');
+function onGoogle(): void {
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
+  window.location.href = `${base}/oauth2/authorization/google`;
+}
+
+function onKakao(): void {
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
+  window.location.href = `${base}/oauth2/authorization/kakao`;
 }
 
 async function onEmail(): Promise<void> {
@@ -275,9 +277,9 @@ ion-content.ob-content {
   letter-spacing: -0.01em;
   cursor: pointer;
 }
-.auth-btn.apple {
+.auth-btn.google {
   background: #ffffff;
-  color: #000000;
+  color: #191919;
 }
 .auth-btn.kakao {
   background: #FEE500;

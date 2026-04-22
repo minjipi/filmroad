@@ -50,6 +50,16 @@ public class User extends BaseEntity {
     @Column(name = "total_photo_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private int totalPhotoCount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'DEMO'")
+    private AuthProvider provider;
+
+    @Column(name = "provider_id", length = 120)
+    private String providerId;
+
+    @Column(length = 200)
+    private String email;
+
     // 업로드 보상 로직에서 포인트/레벨/스트릭/사진수 증가에 쓰는 상태 업데이트 헬퍼.
     public void applyUploadReward(int pointsDelta, int newStreakDays, int newLevel) {
         this.points += pointsDelta;

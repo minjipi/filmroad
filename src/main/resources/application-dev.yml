@@ -11,12 +11,12 @@ spring:
               - email
               - profile
           kakao:
-            client-id: ${KAKAO_CLIENT_ID}
-            client-secret: ${KAKAO_CLIENT_SECRET}
+            client-id: ${KAKAO_CLIENT_ID:disabled-kakao}
+            client-secret: ${KAKAO_CLIENT_SECRET:disabled-kakao}
             client-name: Kakao
             authorization-grant-type: authorization_code
-            redirect-uri: ${KAKAO_REDIRECT_URI}
-            scope: profile_nickname
+            redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8080/login/oauth2/code/kakao}
+            scope: profile_nickname, profile_image, account_email
             client-authentication-method: client_secret_post
         provider:
           kakao:
@@ -75,13 +75,13 @@ portone:
 
 app:
   domain:
-    server: "http://localhost:8100"
+    server: "http://localhost:5173"
     cookie: "localhost"
   aes:
-    key: ${AES_SECRET_KEY:devAesSecretKey1234567890123456}  # 32? (AES-256), ?? ???? ??? ?? ??? ??
+    key: ${AES_SECRET_KEY:devAesSecretKey1234567890123456}
   token:
-    access-max-age: 1800000  # 30? (???)
-    refresh-max-age: 604800000  # 7? (???)
+    access-max-age: 1800000
+    refresh-max-age: 604800000
     access-format: "ATOKEN=%s; HttpOnly; Secure; SameSite=Strict; Domain=localhost; Path=/; Max-Age=%d"
     refresh-format: "RTOKEN=%s; HttpOnly; Secure; SameSite=Strict; Domain=localhost; Path=/; Max-Age=%d"
 

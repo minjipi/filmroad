@@ -1,7 +1,9 @@
 package com.filmroad.api.domain.saved;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.filmroad.api.domain.auth.JwtTokenService;
 import com.filmroad.api.domain.saved.dto.ToggleSaveRequest;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,10 +31,17 @@ class SavedControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie demoAccessCookie() {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
+    }
+
     @Test
     @DisplayName("GET /api/saved returns seeded collections and saved items")
     void getSaved_returnsSeedData() throws Exception {
-        mockMvc.perform(get("/api/saved"))
+        mockMvc.perform(get("/api/saved").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.results.collections", hasSize(greaterThanOrEqualTo(3))))
@@ -43,10 +52,10 @@ class SavedControllerTest {
     @Test
     @DisplayName("GET /api/saved?lat=&lng= adds distanceKm and nearbyRouteSuggestion when coords given")
     void getSaved_withCoords_addsDistanceAndSuggestion() throws Exception {
-        // 서울 근방 좌표 → 서울 성지(13, 14, 16) 모두 nearby로 잡힘
         mockMvc.perform(get("/api/saved")
                         .param("lat", "37.55")
-                        .param("lng", "126.99"))
+                        .param("lng", "126.99")
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.items[0].distanceKm", notNullValue()))
                 .andExpect(jsonPath("$.results.nearbyRouteSuggestion.placeCount", greaterThanOrEqualTo(2)));
@@ -55,19 +64,20 @@ class SavedControllerTest {
     @Test
     @DisplayName("POST /api/saved/toggle twice flips saved state on then off")
     void toggleSave_twice_flipsState() throws Exception {
-        // 아직 저장되지 않은 place_id=12를 대상으로 토글.
         ToggleSaveRequest req = new ToggleSaveRequest(12L);
         String body = objectMapper.writeValueAsString(req);
 
         mockMvc.perform(post("/api/saved/toggle")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content(body)
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.saved", is(true)));
 
         mockMvc.perform(post("/api/saved/toggle")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content(body)
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.saved", is(false)));
     }

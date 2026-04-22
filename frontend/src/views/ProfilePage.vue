@@ -83,16 +83,14 @@
         </div>
       </div>
 
-      <div slot="fixed" class="pf-tabbar-slot">
-        <FrTabBar :model-value="'me'" />
-      </div>
     </ion-content>
+    <FrTabBar :model-value="'me'" />
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, actionSheetController } from '@ionic/vue';
 import {
   shareSocialOutline,
   menuOutline,
@@ -104,10 +102,12 @@ import {
   gridOutline,
   ribbonOutline,
   bookmarkOutline,
+  logOutOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useProfileStore, type MiniMapPin } from '@/stores/profile';
+import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
 
@@ -115,6 +115,7 @@ type LocalTab = 'photos' | 'stampbook' | 'saved';
 
 const router = useRouter();
 const profileStore = useProfileStore();
+const authStore = useAuthStore();
 const { user, stats, miniMapPins, error } = storeToRefs(profileStore);
 const { showError, showInfo } = useToast();
 
@@ -221,7 +222,27 @@ async function onShare(): Promise<void> {
 }
 
 async function onMenu(): Promise<void> {
-  await showInfo('메뉴는 곧 공개됩니다');
+  const sheet = await actionSheetController.create({
+    header: '계정',
+    buttons: [
+      {
+        text: '로그아웃',
+        role: 'destructive',
+        icon: logOutOutline,
+        handler: () => {
+          void handleLogout();
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+}
+
+async function handleLogout(): Promise<void> {
+  await authStore.logout();
+  await showInfo('로그아웃되었습니다');
+  await router.replace('/onboarding');
 }
 
 onMounted(async () => {

@@ -1,5 +1,7 @@
 package com.filmroad.api.domain.user;
 
+import com.filmroad.api.domain.auth.JwtTokenService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,10 +27,17 @@ class UserControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie demoAccessCookie() {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
+    }
+
     @Test
     @DisplayName("GET /api/users/me returns demo user profile with seeded stats and mini-map pins")
     void getMe_returnsSeededProfile() throws Exception {
-        mockMvc.perform(get("/api/users/me"))
+        mockMvc.perform(get("/api/users/me").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.code", is(20000)))
@@ -41,7 +50,7 @@ class UserControllerTest {
     @Test
     @DisplayName("level=5 maps to levelName '성지 순례자'")
     void getMe_level5_mapsToSeongjiLevel() throws Exception {
-        mockMvc.perform(get("/api/users/me"))
+        mockMvc.perform(get("/api/users/me").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.user.level", is(5)))
                 .andExpect(jsonPath("$.results.user.levelName", is("성지 순례자")));

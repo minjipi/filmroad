@@ -46,39 +46,46 @@ describe('OnboardingPage.vue', () => {
     expect(h1.text()).toContain('내가 직접');
   });
 
-  it('renders three auth buttons in apple/kakao/email order', () => {
+  it('renders three auth buttons in google/kakao/email order', () => {
     const { wrapper } = mountWithStubs(OnboardingPage);
     const btns = wrapper.findAll('.auth-btn');
     expect(btns.length).toBe(3);
-    expect(btns[0].classes()).toContain('apple');
+    expect(btns[0].classes()).toContain('google');
     expect(btns[1].classes()).toContain('kakao');
     expect(btns[2].classes()).toContain('email');
   });
 
-  it('Apple button: shows toast, marks onboarded and replaces /home', async () => {
+  it('Google button: redirects window.location to the backend oauth start URL', async () => {
     const { wrapper } = mountWithStubs(OnboardingPage);
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
 
-    await wrapper.find('.auth-btn.apple').trigger('click');
+    const original = window.location;
+    const locationMock = { ...original, href: '' } as unknown as Location;
+    Object.defineProperty(window, 'location', { configurable: true, value: locationMock });
+
+    await wrapper.find('.auth-btn.google').trigger('click');
     await flushPromises();
 
-    expect(toastCreateSpy).toHaveBeenCalledTimes(1);
-    expect(toastCreateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ message: '소셜 로그인 기능은 곧 공개됩니다' }),
-    );
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
-    expect(replaceSpy).toHaveBeenCalledWith('/home');
+    expect(window.location.href).toMatch(/\/oauth2\/authorization\/google$/);
+    // Google path deliberately does not mark onboarded — that happens on session return.
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    Object.defineProperty(window, 'location', { configurable: true, value: original });
   });
 
-  it('Kakao button: shows toast, marks onboarded and replaces /home', async () => {
+  it('Kakao button: redirects window.location to the backend oauth start URL', async () => {
     const { wrapper } = mountWithStubs(OnboardingPage);
+
+    const original = window.location;
+    const locationMock = { ...original, href: '' } as unknown as Location;
+    Object.defineProperty(window, 'location', { configurable: true, value: locationMock });
 
     await wrapper.find('.auth-btn.kakao').trigger('click');
     await flushPromises();
 
-    expect(toastCreateSpy).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
-    expect(replaceSpy).toHaveBeenCalledWith('/home');
+    expect(window.location.href).toMatch(/\/oauth2\/authorization\/kakao$/);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    Object.defineProperty(window, 'location', { configurable: true, value: original });
   });
 
   it('Email button: marks onboarded and replaces /home without showing a toast', async () => {

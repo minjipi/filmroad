@@ -1,12 +1,23 @@
 package com.filmroad.api.config;
 
+import com.filmroad.api.common.model.BaseResponse;
+import com.filmroad.api.common.model.BaseResponseStatus;
+import com.filmroad.api.domain.auth.CustomOAuth2UserService;
+import com.filmroad.api.domain.auth.JwtAuthenticationFilter;
+import com.filmroad.api.domain.auth.OAuth2SuccessHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -15,7 +26,13 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2SuccessHandler oauth2SuccessHandler;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -26,10 +43,47 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/home",
+                                "/api/map/places",
+                                "/api/places/*",
+                                "/api/places/*/photos",
+                                "/api/works/*",
+                                "/uploads/**",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/users/**",
+                                "/api/saved/**",
+                                "/api/photos",
+                                "/api/photos/**",
+                                "/api/stampbook").authenticated()
                         .anyRequest().permitAll()
-                );
+                )
+                .exceptionHandling(eh -> eh
+                        .authenticationEntryPoint((request, response, ex) -> {
+                            response.setStatus(401);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setCharacterEncoding("UTF-8");
+                            response.getWriter().write(objectMapper.writeValueAsString(
+                                    BaseResponse.error(BaseResponseStatus.INVALID_JWT)));
+                        })
+                )
+                .oauth2Login(oauth -> oauth
+                        .userInfoEndpoint(ui -> ui.userService(customOAuth2UserService))
+                        .successHandler(oauth2SuccessHandler)
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    // Spring Boot는 @Component Filter를 서블릿 체인에 자동 등록. 보안 체인에만 쓰도록 비활성화.
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistrationDisable(JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
     }
 
     @Bean
