@@ -1,0 +1,74 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:filmroad-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        format_sql: false
+
+  sql:
+    init:
+      mode: always
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-id
+            client-secret: test-google-secret
+            redirect-uri: http://localhost:8080/login/oauth2/code/google
+            scope:
+              - email
+              - profile
+          kakao:
+            client-id: test-kakao-id
+            client-secret: test-kakao-secret
+            client-name: Kakao
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+            scope: profile_nickname
+            client-authentication-method: client_secret_post
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: test@example.com
+    password: test
+
+jwt:
+  secret:
+    key: test-secret-key-must-be-long-enough-for-hmac-256-algo-0123456789
+
+portone:
+  portone_secret: test-portone-secret
+
+app:
+  domain:
+    server: "http://localhost:8080"
+    cookie: "localhost"
+  aes:
+    key: devAesSecretKey1234567890123456
+  token:
+    access-max-age: 1800000
+    refresh-max-age: 604800000
+    access-format: "ATOKEN=%s; Path=/; Max-Age=%d"
+    refresh-format: "RTOKEN=%s; Path=/; Max-Age=%d"
+
+project:
+  upload:
+    path: /tmp/filmroad-uploads
