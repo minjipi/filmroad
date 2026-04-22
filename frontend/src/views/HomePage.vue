@@ -86,10 +86,8 @@
         </div>
       </div>
 
-      <div slot="fixed" class="home-tabbar-slot">
-        <FrTabBar :model-value="'home'" />
-      </div>
     </ion-content>
+    <FrTabBar :model-value="'home'" />
   </ion-page>
 </template>
 

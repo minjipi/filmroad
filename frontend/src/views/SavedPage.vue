@@ -99,10 +99,8 @@
         </section>
       </div>
 
-      <div slot="fixed" class="sv-tabbar-slot">
-        <FrTabBar :model-value="'saved'" />
-      </div>
     </ion-content>
+    <FrTabBar :model-value="'saved'" />
   </ion-page>
 </template>
 

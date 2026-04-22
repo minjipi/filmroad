@@ -93,10 +93,8 @@
         </div>
       </div>
 
-      <div slot="fixed" class="sb-tabbar-slot">
-        <FrTabBar :model-value="'me'" />
-      </div>
     </ion-content>
+    <FrTabBar :model-value="'me'" />
   </ion-page>
 </template>
 
