@@ -1,0 +1,41 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+/* Filmroad design tokens — ported from /design/pages/shared.css */
+:root {
+  --fr-primary: #14BCED;
+  --fr-primary-soft: #e6f8fd;
+  --fr-ink: #0f172a;
+  --fr-ink-2: #334155;
+  --fr-ink-3: #64748b;
+  --fr-ink-4: #94a3b8;
+  --fr-line: #e5e7eb;
+  --fr-line-soft: #f1f5f9;
+  --fr-bg: #ffffff;
+  --fr-bg-muted: #f8fafc;
+  --fr-coral: #ff5a5f;
+  --fr-amber: #f5a524;
+  --fr-violet: #7c3aed;
+  --fr-mint: #10b981;
+}
+
+/* Override Ionic primary to match our brand */
+:root {
+  --ion-color-primary: #14BCED;
+  --ion-color-primary-rgb: 20, 188, 237;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #12a6d1;
+  --ion-color-primary-tint: #2cc3ef;
+
+  --ion-font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', system-ui, sans-serif;
+  --ion-background-color: #ffffff;
+  --ion-text-color: #0f172a;
+}
+
+html, body {
+  font-family: var(--ion-font-family);
+  font-feature-settings: 'ss01','cv01';
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+  color: var(--fr-ink);
+}
