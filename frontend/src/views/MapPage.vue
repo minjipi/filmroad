@@ -1,26 +1,14 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="map-content">
-      <div class="map-canvas">
-        <div class="map-bg" />
-
-        <div class="me" :style="meStyle" />
-
-        <div
-          v-for="m in visibleMarkers"
-          :key="m.id"
-          :class="['pin', pinClass(m)]"
-          :style="pinStyle(m)"
-          @click="onSelect(m.id)"
-        >
-          <div class="bubble">
-            <span class="dot">
-              <ion-icon :icon="isVisited(m.id) ? checkmark : cameraOutline" class="ic-16" />
-            </span>
-            {{ m.name }}
-          </div>
-        </div>
-      </div>
+      <KakaoMap
+        :center="center"
+        :zoom="zoom"
+        :markers="visibleMarkers"
+        :selected-id="selected?.id ?? null"
+        :visited-ids="visitedIds"
+        @marker-click="onSelect"
+      />
 
       <div class="top-bar">
         <div class="search-box" @click="onSearchFocus">
@@ -55,8 +43,8 @@
         <ion-icon :icon="locateOutline" class="ic-24" />
       </button>
       <div class="zoom">
-        <button type="button" aria-label="zoom-in" @click="zoom += 1"><ion-icon :icon="add" class="ic-18" /></button>
-        <button type="button" aria-label="zoom-out" @click="zoom = Math.max(0, zoom - 1)"><ion-icon :icon="remove" class="ic-18" /></button>
+        <button type="button" aria-label="zoom-in" @click="zoomIn"><ion-icon :icon="add" class="ic-18" /></button>
+        <button type="button" aria-label="zoom-out" @click="zoomOut"><ion-icon :icon="remove" class="ic-18" /></button>
       </div>
 
       <section v-if="selected" class="sheet">
@@ -92,10 +80,8 @@
         </div>
       </section>
 
-      <div slot="fixed" class="map-tabbar-slot">
-        <FrTabBar :model-value="'map'" />
-      </div>
     </ion-content>
+    <FrTabBar :model-value="'map'" />
   </ion-page>
 </template>
 
@@ -123,6 +109,7 @@ import { storeToRefs } from 'pinia';
 import { useMapStore, type MapMarker, type MapFilter } from '@/stores/map';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
+import KakaoMap from '@/components/map/KakaoMap.vue';
 import { useToast } from '@/composables/useToast';
 
 const mapStore = useMapStore();
@@ -131,11 +118,18 @@ const { showError } = useToast();
 const route = useRoute();
 const router = useRouter();
 const visibleMarkers = computed<MapMarker[]>(() => mapStore.visibleMarkers);
-const isVisited = (id: number) => mapStore.isVisited(id);
+const visitedIds = computed<number[]>(() => mapStore.visitedIds);
 const isSaved = (id: number) => mapStore.isSaved(id);
 
 const query = ref('');
-const zoom = ref(0);
+const zoom = ref(5);
+
+function zoomIn(): void {
+  zoom.value = Math.max(1, zoom.value - 1);
+}
+function zoomOut(): void {
+  zoom.value = Math.min(14, zoom.value + 1);
+}
 
 interface ChipSpec {
   key: string;
@@ -184,41 +178,6 @@ const filterChips = computed<ChipSpec[]>(() => {
     },
   ];
 });
-
-// Fit all visible markers into a padded bounding box around the user center.
-// A real deploy would plug a map SDK in here; the mock projection is enough to
-// reproduce the design and verify interaction wiring.
-const MAP_PAD_DEG = 0.02;
-const bounds = computed(() => {
-  const ms = visibleMarkers.value;
-  const lats = ms.map((m) => m.latitude).concat(center.value.lat);
-  const lngs = ms.map((m) => m.longitude).concat(center.value.lng);
-  const minLat = Math.min(...lats) - MAP_PAD_DEG;
-  const maxLat = Math.max(...lats) + MAP_PAD_DEG;
-  const minLng = Math.min(...lngs) - MAP_PAD_DEG;
-  const maxLng = Math.max(...lngs) + MAP_PAD_DEG;
-  return { minLat, maxLat, minLng, maxLng };
-});
-
-function project(lat: number, lng: number): { left: string; top: string } {
-  const b = bounds.value;
-  const x = (lng - b.minLng) / Math.max(b.maxLng - b.minLng, 0.0001);
-  const y = 1 - (lat - b.minLat) / Math.max(b.maxLat - b.minLat, 0.0001);
-  return { left: `${(x * 100).toFixed(2)}%`, top: `${(y * 100).toFixed(2)}%` };
-}
-
-function pinStyle(m: MapMarker): Record<string, string> {
-  return project(m.latitude, m.longitude);
-}
-
-function pinClass(m: MapMarker): string {
-  const classes: string[] = [];
-  if (isVisited(m.id)) classes.push('visited');
-  if (selected.value && selected.value.id === m.id) classes.push('active');
-  return classes.join(' ');
-}
-
-const meStyle = computed(() => project(center.value.lat, center.value.lng));
 
 const distanceLabel = computed(() => {
   const d = selected.value?.distanceKm;
@@ -297,82 +256,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-ion-content.map-content {
-  --background: #eef3f8;
-}
-
-.map-canvas {
-  position: absolute;
-  inset: 0;
-}
-.map-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 30% 30%, #e6eef7 0%, transparent 50%),
-    radial-gradient(circle at 70% 60%, #dde9f2 0%, transparent 60%),
-    linear-gradient(180deg, #eef3f8, #e3ecf4);
-}
-.map-bg::before {
-  content: '';
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-.me {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: var(--fr-primary);
-  border: 3px solid #ffffff;
-  box-shadow: 0 0 0 8px rgba(20, 188, 237, 0.25);
-  z-index: 3;
-}
-
-.pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  cursor: pointer;
-  z-index: 2;
-}
-.pin .bubble {
-  background: #ffffff;
-  border-radius: 999px;
-  padding: 5px 10px 5px 5px;
-  display: flex; align-items: center; gap: 6px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.06);
-  font-size: 11px; font-weight: 700;
-  color: var(--fr-ink);
-  letter-spacing: -0.02em;
-  position: relative;
-  white-space: nowrap;
-}
-.pin .bubble::after {
-  content: '';
-  position: absolute;
-  left: 50%; bottom: -5px;
-  transform: translateX(-50%) rotate(45deg);
-  width: 8px; height: 8px;
-  background: #ffffff;
-  box-shadow: 1px 1px 0 rgba(15, 23, 42, 0.06);
-}
-.pin .dot {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: var(--fr-primary);
-  color: #ffffff;
-  display: flex; align-items: center; justify-content: center;
-}
-.pin.visited .dot { background: var(--fr-mint); }
-.pin.active { z-index: 5; }
-.pin.active .dot { background: #0f172a; transform: scale(1.1); }
-.pin.active .bubble { background: #0f172a; color: #ffffff; }
-.pin.active .bubble::after { background: #0f172a; box-shadow: none; }
-
 .top-bar {
   position: absolute;
   top: calc(16px + env(safe-area-inset-top));

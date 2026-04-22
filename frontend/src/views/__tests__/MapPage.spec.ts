@@ -68,6 +68,14 @@ const fixture: MapResponse = {
   },
 };
 
+const KakaoMapStub = {
+  name: 'KakaoMap',
+  props: ['center', 'zoom', 'markers', 'selectedId', 'visitedIds'],
+  emits: ['markerClick', 'mapClick', 'centerChange'],
+  template:
+    '<div class="kakao-map-stub" :data-markers="markers?.length ?? 0" :data-selected="selectedId ?? \'\'" :data-visited="(visitedIds ?? []).join(\',\')" @click="$emit(\'markerClick\', markers?.[1]?.id)"></div>',
+};
+
 function mountMapPage() {
   const { wrapper } = mountWithStubs(MapPage, {
     initialState: {
@@ -84,6 +92,9 @@ function mountMapPage() {
         savedIds: [],
       },
     },
+    stubs: {
+      KakaoMap: KakaoMapStub,
+    },
   });
 
   return { wrapper, store: useMapStore() };
@@ -96,22 +107,20 @@ describe('MapPage.vue', () => {
     backSpy.mockClear();
   });
 
-  it('renders one .pin per visible marker', async () => {
+  it('passes visibleMarkers to the KakaoMap component', async () => {
     const { wrapper } = mountMapPage();
     await flushPromises();
-    expect(wrapper.findAll('.pin').length).toBe(fixture.markers.length);
+    const el = wrapper.find('.kakao-map-stub');
+    expect(el.exists()).toBe(true);
+    expect(el.attributes('data-markers')).toBe(String(fixture.markers.length));
   });
 
-  it('marks the visited marker with .visited and the selected marker with .active', async () => {
+  it('forwards selectedId and visitedIds to the KakaoMap component', async () => {
     const { wrapper } = mountMapPage();
     await flushPromises();
-    const pins = wrapper.findAll('.pin');
-    // id=10 is both visited (seeded) and selected.
-    expect(pins[0].classes()).toContain('visited');
-    expect(pins[0].classes()).toContain('active');
-    // id=13 has neither.
-    expect(pins[1].classes()).not.toContain('visited');
-    expect(pins[1].classes()).not.toContain('active');
+    const el = wrapper.find('.kakao-map-stub');
+    expect(el.attributes('data-selected')).toBe(String(fixture.selected!.id));
+    expect(el.attributes('data-visited')).toBe('10');
   });
 
   it('renders the selected place detail sheet with formatted stats', async () => {
@@ -125,12 +134,12 @@ describe('MapPage.vue', () => {
     expect(sheet.text()).toContain('4.8');  // rating
   });
 
-  it('dispatches selectMarker when a pin is tapped', async () => {
+  it('dispatches selectMarker when the map emits markerClick', async () => {
     const { wrapper, store } = mountMapPage();
     await flushPromises();
     const selectSpy = vi.spyOn(store, 'selectMarker');
 
-    await wrapper.findAll('.pin')[1].trigger('click');
+    await wrapper.find('.kakao-map-stub').trigger('click');
     expect(selectSpy).toHaveBeenCalledWith(13);
   });
 
