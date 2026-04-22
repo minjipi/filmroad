@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>11 · 저장한 장소</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .top { padding: 8px 16px; display:flex; justify-content:space-between; align-items:center; }
+  .top h1 { font-size:22px; font-weight:800; letter-spacing:-0.03em; margin:0; }
+  .top button { width:38px; height:38px; border-radius:11px; background:var(--fr-bg-muted); border:none; color:var(--fr-ink-2); display:flex; align-items:center; justify-content:center; }
+
+  .collection-row { display:flex; gap:10px; padding: 8px 16px 14px; overflow-x:auto; }
+  .coll {
+    flex-shrink:0; width:132px; border-radius:16px; position:relative; overflow:hidden;
+    aspect-ratio: 1.05; padding: 12px;
+    display:flex; flex-direction:column; justify-content:space-between; color:white;
+  }
+  .coll::before { content:''; position:absolute; inset:0; background: linear-gradient(135deg, rgba(15,23,42,.15), rgba(15,23,42,.8)); z-index:1; }
+  .coll > * { position:relative; z-index:2; }
+  .coll img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .coll .name { font-size:14px; font-weight:800; letter-spacing:-0.02em; line-height:1.2; }
+  .coll .count { font-size:10.5px; opacity:.9; font-weight:700; display:flex; align-items:center; gap:3px; }
+  .coll.new { background:var(--fr-bg-muted); color:var(--fr-ink-3); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; border:1.5px dashed var(--fr-line); font-weight:800; font-size:12px; }
+  .coll.new::before { display:none; }
+
+  .section { padding: 8px 16px 0; }
+  .section-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .section-h h2 { font-size:16px; font-weight:800; letter-spacing:-0.02em; margin:0; }
+  .section-h .sort { font-size:12px; font-weight:700; color:var(--fr-ink-3); display:flex; align-items:center; gap:3px; }
+
+  .saved-list { display:flex; flex-direction:column; gap:10px; padding-bottom:110px; }
+  .saved {
+    background:white; border:1px solid var(--fr-line); border-radius:18px;
+    padding: 10px; display:flex; gap:12px; position:relative;
+  }
+  .saved-thumb { width:88px; height:88px; border-radius:12px; overflow:hidden; flex-shrink:0; }
+  .saved-thumb img { width:100%; height:100%; object-fit:cover; }
+  .saved-info { flex:1; display:flex; flex-direction:column; justify-content:space-between; padding:2px 0; }
+  .saved-info .chips { display:flex; gap:5px; margin-bottom:3px; flex-wrap:wrap; }
+  .saved-info .t { font-size:14px; font-weight:800; letter-spacing:-0.02em; }
+  .saved-info .loc { font-size:11.5px; color:var(--fr-ink-3); display:flex; align-items:center; gap:4px; margin-top:2px; }
+  .saved-info .meta { display:flex; gap:10px; font-size:11px; color:var(--fr-ink-3); font-weight:600; }
+  .saved-info .meta .m { display:flex; align-items:center; gap:3px; }
+  .saved-action { width:34px; height:34px; border-radius:10px; background:var(--fr-primary); color:white; display:flex; align-items:center; justify-content:center; align-self:flex-start; }
+
+  .banner {
+    margin: 0 16px 14px; padding:14px; border-radius:16px;
+    background: linear-gradient(135deg, #eef9ff, #faf5ff);
+    border: 1px solid #e0e7ff;
+    display:flex; align-items:center; gap:12px;
+  }
+  .banner .ico { width:40px; height:40px; border-radius:12px; background:white; display:flex; align-items:center; justify-content:center; color:var(--fr-primary); }
+  .banner .t { font-size:13px; font-weight:800; letter-spacing:-0.02em; }
+  .banner .s { font-size:11px; color:var(--fr-ink-3); margin-top:1px; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="top">
+    <h1>저장한 장소</h1>
+    <div style="display:flex; gap:6px;">
+      <button><i data-lucide="search" class="ic-20"></i></button>
+      <button><i data-lucide="arrow-up-down" class="ic-20"></i></button>
+    </div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="section">
+      <div class="section-h"><h2>컬렉션</h2><span class="sort">편집</span></div>
+    </div>
+    <div class="collection-row no-scrollbar">
+      <div class="coll">
+        <img src="https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=400&q=80">
+        <div></div>
+        <div>
+          <div class="name">다음 여행 · 강릉</div>
+          <div class="count"><i data-lucide="map-pin" class="ic-16"></i>8곳</div>
+        </div>
+      </div>
+      <div class="coll">
+        <img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=400&q=80">
+        <div></div>
+        <div>
+          <div class="name">도깨비 컴플리트</div>
+          <div class="count"><i data-lucide="film" class="ic-16"></i>24곳</div>
+        </div>
+      </div>
+      <div class="coll">
+        <img src="https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=400&q=80">
+        <div></div>
+        <div>
+          <div class="name">서울 야경 성지</div>
+          <div class="count"><i data-lucide="moon" class="ic-16"></i>12곳</div>
+        </div>
+      </div>
+      <div class="coll new">
+        <i data-lucide="plus" class="ic-24"></i>
+        새 컬렉션
+      </div>
+    </div>
+
+    <div class="banner">
+      <div class="ico"><i data-lucide="route" class="ic-22"></i></div>
+      <div style="flex:1;">
+        <div class="t">근처 성지 4곳, 하루에 돌 수 있어요</div>
+        <div class="s">AI가 자동으로 루트를 짜드려요</div>
+      </div>
+      <i data-lucide="chevron-right" class="ic-20" style="color:var(--fr-ink-4)"></i>
+    </div>
+
+    <div class="section">
+      <div class="section-h"><h2>모든 저장 · 28곳</h2><span class="sort">거리순<i data-lucide="chevron-down" class="ic-16"></i></span></div>
+      <div class="saved-list">
+        <div class="saved">
+          <div class="saved-thumb"><img src="https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=200&q=80"></div>
+          <div class="saved-info">
+            <div>
+              <div class="chips"><span class="fr-chip fr-chip-soft">도깨비</span></div>
+              <div class="t">주문진 영진해변 방파제</div>
+              <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강릉시 주문진읍</div>
+            </div>
+            <div class="meta">
+              <span class="m"><i data-lucide="navigation" class="ic-16" style="color:var(--fr-primary)"></i>1.2km</span>
+              <span class="m"><i data-lucide="heart" class="ic-16"></i>3.2k</span>
+            </div>
+          </div>
+          <div class="saved-action"><i data-lucide="camera" class="ic-18"></i></div>
+        </div>
+
+        <div class="saved">
+          <div class="saved-thumb"><img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=200&q=80"></div>
+          <div class="saved-info">
+            <div>
+              <div class="chips"><span class="fr-chip fr-chip-soft">미스터션샤인</span></div>
+              <div class="t">논산 선샤인 스튜디오</div>
+              <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>충남 논산시 연무읍</div>
+            </div>
+            <div class="meta">
+              <span class="m"><i data-lucide="navigation" class="ic-16" style="color:var(--fr-primary)"></i>142km</span>
+              <span class="m"><i data-lucide="heart" class="ic-16"></i>892</span>
+            </div>
+          </div>
+          <div class="saved-action"><i data-lucide="camera" class="ic-18"></i></div>
+        </div>
+
+        <div class="saved">
+          <div class="saved-thumb"><img src="https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=200&q=80"></div>
+          <div class="saved-info">
+            <div>
+              <div class="chips"><span class="fr-chip fr-chip-soft">이태원클라쓰</span><span style="font-size:10px; color:var(--fr-mint); font-weight:800; display:inline-flex; align-items:center; gap:2px;"><i data-lucide="check" class="ic-16"></i>방문함</span></div>
+              <div class="t">단밤 포차 (서울밤)</div>
+              <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>서울 용산구 이태원동</div>
+            </div>
+            <div class="meta">
+              <span class="m"><i data-lucide="navigation" class="ic-16" style="color:var(--fr-primary)"></i>4.8km</span>
+              <span class="m"><i data-lucide="heart" class="ic-16"></i>5.1k</span>
+            </div>
+          </div>
+          <div class="saved-action" style="background:var(--fr-mint)"><i data-lucide="check" class="ic-18"></i></div>
+        </div>
+
+        <div class="saved">
+          <div class="saved-thumb"><img src="https://images.unsplash.com/photo-1555042827-6d274530c333?auto=format&fit=crop&w=200&q=80"></div>
+          <div class="saved-info">
+            <div>
+              <div class="chips"><span class="fr-chip fr-chip-soft">갯마을차차차</span></div>
+              <div class="t">청하공진시장</div>
+              <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>경북 포항시 청하면</div>
+            </div>
+            <div class="meta">
+              <span class="m"><i data-lucide="navigation" class="ic-16" style="color:var(--fr-primary)"></i>210km</span>
+              <span class="m"><i data-lucide="heart" class="ic-16"></i>1.4k</span>
+            </div>
+          </div>
+          <div class="saved-action"><i data-lucide="camera" class="ic-18"></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item is-active"><i data-lucide="bookmark" class="ic-24"></i><span class="lbl">저장</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

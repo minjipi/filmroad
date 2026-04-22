@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>01 · 홈</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .home-head { padding: 0 20px 12px; display:flex; align-items:center; justify-content:space-between; }
+  .logo { display:flex; align-items:center; gap:8px; }
+  .logo-badge { width:32px; height:32px; border-radius:10px; background:var(--fr-primary); display:flex; align-items:center; justify-content:center; color:white; }
+  .logo-name { font-weight:900; font-size:18px; letter-spacing:-0.04em; }
+  .home-hero { margin: 4px 20px 16px; padding:18px 20px; background: linear-gradient(135deg, #14BCED 0%, #0ea5d4 100%); border-radius:22px; color:white; position:relative; overflow:hidden; }
+  .home-hero .label { font-size:11px; font-weight:700; opacity:.9; letter-spacing:0.04em; text-transform:uppercase; }
+  .home-hero h1 { font-size:22px; font-weight:800; margin:6px 0 2px; letter-spacing:-0.03em; line-height:1.3; }
+  .home-hero .sub { font-size:13px; opacity:.9; }
+  .home-hero .deco { position:absolute; right:-18px; top:-18px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.1); }
+  .home-hero .deco2 { position:absolute; right:20px; bottom:-40px; width:80px; height:80px; border-radius:50%; background:rgba(255,255,255,0.08); }
+  .tabs { display:flex; gap:18px; padding: 4px 20px 0; border-bottom:1px solid var(--fr-line); margin: 0 0 16px; }
+  .tab { font-weight:700; font-size:15px; color:var(--fr-ink-4); padding:10px 0; border-bottom:2px solid transparent; cursor:pointer; letter-spacing:-0.02em; }
+  .tab.active { color:var(--fr-ink); border-bottom-color:var(--fr-ink); }
+  .segmented { display:flex; gap:16px; padding: 0 20px 14px; }
+  .seg { font-size:20px; font-weight:800; color:var(--fr-ink-4); letter-spacing:-0.03em; }
+  .seg.active { color:var(--fr-ink); }
+  .grid { padding: 0 20px; display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .photo-card { position:relative; aspect-ratio: 3/4; border-radius:16px; overflow:hidden; background:#eef2f6; }
+  .photo-card img { width:100%; height:100%; object-fit:cover; }
+  .photo-card .grad { position:absolute; inset:0; background: linear-gradient(to top, rgba(0,0,0,.7) 0%, rgba(0,0,0,0) 55%); }
+  .photo-card .chip-wrap { margin-bottom:6px; display:inline-flex; }
+  .photo-card .like { position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.25); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; color:white; }
+  .photo-card .like.on { color:var(--fr-coral); }
+  .photo-card .cap { position:absolute; left:12px; right:12px; bottom:10px; color:white; }
+  .photo-card .cap .chip-wrap { margin-bottom:6px; }
+  .photo-card .t { font-size:13px; font-weight:800; line-height:1.25; letter-spacing:-0.02em; }
+  .photo-card .loc { display:flex; align-items:center; gap:3px; font-size:10px; opacity:.85; margin-top:3px; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right">
+      <i data-lucide="signal" class="ic-16"></i>
+      <i data-lucide="wifi" class="ic-16"></i>
+      <i data-lucide="battery-full" class="ic-20"></i>
+    </span>
+  </div>
+
+  <div class="home-head">
+    <div class="logo">
+      <div class="logo-badge"><i data-lucide="map-pin" class="ic-18"></i></div>
+      <span class="logo-name">필름로드</span>
+    </div>
+    <div style="display:flex; gap:4px;">
+      <button style="width:40px; height:40px; border:none; background:var(--fr-bg-muted); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--fr-ink-2);"><i data-lucide="search" class="ic-20"></i></button>
+      <button style="width:40px; height:40px; border:none; background:var(--fr-bg-muted); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--fr-ink-2); position:relative;">
+        <i data-lucide="bell" class="ic-20"></i>
+        <span style="position:absolute; top:9px; right:9px; width:8px; height:8px; border-radius:50%; background:var(--fr-coral); border:2px solid var(--fr-bg-muted);"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="home-hero">
+      <div class="deco"></div>
+      <div class="deco2"></div>
+      <div class="label">OCT · 주말 추천</div>
+      <h1>오늘은 '도깨비'의<br/>주문진을 걸어볼까요?</h1>
+      <div class="sub">내 위치에서 차로 12분 · 3곳의 성지</div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">모두</div>
+      <div class="tab">도깨비</div>
+      <div class="tab">이태원 클라쓰</div>
+      <div class="tab">호텔 델루나</div>
+    </div>
+
+    <div class="segmented">
+      <span class="seg active">내 위치 근처</span>
+      <span class="seg">전국 트렌드</span>
+    </div>
+
+    <div class="grid">
+      <div class="photo-card">
+        <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80">
+        <div class="grad"></div>
+        <div class="like on"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i></div>
+        <div class="cap"><div class="chip-wrap"><span class="fr-chip fr-chip-primary">도깨비</span></div><div class="t">주문진 영진해변 방파제</div><div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강릉시 주문진읍</div></div>
+      </div>
+      <div class="photo-card">
+        <img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=600&q=80">
+        <div class="grad"></div>
+        <div class="like"><i data-lucide="heart" class="ic-16"></i></div>
+        <div class="cap"><div class="chip-wrap"><span class="fr-chip fr-chip-primary">미스터션샤인</span></div><div class="t">논산 선샤인 스튜디오</div><div class="loc"><i data-lucide="map-pin" class="ic-16"></i>충남 논산시 연무읍</div></div>
+      </div>
+      <div class="photo-card">
+        <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80">
+        <div class="grad"></div>
+        <div class="like"><i data-lucide="heart" class="ic-16"></i></div>
+        <div class="cap"><div class="chip-wrap"><span class="fr-chip fr-chip-primary">갯마을차차차</span></div><div class="t">청하공진시장</div><div class="loc"><i data-lucide="map-pin" class="ic-16"></i>경북 포항시 청하면</div></div>
+      </div>
+      <div class="photo-card">
+        <img src="https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=600&q=80">
+        <div class="grad"></div>
+        <div class="like on"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i></div>
+        <div class="cap"><div class="chip-wrap"><span class="fr-chip fr-chip-primary">이태원클라쓰</span></div><div class="t">단밤 포차 (서울밤)</div><div class="loc"><i data-lucide="map-pin" class="ic-16"></i>서울 용산구 이태원동</div></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item is-active"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item"><i data-lucide="bookmark" class="ic-24"></i><span class="lbl">저장</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

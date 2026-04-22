@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>12 · 온보딩</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  body.fr-frame { background: #0a0a0a; color:white; }
+  .bg-img { position:absolute; inset:0; }
+  .bg-img img { width:100%; height:100%; object-fit:cover; opacity:.7; }
+  .bg-grad { position:absolute; inset:0; background: linear-gradient(180deg, rgba(10,10,10,.3) 0%, rgba(10,10,10,.6) 50%, #0a0a0a 100%); }
+
+  .content { position:relative; z-index:2; height:100%; display:flex; flex-direction:column; padding: 60px 28px 40px; }
+
+  .brand { display:flex; align-items:center; gap:8px; }
+  .brand-badge { width:36px; height:36px; border-radius:11px; background:var(--fr-primary); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 30px rgba(20,188,237,.4); }
+  .brand-name { font-size:18px; font-weight:900; letter-spacing:-0.04em; }
+
+  .tag-line { margin-top:auto; }
+  .tag-line .kicker { font-size:12px; font-weight:700; color:var(--fr-primary); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px; }
+  .tag-line h1 { font-size:38px; font-weight:800; letter-spacing:-0.04em; line-height:1.05; margin:0; }
+  .tag-line h1 em { font-style:normal; background: linear-gradient(135deg, #14BCED, #7c3aed); -webkit-background-clip: text; background-clip:text; color:transparent; }
+  .tag-line p { font-size:14.5px; opacity:.75; margin-top:16px; line-height:1.55; }
+
+  .dots { display:flex; gap:6px; margin: 26px 0 16px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.3); }
+  .dot.on { width:22px; background:white; border-radius:3px; }
+
+  .auth-btns { display:flex; flex-direction:column; gap:10px; }
+  .auth-btn {
+    height:52px; border-radius:14px; font-size:14.5px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; gap:8px; border:none;
+    letter-spacing:-0.01em;
+  }
+  .auth-btn.apple { background:white; color:black; }
+  .auth-btn.kakao { background:#FEE500; color:#191919; }
+  .auth-btn.email { background:transparent; color:white; border:1px solid rgba(255,255,255,.2); }
+
+  .legal { font-size:11px; opacity:.5; text-align:center; margin-top:16px; line-height:1.5; }
+  .legal a { color:white; text-decoration:underline; }
+
+  .floating-chip {
+    position:absolute; z-index:3;
+    background:rgba(0,0,0,.55); backdrop-filter:blur(12px);
+    border: 1px solid rgba(255,255,255,.1);
+    padding:8px 12px 8px 8px; border-radius:999px;
+    display:flex; align-items:center; gap:8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .floating-chip .d { width:28px; height:28px; border-radius:50%; background:var(--fr-primary); display:flex; align-items:center; justify-content:center; }
+  .floating-chip .t { font-size:11.5px; font-weight:700; }
+  .floating-chip .s { font-size:9.5px; opacity:.7; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page" style="position:relative;">
+  <div class="bg-img"><img src="https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=800&q=90"></div>
+  <div class="bg-grad"></div>
+
+  <div class="floating-chip" style="top:130px; left:24px;">
+    <span class="d"><i data-lucide="map-pin" class="ic-16" style="color:white"></i></span>
+    <div><div class="t">영진해변 인증 완료 ✓</div><div class="s">도깨비 · 1회</div></div>
+  </div>
+  <div class="floating-chip" style="top:220px; right:24px;">
+    <span class="d" style="background:#f5a524;"><i data-lucide="award" class="ic-16" style="color:white"></i></span>
+    <div><div class="t">새 뱃지 획득!</div><div class="s">바다 러너</div></div>
+  </div>
+
+  <div class="fr-status" style="position:relative; color:white; z-index:3;">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="content">
+    <div class="brand">
+      <div class="brand-badge"><i data-lucide="map-pin" class="ic-22" style="color:white"></i></div>
+      <span class="brand-name">필름로드</span>
+    </div>
+
+    <div class="tag-line">
+      <div class="kicker">SACRED SITE PILGRIMAGE</div>
+      <h1>드라마 속<br/>그 장면,<br/><em>내가 직접</em>.</h1>
+      <p>좋아하는 작품의 촬영지를 찾아가서<br/>같은 앵글로 인증샷을 남기고 스탬프를 모아요.</p>
+    </div>
+
+    <div class="dots">
+      <span class="dot on"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+    </div>
+
+    <div class="auth-btns">
+      <button class="auth-btn apple"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.543 12.89c-.03-3.048 2.488-4.52 2.604-4.59-1.42-2.073-3.627-2.357-4.41-2.387-1.876-.19-3.664 1.106-4.615 1.106-.953 0-2.422-1.08-3.983-1.05-2.048.03-3.937 1.19-4.99 3.018-2.13 3.69-.545 9.148 1.527 12.148 1.01 1.47 2.215 3.118 3.794 3.06 1.526-.062 2.101-.99 3.948-.99 1.844 0 2.374.99 3.988.957 1.647-.03 2.692-1.5 3.7-2.98 1.167-1.706 1.648-3.36 1.677-3.45-.037-.013-3.209-1.23-3.24-4.88zm-3.04-8.96c.843-1.02 1.41-2.437 1.257-3.844-1.213.05-2.688.81-3.558 1.83-.78.9-1.463 2.345-1.28 3.728 1.354.105 2.736-.688 3.58-1.714z"/></svg>Apple로 계속하기</button>
+      <button class="auth-btn kakao"><i data-lucide="message-circle" class="ic-18" style="fill:currentColor"></i>카카오로 3초 만에 시작</button>
+      <button class="auth-btn email"><i data-lucide="mail" class="ic-18"></i>이메일로 가입</button>
+    </div>
+    <div class="legal">
+      계속하면 <a>이용약관</a>과 <a>개인정보처리방침</a>에<br/>동의하는 것으로 간주돼요.
+    </div>
+  </div>
+  <div class="fr-home-indicator" style="background:white; opacity:.5;"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
