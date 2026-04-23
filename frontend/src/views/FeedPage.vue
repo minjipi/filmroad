@@ -185,6 +185,7 @@ import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
 import { useFeedStore, type FeedPost, type FeedTab, type FeedUser } from '@/stores/feed';
 import { useSavedStore } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
@@ -192,6 +193,7 @@ import { formatRelativeTime, formatVisitDate } from '@/utils/formatRelativeTime'
 
 const feedStore = useFeedStore();
 const savedStore = useSavedStore();
+const uiStore = useUiStore();
 const router = useRouter();
 const { posts, recommendedUsers, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
@@ -229,8 +231,13 @@ async function onToggleLike(p: FeedPost): Promise<void> {
 }
 
 async function onToggleSave(p: FeedPost): Promise<void> {
-  await savedStore.toggleSave(p.place.id);
-  if (savedStore.error) await showError(savedStore.error);
+  const pid = p.place.id;
+  if (savedStore.isSaved(pid)) {
+    await savedStore.toggleSave(pid);
+    if (savedStore.error) await showError(savedStore.error);
+    return;
+  }
+  uiStore.openCollectionPicker(pid);
 }
 
 function onComment(p: FeedPost): void {

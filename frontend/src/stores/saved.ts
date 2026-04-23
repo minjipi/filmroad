@@ -9,6 +9,9 @@ export interface SavedCollection {
   coverImageUrl: string | null;
   count: number;
   gradient: string | null;
+  // Optional iconKey for future server-driven cover icons (MAP_PIN / FILM /
+  // MOON etc.). Renderers fall back to a generic pin when absent.
+  iconKey?: string | null;
 }
 
 export interface SavedItem {
@@ -90,13 +93,48 @@ export const useSavedStore = defineStore('saved', {
         this.loading = false;
       }
     },
-    async toggleSave(placeId: number): Promise<void> {
+    async createCollection(name: string): Promise<SavedCollection | null> {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        this.error = '컬렉션 이름을 입력해 주세요';
+        return null;
+      }
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('컬렉션 만들기는 로그인 후 이용할 수 있어요.');
+        return null;
+      }
+      try {
+        const { data } = await api.post<SavedCollection>(
+          '/api/saved/collections',
+          { name: trimmed },
+        );
+        // Prepend so the user sees the card they just added at the start of
+        // the horizontal list — re-sorting stays the server's job.
+        this.collections.unshift(data);
+        return data;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Failed to create collection';
+        return null;
+      }
+    },
+    async toggleSave(
+      placeId: number,
+      collectionId?: number | null,
+    ): Promise<void> {
       if (!useAuthStore().isAuthenticated) {
         useUiStore().showLoginPrompt('저장은 로그인 후 이용할 수 있어요.');
         return;
       }
       try {
-        const { data } = await api.post<{ saved: boolean; totalCount: number }>('/api/saved/toggle', { placeId });
+        // Only forward collectionId when the caller explicitly supplied one —
+        // omitting it entirely keeps the server-side default ("unassigned"
+        // i.e. collectionId=null) while still letting unsave paths skip the
+        // field. `null` is a valid value meaning "drop into 기본".
+        const body: { placeId: number; collectionId?: number | null } = {
+          placeId,
+        };
+        if (collectionId !== undefined) body.collectionId = collectionId;
+        const { data } = await api.post<{ saved: boolean; totalCount: number }>('/api/saved/toggle', body);
         this.totalCount = data.totalCount;
         if (data.saved) {
           if (!this.savedPlaceIds.includes(placeId)) {

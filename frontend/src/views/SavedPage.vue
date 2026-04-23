@@ -36,22 +36,22 @@
           </div>
         </section>
 
-        <!-- 컬렉션 목록 — 백엔드 모델 미구현이라 v1 은 디자인 mock 값을
-             그대로 사용. 백엔드 도입 시 `mockCollections` 를 store 로 교체. -->
+        <!-- 컬렉션 목록 — 서버 fetch 결과 직접 렌더. 비어 있으면 "새
+             컬렉션" 카드만 노출 (mock 3개는 task #26 에서 제거됨). -->
         <div class="collection-row no-scrollbar">
           <div
-            v-for="c in mockCollections"
+            v-for="c in collections"
             :key="c.id"
             class="coll"
             data-testid="coll-card"
             @click="onOpenCollection(c.id)"
           >
-            <img :src="c.coverImageUrl" :alt="c.name" />
+            <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
             <div />
             <div>
               <div class="name">{{ c.name }}</div>
               <div class="count">
-                <ion-icon :icon="c.icon" class="ic-16" />{{ c.count }}곳
+                <ion-icon :icon="collectionIconFor(c)" class="ic-16" />{{ c.count }}곳
               </div>
             </div>
           </div>
@@ -130,6 +130,11 @@
         </section>
       </div>
 
+      <!-- 새 컬렉션 만들기 다이얼로그는 task #29 에서 공통 컴포넌트
+           (components/saved/NewCollectionModal.vue) 로 추출되어 App.vue 에
+           1개만 마운트된다. 여기선 `uiStore.openNewCollectionModal()` 로
+           트리거만 걸어두면, 전역 모달이 대신 뜬다. CollectionPicker 도
+           동일 경로를 사용. -->
     </ion-content>
     <FrTabBar :model-value="'me'" />
   </ion-page>
@@ -152,12 +157,14 @@ import {
   cameraOutline,
   filmOutline,
   moonOutline,
+  starOutline,
   trailSignOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useSavedStore, type SavedItem } from '@/stores/saved';
+import { useSavedStore, type SavedItem, type SavedCollection } from '@/stores/saved';
 import { useUploadStore } from '@/stores/upload';
+import { useUiStore } from '@/stores/ui';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
@@ -165,52 +172,32 @@ import { useToast } from '@/composables/useToast';
 const router = useRouter();
 const savedStore = useSavedStore();
 const uploadStore = useUploadStore();
-const { items, totalCount, error } = storeToRefs(savedStore);
+const uiStore = useUiStore();
+const { collections, items, totalCount, error } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 
-// Design 11-saved.html 의 컬렉션 3개 + 새 컬렉션 카드. 백엔드 SavedCollection
-// 모델이 준비되면 mockCollections 를 store.collections 로 교체.
-interface MockCollection {
-  id: number;
-  name: string;
-  coverImageUrl: string;
-  count: number;
-  icon: string;
-}
-const mockCollections: MockCollection[] = [
-  {
-    id: 1,
-    name: '다음 여행 · 강릉',
-    coverImageUrl:
-      'https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=400&q=80',
-    count: 8,
-    icon: locationOutline,
-  },
-  {
-    id: 2,
-    name: '도깨비 컴플리트',
-    coverImageUrl:
-      'https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=400&q=80',
-    count: 24,
-    icon: filmOutline,
-  },
-  {
-    id: 3,
-    name: '서울 야경 성지',
-    coverImageUrl:
-      'https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=400&q=80',
-    count: 12,
-    icon: moonOutline,
-  },
-];
-
-// AI 루트 배너도 동일하게 v1 은 고정 문구. 추후 `savedStore.suggestion` 으로
-// 교체 가능하나 현재는 서버가 null 을 돌려줘서 렌더되지 않던 상태였음.
+// AI 루트 배너는 고정 문구. `savedStore.suggestion` 이 null 이 아닌 값으로
+// 오기 시작하면 computed 로 교체.
 const aiBanner = {
   title: '근처 성지 4곳, 하루에 돌 수 있어요',
   subtitle: 'AI가 자동으로 루트를 짜드려요',
 };
 const routeIcon = trailSignOutline;
+
+// 컬렉션 카드 카운트 아이콘 — 서버가 iconKey 를 내려주면 몇 가지 고정된
+// ionicon 중 하나로 매핑. 없으면 map-pin 기본값.
+const COLLECTION_ICON_MAP: Record<string, string> = {
+  MAP_PIN: locationOutline,
+  LOCATION: locationOutline,
+  FILM: filmOutline,
+  MOON: moonOutline,
+  STAR: starOutline,
+};
+function collectionIconFor(c: SavedCollection): string {
+  const key = c.iconKey;
+  if (key && COLLECTION_ICON_MAP[key]) return COLLECTION_ICON_MAP[key];
+  return locationOutline;
+}
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -269,12 +256,15 @@ async function onEditCollections(): Promise<void> {
   await showInfo('컬렉션 편집은 곧 공개됩니다');
 }
 
-async function onCreateCollection(): Promise<void> {
-  await showInfo('새 컬렉션 만들기는 곧 공개됩니다');
+// 새 컬렉션 모달은 task #29 에서 공통 컴포넌트로 빠졌다. 여기선 버튼
+// 탭에 uiStore 액션만 걸어두면, App.vue 에 마운트된 NewCollectionModal 이
+// 대신 열린다. CollectionPicker 도 같은 진입점을 공유.
+function onCreateCollection(): void {
+  uiStore.openNewCollectionModal();
 }
 
-async function onOpenCollection(_id: number): Promise<void> {
-  await showInfo('컬렉션 상세는 곧 공개됩니다');
+async function onOpenCollection(id: number): Promise<void> {
+  await router.push(`/collection/${id}`);
 }
 
 async function onOpenSuggestion(): Promise<void> {
@@ -545,4 +535,7 @@ ion-content.sv-content {
   color: var(--fr-ink-3);
   font-size: 13px;
 }
+
+/* 새 컬렉션 모달 관련 CSS 는 components/saved/NewCollectionModal.vue 로
+   이동했다 (task #29). SavedPage 전용 스타일만 여기 남는다. */
 </style>

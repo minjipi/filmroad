@@ -158,12 +158,16 @@ describe('PlaceDetailPage.vue', () => {
     expect(cards[0].find('.t').text()).toBe(fixture.related[0].name);
   });
 
-  it('like / bookmark buttons invoke the corresponding toggle action (save via unified savedStore)', async () => {
+  it('like button invokes toggleLike; bookmark on unsaved place opens the collection picker (task #29)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
     const { wrapper, store } = mountPlaceDetailPage();
     await flushPromises();
 
     const likeSpy = vi.spyOn(store, 'toggleLike').mockResolvedValue();
-    const saveSpy = vi.spyOn(useSavedStore(), 'toggleSave').mockResolvedValue();
+    const saved = useSavedStore();
+    const ui = useUiStore();
+    const saveSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
     await wrapper.find('.act.like').trigger('click');
     expect(likeSpy).toHaveBeenCalledTimes(1);
@@ -172,7 +176,27 @@ describe('PlaceDetailPage.vue', () => {
     const bookmarkBtn = wrapper.findAll('.act').find((b) => !b.classes('like'));
     expect(bookmarkBtn).toBeDefined();
     await bookmarkBtn!.trigger('click');
+    // Unsaved place → picker opens, toggleSave not called directly.
+    expect(pickerSpy).toHaveBeenCalledWith(fixture.place.id);
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('bookmark on already-saved place unsaves directly — picker skipped', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountPlaceDetailPage();
+    await flushPromises();
+    const saved = useSavedStore();
+    const ui = useUiStore();
+    saved.savedPlaceIds = [fixture.place.id];
+    await flushPromises();
+
+    const saveSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
+
+    const bookmarkBtn = wrapper.findAll('.act').find((b) => !b.classes('like'));
+    await bookmarkBtn!.trigger('click');
     expect(saveSpy).toHaveBeenCalledWith(fixture.place.id);
+    expect(pickerSpy).not.toHaveBeenCalled();
   });
 
   it('"지도 보기" pushes /map with selectedId/lat/lng query', async () => {

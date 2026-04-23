@@ -93,6 +93,15 @@ const routes: Array<RouteRecordRaw> = [
     props: true,
   },
   {
+    path: '/collection/:id',
+    name: 'CollectionDetail',
+    component: () => import('../views/CollectionDetailPage.vue'),
+    props: true,
+    // Collections are private to the owner — anonymous visitors get bounced
+    // to /onboarding before the page mounts.
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/feed',
     name: 'Feed',
     component: () => import('../views/FeedPage.vue'),

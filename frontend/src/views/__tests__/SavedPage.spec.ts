@@ -25,8 +25,27 @@ vi.mock('@ionic/vue', async () => {
 });
 
 import SavedPage from '@/views/SavedPage.vue';
+import { useSavedStore } from '@/stores/saved';
 import { useUploadStore } from '@/stores/upload';
 import { mountWithStubs } from './__helpers__/mount';
+
+// The new-collection modal uses <Teleport to="body"> so `wrapper.find(...)`
+// can't see it — teleported content lives outside the wrapper's subtree.
+// These helpers query the document directly (and remember: jsdom keeps body
+// across assertions, so we read fresh each time).
+function qsBody<T extends Element = HTMLElement>(selector: string): T | null {
+  return document.body.querySelector<T>(selector);
+}
+function qsAllBody<T extends Element = HTMLElement>(selector: string): T[] {
+  return Array.from(document.body.querySelectorAll<T>(selector));
+}
+// Drive v-model on a native <input> without vue-test-utils' DOMWrapper —
+// teleported content isn't in the wrapper's subtree, so we dispatch the
+// native 'input' event ourselves.
+function setInputValue(el: HTMLInputElement, value: string): void {
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 const savedState = {
   collections: [] as Array<unknown>,
@@ -74,6 +93,12 @@ describe('SavedPage.vue', () => {
     replaceSpy.mockClear();
     backSpy.mockClear();
     toastCreateSpy.mockClear();
+    // Strip any teleported modal content left behind by the previous test.
+    // mountWithStubs doesn't auto-unmount, so without this the modal's
+    // backdrop/input/submit can leak across tests and break qsBody lookups.
+    document.body
+      .querySelectorAll('[data-testid^="new-coll-"]')
+      .forEach((el) => el.remove());
   });
 
   it('back button triggers router.back() when there is history to go back to', async () => {
@@ -142,16 +167,59 @@ describe('SavedPage.vue', () => {
     ]);
   });
 
-  it('renders the 3 mock collections + "new" card from the design (task #20)', async () => {
+  it('collections render from store data — empty store → only the "new" card is visible', async () => {
     const { wrapper } = mountSaved();
     await flushPromises();
 
-    const cards = wrapper.findAll('[data-testid="coll-card"]');
-    expect(cards.length).toBe(3);
-    expect(cards[0].find('.name').text()).toBe('다음 여행 · 강릉');
-    expect(cards[1].find('.name').text()).toBe('도깨비 컴플리트');
-    expect(cards[2].find('.name').text()).toBe('서울 야경 성지');
+    expect(wrapper.findAll('[data-testid="coll-card"]').length).toBe(0);
     expect(wrapper.find('[data-testid="coll-new"]').exists()).toBe(true);
+  });
+
+  it('collections render from store data — seeded entries show title + count', async () => {
+    const { wrapper } = mountSaved({
+      collections: [
+        { id: 1, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c1.jpg', count: 8, gradient: null },
+        { id: 2, name: '도깨비 컴플리트', coverImageUrl: 'https://img/c2.jpg', count: 24, gradient: null },
+      ],
+    });
+    await flushPromises();
+
+    const cards = wrapper.findAll('[data-testid="coll-card"]');
+    expect(cards.length).toBe(2);
+    expect(cards[0].find('.name').text()).toBe('다음 여행 · 강릉');
+    expect(cards[0].find('.count').text()).toContain('8곳');
+    expect(cards[1].find('.name').text()).toBe('도깨비 컴플리트');
+  });
+
+  it('collection card click pushes /collection/:id (task #30)', async () => {
+    const { wrapper } = mountSaved({
+      collections: [
+        { id: 7, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c7.jpg', count: 8, gradient: null },
+      ],
+    });
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="coll-card"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/collection/7');
+  });
+
+  it('"새 컬렉션" 카드 탭 → uiStore.openNewCollectionModal() 호출 (모달은 App.vue 에 마운트됨)', async () => {
+    // task #29 에서 new-collection 모달이 공통 컴포넌트로 빠지고 ui store
+    // 액션으로 열리도록 변경됨. SavedPage 책임은 "카드 탭 → 액션 호출"뿐.
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountSaved();
+    await flushPromises();
+    const uiStore = useUiStore();
+    const openSpy = vi.spyOn(uiStore, 'openNewCollectionModal');
+
+    await wrapper.find('[data-testid="coll-new"]').trigger('click');
+    await flushPromises();
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    // 로컬 모달 DOM 은 더 이상 SavedPage 에서 렌더하지 않는다.
+    expect(qsBody('[data-testid="new-coll-backdrop"]')).toBeNull();
   });
 
   it('AI 루트 배너는 항상 렌더되고 디자인의 mock 문구를 표시한다', async () => {

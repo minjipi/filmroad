@@ -2,16 +2,35 @@
   <ion-app>
     <ion-router-outlet />
     <LoginPromptModal />
+    <CollectionPicker ref="pickerRef" />
+    <NewCollectionModal @created="onCollectionCreated" />
   </ion-app>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
 import { useAuthStore } from '@/stores/auth';
-import { useSavedStore } from '@/stores/saved';
+import { useSavedStore, type SavedCollection } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
 import { markOnboarded } from '@/composables/useOnboarding';
 import LoginPromptModal from '@/components/auth/LoginPromptModal.vue';
+import CollectionPicker from '@/components/saved/CollectionPicker.vue';
+import NewCollectionModal from '@/components/saved/NewCollectionModal.vue';
+
+// Bridge between the two globally-mounted modals: when the user creates a
+// collection *from inside the picker* we auto-select it for the pending
+// place so they don't have to tap the new row. Creation from SavedPage
+// doesn't hit this path (picker isn't open there — uiStore guards it).
+const pickerRef = ref<{
+  onCollectionCreated: (c: SavedCollection) => Promise<void>;
+} | null>(null);
+const uiStore = useUiStore();
+function onCollectionCreated(c: SavedCollection): void {
+  if (uiStore.collectionPickerPlaceId != null && pickerRef.value) {
+    void pickerRef.value.onCollectionCreated(c);
+  }
+}
 
 const authStore = useAuthStore();
 const savedStore = useSavedStore();

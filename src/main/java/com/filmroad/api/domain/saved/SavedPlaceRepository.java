@@ -19,6 +19,19 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
             """)
     List<SavedPlace> findByUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
 
+    /**
+     * 특정 컬렉션 내 저장 장소 목록. 컬렉션 상세 `GET /api/saved/collections/:id` 에서 방문 순서를
+     * createdAt 오름차순(저장 시점 순) 으로 고정.
+     */
+    @Query("""
+            SELECT sp FROM SavedPlace sp
+            JOIN FETCH sp.place p
+            JOIN FETCH p.work w
+            WHERE sp.collection.id = :collectionId
+            ORDER BY sp.createdAt ASC, sp.id ASC
+            """)
+    List<SavedPlace> findByCollectionIdOrderByCreatedAtAsc(@Param("collectionId") Long collectionId);
+
     boolean existsByUserIdAndPlaceId(Long userId, Long placeId);
 
     @Modifying

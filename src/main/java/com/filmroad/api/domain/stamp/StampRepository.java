@@ -21,6 +21,13 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
 
     boolean existsByUserIdAndPlaceId(Long userId, Long placeId);
 
+    /**
+     * 특정 유저가 방문 도장(Stamp) 을 찍은 place 를 batch 로 조회. CollectionDetailResponse 의 visitedAt 계산용.
+     */
+    @Query("SELECT s FROM Stamp s WHERE s.user.id = :userId AND s.place.id IN :placeIds")
+    List<Stamp> findByUserIdAndPlaceIdIn(@Param("userId") Long userId,
+                                         @Param("placeIds") java.util.Collection<Long> placeIds);
+
     @Query("SELECT DISTINCT s.place.work.id FROM Stamp s WHERE s.user.id = :userId")
     List<Long> findDistinctWorkIdsByUserId(@Param("userId") Long userId);
 

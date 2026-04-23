@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>16 · 컬렉션 상세</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  /* Hero */
+  .coll-hero { position:relative; height: 260px; overflow:hidden; }
+  .coll-hero img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .coll-hero::after {
+    content:""; position:absolute; inset:0;
+    background: linear-gradient(180deg, rgba(15,23,42,.15) 0%, rgba(15,23,42,.35) 55%, rgba(15,23,42,.9) 100%);
+  }
+  .coll-top { position:absolute; top:44px; left:0; right:0; z-index:5; display:flex; justify-content:space-between; padding: 8px 16px; }
+  .coll-top button { width:40px; height:40px; border-radius:50%; background:rgba(15,23,42,.5); backdrop-filter:blur(10px); color:white; border:none; display:flex; align-items:center; justify-content:center; }
+  .coll-top .right { display:flex; gap:8px; }
+
+  .coll-info { position:absolute; left:0; right:0; bottom:0; padding: 16px 20px 18px; color:white; z-index:4; }
+  .coll-tag { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:800; padding: 4px 10px; border-radius:999px; background:rgba(20,188,237,.95); margin-bottom:10px; letter-spacing:-0.01em; }
+  .coll-title { font-size:26px; font-weight:900; letter-spacing:-0.03em; line-height:1.15; margin:0 0 6px; }
+  .coll-sub { font-size:13px; opacity:.92; letter-spacing:-0.01em; }
+  .coll-meta-row { display:flex; align-items:center; gap:14px; margin-top:12px; font-size:11.5px; font-weight:700; }
+  .coll-meta-row .m { display:flex; align-items:center; gap:4px; opacity:.95; }
+  .coll-meta-row .sep { width:3px; height:3px; border-radius:50%; background:white; opacity:.5; }
+
+  /* Progress */
+  .progress-card { margin: -24px 16px 0; background:white; border-radius:18px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(15,23,42,.08); position:relative; z-index:6; }
+  .prog-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .prog-row .lbl { font-size:12.5px; font-weight:800; letter-spacing:-0.02em; }
+  .prog-row .pct { font-size:12.5px; font-weight:800; color:var(--fr-primary); }
+  .bar { height:8px; border-radius:999px; background:var(--fr-line-soft); overflow:hidden; }
+  .bar .fill { height:100%; width:58%; background: linear-gradient(90deg, #14BCED, #7c3aed); border-radius:999px; }
+  .prog-badges { display:flex; gap:14px; margin-top:12px; font-size:11.5px; color:var(--fr-ink-3); font-weight:700; }
+  .prog-badges .pb { display:flex; align-items:center; gap:4px; }
+  .prog-badges .pb b { color:var(--fr-ink); font-weight:800; }
+
+  /* Actions */
+  .action-row { display:flex; gap:8px; padding: 14px 16px 0; }
+  .action-row .btn-a { flex:1; height:44px; border-radius:12px; border:1px solid var(--fr-line); background:white; display:flex; align-items:center; justify-content:center; gap:6px; font-weight:800; font-size:13px; color:var(--fr-ink); }
+  .action-row .btn-a.primary { background:var(--fr-primary); color:white; border-color:var(--fr-primary); box-shadow: 0 6px 14px rgba(20,188,237,.3); flex:1.4; }
+
+  /* View toggle */
+  .view-toggle { display:flex; gap:4px; background:var(--fr-bg-muted); padding:4px; border-radius:12px; margin: 16px 16px 10px; }
+  .view-toggle .vt { flex:1; text-align:center; padding: 7px 0; font-size:12.5px; font-weight:800; color:var(--fr-ink-3); border-radius:8px; display:flex; align-items:center; justify-content:center; gap:4px; letter-spacing:-0.02em; }
+  .view-toggle .vt.on { background:white; color:var(--fr-ink); box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+
+  /* Mini map */
+  .mini-map {
+    margin: 0 16px 14px; height:140px; border-radius:16px; overflow:hidden; position:relative;
+    background:
+      radial-gradient(circle at 30% 40%, #d9e7f2, transparent 40%),
+      radial-gradient(circle at 70% 60%, #e5d5f7, transparent 40%),
+      linear-gradient(180deg, #eef3f8, #dbe7f0);
+  }
+  .mini-map svg.route { position:absolute; inset:0; width:100%; height:100%; }
+  .mini-pin { position:absolute; width:28px; height:28px; border-radius:50%; background:var(--fr-coral); border:3px solid white; color:white; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; transform:translate(-50%,-50%); box-shadow:0 3px 8px rgba(0,0,0,.25); }
+  .mini-pin.done { background:var(--fr-mint); }
+  .mini-map .exp { position:absolute; bottom:10px; right:10px; background:rgba(255,255,255,.95); color:var(--fr-ink); padding:6px 10px; border-radius:8px; font-size:11.5px; font-weight:700; display:flex; align-items:center; gap:4px; }
+
+  /* List */
+  .place-list { padding: 0 16px 120px; display:flex; flex-direction:column; gap:10px; }
+  .place-item {
+    display:flex; gap:12px; padding:10px; border:1px solid var(--fr-line); border-radius:16px; background:white; position:relative;
+  }
+  .place-item.done { background: #f6fdf9; border-color:#d6f1e3; }
+  .place-idx {
+    position:absolute; left:-8px; top:14px;
+    width:24px; height:24px; border-radius:50%; background:var(--fr-ink); color:white;
+    font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
+    border:2px solid white;
+  }
+  .place-item.done .place-idx { background:var(--fr-mint); }
+  .place-thumb { width:78px; height:78px; border-radius:12px; overflow:hidden; flex-shrink:0; position:relative; }
+  .place-thumb img { width:100%; height:100%; object-fit:cover; }
+  .place-thumb .done-ov { position:absolute; inset:0; background:rgba(16,185,129,.25); display:flex; align-items:center; justify-content:center; }
+  .place-thumb .done-ov .chk { width:30px; height:30px; border-radius:50%; background:var(--fr-mint); color:white; display:flex; align-items:center; justify-content:center; border:2px solid white; }
+  .place-body { flex:1; min-width:0; padding-top:2px; display:flex; flex-direction:column; gap:4px; }
+  .place-body .chips { display:flex; gap:4px; align-items:center; }
+  .place-body .chips .c { font-size:10px; font-weight:800; padding:2px 7px; border-radius:999px; background:var(--fr-primary-soft); color:var(--fr-primary); letter-spacing:-0.01em; }
+  .place-body .chips .ep { font-size:10px; font-weight:700; color:var(--fr-ink-3); }
+  .place-body .nm { font-size:13.5px; font-weight:800; letter-spacing:-0.02em; line-height:1.25; }
+  .place-body .loc { font-size:11px; color:var(--fr-ink-3); display:flex; align-items:center; gap:3px; }
+  .place-body .meta { display:flex; gap:10px; font-size:10.5px; color:var(--fr-ink-3); font-weight:700; margin-top:2px; }
+  .place-body .meta .m { display:flex; align-items:center; gap:3px; }
+  .place-body .meta .dist { color:var(--fr-primary); }
+  .place-cta { align-self:center; width:36px; height:36px; border-radius:10px; background:var(--fr-primary); color:white; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .place-cta.done-cta { background:var(--fr-bg-muted); color:var(--fr-ink-3); }
+
+  /* Section headers */
+  .sec-h { padding: 6px 16px; font-size:12px; font-weight:800; color:var(--fr-ink-3); letter-spacing:0.04em; text-transform:uppercase; }
+
+  .owner-strip {
+    margin: 0 16px 10px; padding: 10px 12px; background:var(--fr-bg-muted); border-radius:12px;
+    display:flex; align-items:center; gap:10px; font-size:12px;
+  }
+  .owner-strip .av { width:28px; height:28px; border-radius:50%; overflow:hidden; background:#eee; flex-shrink:0; }
+  .owner-strip .av img { width:100%; height:100%; object-fit:cover; }
+  .owner-strip .nm { font-weight:800; }
+  .owner-strip .tt { color:var(--fr-ink-3); }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page" style="position:relative;">
+  <div class="fr-status" style="position:absolute; top:0; left:0; right:0; z-index:20; color:white;">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="coll-hero">
+    <img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=900&q=80">
+    <div class="coll-top">
+      <button><i data-lucide="chevron-left" class="ic-22"></i></button>
+      <div class="right">
+        <button><i data-lucide="share-2" class="ic-20"></i></button>
+        <button><i data-lucide="more-horizontal" class="ic-20"></i></button>
+      </div>
+    </div>
+    <div class="coll-info">
+      <span class="coll-tag"><i data-lucide="film" class="ic-16"></i>작품 기반 컬렉션</span>
+      <h1 class="coll-title">도깨비 컴플리트</h1>
+      <div class="coll-sub">쓸쓸하고 찬란하神 도깨비의 모든 촬영지</div>
+      <div class="coll-meta-row">
+        <span class="m"><i data-lucide="map-pin" class="ic-16"></i>24곳</span>
+        <span class="sep"></span>
+        <span class="m"><i data-lucide="route" class="ic-16"></i>약 486km</span>
+        <span class="sep"></span>
+        <span class="m"><i data-lucide="heart" class="ic-16"></i>3.4k</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar" style="padding-top:0;">
+    <div class="progress-card">
+      <div class="prog-row">
+        <span class="lbl">완주 진행률</span>
+        <span class="pct">14 / 24 · 58%</span>
+      </div>
+      <div class="bar"><div class="fill"></div></div>
+      <div class="prog-badges">
+        <span class="pb"><i data-lucide="check-circle-2" class="ic-16" style="color:var(--fr-mint)"></i><b>14</b> 방문</span>
+        <span class="pb"><i data-lucide="bookmark" class="ic-16" style="color:var(--fr-primary)"></i><b>10</b> 남음</span>
+        <span class="pb"><i data-lucide="camera" class="ic-16" style="color:var(--fr-coral)"></i><b>9</b> 인증</span>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-a primary"><i data-lucide="navigation" class="ic-20"></i>최적 루트 보기</button>
+      <button class="btn-a"><i data-lucide="share-2" class="ic-20"></i>공유</button>
+    </div>
+
+    <div class="owner-strip" style="margin-top:16px;">
+      <div class="av"><img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80"></div>
+      <div style="flex:1;">
+        <span class="nm">김소연</span>
+        <span class="tt">· 내 컬렉션 · 2025.09.02 생성</span>
+      </div>
+      <i data-lucide="lock" class="ic-16" style="color:var(--fr-ink-4)"></i>
+    </div>
+
+    <div class="mini-map" style="height: 320px; margin: 16px 16px 14px;">
+      <svg class="route" viewBox="0 0 360 320" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#14BCED"/>
+            <stop offset="100%" stop-color="#7c3aed"/>
+          </linearGradient>
+        </defs>
+        <path d="M 36 270 Q 90 220, 110 180 T 180 130 Q 220 100, 240 70 T 320 50"
+              stroke="url(#routeGrad)" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 6"/>
+      </svg>
+      <div class="mini-pin done" style="left:10%; top:84%;">1</div>
+      <div class="mini-pin done" style="left:30%; top:64%;">2</div>
+      <div class="mini-pin done" style="left:50%; top:42%;">3</div>
+      <div class="mini-pin" style="left:68%; top:22%;">4</div>
+      <div class="mini-pin" style="left:88%; top:16%;">5</div>
+      <div class="exp"><i data-lucide="maximize-2" class="ic-16"></i>전체보기</div>
+    </div>
+
+    <div class="sec-h">다음 방문 추천</div>
+    <div class="place-list">
+      <div class="place-item">
+        <div class="place-idx">15</div>
+        <div class="place-thumb"><img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 8회 00:32:11</span></div>
+          <div class="nm">퀘벡 거리 (남이섬)</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강원 춘천시 남이섬</div>
+          <div class="meta">
+            <span class="m dist"><i data-lucide="navigation" class="ic-16"></i>62km</span>
+            <span class="m"><i data-lucide="heart" class="ic-16"></i>2.8k</span>
+            <span class="m"><i data-lucide="camera" class="ic-16"></i>412</span>
+          </div>
+        </div>
+        <div class="place-cta"><i data-lucide="camera" class="ic-18"></i></div>
+      </div>
+
+      <div class="place-item">
+        <div class="place-idx">16</div>
+        <div class="place-thumb"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 1회 00:15:24</span></div>
+          <div class="nm">주문진 영진해변 방파제</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강원 강릉시 주문진읍</div>
+          <div class="meta">
+            <span class="m dist"><i data-lucide="navigation" class="ic-16"></i>1.2km</span>
+            <span class="m"><i data-lucide="heart" class="ic-16"></i>3.2k</span>
+            <span class="m"><i data-lucide="camera" class="ic-16"></i>1.1k</span>
+          </div>
+        </div>
+        <div class="place-cta"><i data-lucide="camera" class="ic-18"></i></div>
+      </div>
+
+      <div class="place-item">
+        <div class="place-idx">17</div>
+        <div class="place-thumb"><img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 11회 00:58:02</span></div>
+          <div class="nm">경포대 호수 산책로</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강원 강릉시 경포호로</div>
+          <div class="meta">
+            <span class="m dist"><i data-lucide="navigation" class="ic-16"></i>8.6km</span>
+            <span class="m"><i data-lucide="heart" class="ic-16"></i>1.7k</span>
+            <span class="m"><i data-lucide="camera" class="ic-16"></i>284</span>
+          </div>
+        </div>
+        <div class="place-cta"><i data-lucide="camera" class="ic-18"></i></div>
+      </div>
+    </div>
+
+    <div class="sec-h">방문 완료 · 14곳</div>
+    <div class="place-list">
+      <div class="place-item done">
+        <div class="place-idx">1</div>
+        <div class="place-thumb">
+          <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=200&q=80">
+          <div class="done-ov"><span class="chk"><i data-lucide="check" class="ic-18"></i></span></div>
+        </div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 3회 00:21:05</span></div>
+          <div class="nm">덕수궁 돌담길</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>서울 중구 세종대로</div>
+          <div class="meta">
+            <span class="m"><i data-lucide="check" class="ic-16" style="color:var(--fr-mint)"></i>2025.10.14 방문</span>
+            <span class="m"><i data-lucide="camera" class="ic-16"></i>인증 완료</span>
+          </div>
+        </div>
+        <div class="place-cta done-cta"><i data-lucide="chevron-right" class="ic-18"></i></div>
+      </div>
+
+      <div class="place-item done">
+        <div class="place-idx">2</div>
+        <div class="place-thumb">
+          <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=200&q=80">
+          <div class="done-ov"><span class="chk"><i data-lucide="check" class="ic-18"></i></span></div>
+        </div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 5회 00:44:18</span></div>
+          <div class="nm">인천 재능대학교</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>인천 동구 재능로</div>
+          <div class="meta">
+            <span class="m"><i data-lucide="check" class="ic-16" style="color:var(--fr-mint)"></i>2025.09.28 방문</span>
+            <span class="m" style="color:var(--fr-ink-4)"><i data-lucide="camera-off" class="ic-16"></i>인증 미완</span>
+          </div>
+        </div>
+        <div class="place-cta"><i data-lucide="camera" class="ic-18"></i></div>
+      </div>
+
+      <div class="place-item done">
+        <div class="place-idx">3</div>
+        <div class="place-thumb">
+          <img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=200&q=80">
+          <div class="done-ov"><span class="chk"><i data-lucide="check" class="ic-18"></i></span></div>
+        </div>
+        <div class="place-body">
+          <div class="chips"><span class="c">도깨비</span><span class="ep">· 2회 00:38:40</span></div>
+          <div class="nm">월정사 전나무숲길</div>
+          <div class="loc"><i data-lucide="map-pin" class="ic-16"></i>강원 평창군 진부면</div>
+          <div class="meta">
+            <span class="m"><i data-lucide="check" class="ic-16" style="color:var(--fr-mint)"></i>2025.09.15 방문</span>
+            <span class="m"><i data-lucide="camera" class="ic-16"></i>인증 완료</span>
+          </div>
+        </div>
+        <div class="place-cta done-cta"><i data-lucide="chevron-right" class="ic-18"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item is-active"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
