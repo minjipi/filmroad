@@ -11,6 +11,7 @@ import {
   type CaptureTarget,
   type PhotoResponse,
 } from '@/stores/upload';
+import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as { post: ReturnType<typeof vi.fn> };
 
@@ -41,7 +42,7 @@ const fakeResponse: PhotoResponse = {
 
 describe('upload store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    setActivePinia(createPinia()); signInForTest();
     mockApi.post.mockReset();
   });
 

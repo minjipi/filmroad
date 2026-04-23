@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export type Visibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
 
@@ -154,6 +156,10 @@ export const useUploadStore = defineStore('upload', {
       }
       if (this.photos.length === 0) {
         this.error = '사진을 먼저 선택해주세요';
+        return null;
+      }
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('인증샷 업로드는 로그인 후 이용할 수 있어요.');
         return null;
       }
       this.loading = true;

@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export interface SavedCollection {
   id: number;
@@ -78,6 +80,10 @@ export const useSavedStore = defineStore('saved', {
       }
     },
     async toggleSave(placeId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('저장은 로그인 후 이용할 수 있어요.');
+        return;
+      }
       try {
         const { data } = await api.post<{ saved: boolean; totalCount: number }>('/api/saved/toggle', { placeId });
         this.totalCount = data.totalCount;

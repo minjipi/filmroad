@@ -1,11 +1,13 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
-import { hasOnboarded } from '@/composables/useOnboarding';
 
+// Anonymous browsing is the default — first-time visitors land on /home and
+// are prompted to sign in only when they trigger a login-required action.
+// /onboarding is still reachable from the login prompt modal or deep links.
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: () => (hasOnboarded() ? '/home' : '/onboarding'),
+    redirect: '/home',
   },
   {
     path: '/onboarding',
@@ -81,13 +83,6 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-});
-
-router.beforeEach((to) => {
-  if (to.path === '/onboarding' && hasOnboarded()) {
-    return { path: '/home' };
-  }
-  return true;
 });
 
 export default router;

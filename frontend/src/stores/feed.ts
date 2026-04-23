@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export type FeedTab = 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_WORK';
 
@@ -150,6 +152,10 @@ export const useFeedStore = defineStore('feed', {
       await this.fetch();
     },
     async toggleLikePost(photoId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.');
+        return;
+      }
       try {
         const { data } = await api.post<{ liked: boolean; likeCount: number }>(
           `/api/photos/${photoId}/like`,
@@ -164,6 +170,10 @@ export const useFeedStore = defineStore('feed', {
       }
     },
     async toggleFollow(userId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('팔로우는 로그인 후 이용할 수 있어요.');
+        return;
+      }
       try {
         const { data } = await api.post<FollowToggleResponse>(
           `/api/users/${userId}/follow`,

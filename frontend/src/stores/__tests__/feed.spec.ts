@@ -11,6 +11,7 @@ import {
   type FeedPost,
   type FeedUser,
 } from '@/stores/feed';
+import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
@@ -70,7 +71,7 @@ const page2 = {
 
 describe('feed store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
   });

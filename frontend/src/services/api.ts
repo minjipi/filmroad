@@ -31,6 +31,17 @@ function isSessionProbe(url: string | undefined): boolean {
   return url.includes('/api/users/me') || url.includes('/api/auth/');
 }
 
+// Lazily import the ui store so the api module stays loadable before Pinia
+// is installed (e.g. inside Vitest setup before createTestingPinia).
+async function openLoginPromptFromInterceptor(): Promise<void> {
+  try {
+    const { useUiStore } = await import('@/stores/ui');
+    useUiStore().showLoginPrompt();
+  } catch {
+    // Pinia not ready yet — no-op; the next user action will retry.
+  }
+}
+
 // Unwrap { success, code, message, results } envelope; surface message on failure.
 api.interceptors.response.use(
   (response: AxiosResponse<ApiEnvelope<unknown>>) => {
@@ -46,11 +57,11 @@ api.interceptors.response.use(
   (error: AxiosError<ApiEnvelope<unknown>>) => {
     const status = error.response?.status ?? null;
     const requestUrl = error.config?.url;
-    if (status === 401 && typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path !== '/onboarding' && !isSessionProbe(requestUrl)) {
-        window.location.href = '/onboarding';
-      }
+    // Protected endpoints return 401 when anonymous; prompt the user to sign in
+    // in place rather than yanking them out of their current page. Session probes
+    // (/api/users/me, /api/auth/*) are silent since App.vue fires them on load.
+    if (status === 401 && !isSessionProbe(requestUrl)) {
+      void openLoginPromptFromInterceptor();
     }
     const body = error.response?.data;
     const msg = body?.message ?? error.message ?? 'Network error';

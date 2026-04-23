@@ -1,6 +1,7 @@
 <template>
   <ion-app>
     <ion-router-outlet />
+    <LoginPromptModal />
   </ion-app>
 </template>
 
@@ -9,6 +10,7 @@ import { onMounted } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
 import { useAuthStore } from '@/stores/auth';
 import { markOnboarded } from '@/composables/useOnboarding';
+import LoginPromptModal from '@/components/auth/LoginPromptModal.vue';
 
 const authStore = useAuthStore();
 

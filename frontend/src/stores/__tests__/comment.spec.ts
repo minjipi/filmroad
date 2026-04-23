@@ -11,6 +11,7 @@ vi.mock('@/services/api', () => ({
 
 import api from '@/services/api';
 import { useCommentStore, type Comment } from '@/stores/comment';
+import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
@@ -47,7 +48,7 @@ const page2 = {
 
 describe('comment store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
     mockApi.delete.mockReset();

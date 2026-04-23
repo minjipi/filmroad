@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export interface CommentAuthor {
   userId: number;
@@ -102,6 +104,10 @@ export const useCommentStore = defineStore('comment', {
     async create(photoId: number, content: string): Promise<Comment | null> {
       const trimmed = content.trim();
       if (trimmed.length === 0) return null;
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('댓글 작성은 로그인 후 이용할 수 있어요.');
+        return null;
+      }
       const s = ensure(this, photoId);
       s.error = null;
       try {
@@ -117,6 +123,10 @@ export const useCommentStore = defineStore('comment', {
       }
     },
     async remove(commentId: number, photoId: number): Promise<boolean> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('댓글 관리는 로그인 후 이용할 수 있어요.');
+        return false;
+      }
       const s = ensure(this, photoId);
       s.error = null;
       try {

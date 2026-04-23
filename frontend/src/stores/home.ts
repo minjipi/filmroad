@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export interface WorkSummary {
   id: number;
@@ -89,6 +91,10 @@ export const useHomeStore = defineStore('home', {
       await this.fetchHome();
     },
     async toggleLike(placeId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.');
+        return;
+      }
       try {
         const { data } = await api.post<{ liked: boolean; likeCount: number }>(
           `/api/places/${placeId}/like`,

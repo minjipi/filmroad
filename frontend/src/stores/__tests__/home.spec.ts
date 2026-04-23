@@ -11,6 +11,7 @@ vi.mock('@/services/api', () => ({
 
 import api from '@/services/api';
 import { useHomeStore, type HomeResponse } from '@/stores/home';
+import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
@@ -56,7 +57,7 @@ const fixture: HomeResponse = {
 
 describe('home store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
   });
