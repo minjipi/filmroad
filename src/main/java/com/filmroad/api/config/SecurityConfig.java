@@ -50,10 +50,16 @@ public class SecurityConfig {
                                 "/api/map/places",
                                 "/api/places/*",
                                 "/api/places/*/photos",
+                                "/api/photos/*/comments",
                                 "/api/works/*",
+                                "/api/feed",
+                                "/api/feed/**",
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/places/*/like").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/users/*/follow").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/comments/*").authenticated()
                         .requestMatchers("/api/users/**",
                                 "/api/saved/**",
                                 "/api/photos",

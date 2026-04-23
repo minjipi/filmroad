@@ -3,7 +3,10 @@ import { flushPromises } from '@vue/test-utils';
 
 // Must mock api before HomePage -> home store is evaluated.
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: null }) },
+  default: {
+    get: vi.fn().mockResolvedValue({ data: null }),
+    post: vi.fn(),
+  },
 }));
 
 const { pushSpy, backSpy } = vi.hoisted(() => ({
@@ -48,6 +51,7 @@ const fixture: HomeResponse = {
       workId: 1,
       workTitle: '도깨비',
       liked: false,
+      likeCount: 3200,
     },
     {
       id: 11,
@@ -57,6 +61,7 @@ const fixture: HomeResponse = {
       workId: 2,
       workTitle: '이태원 클라쓰',
       liked: false,
+      likeCount: 1800,
     },
     {
       id: 12,
@@ -66,6 +71,7 @@ const fixture: HomeResponse = {
       workId: 1,
       workTitle: '도깨비',
       liked: false,
+      likeCount: 420,
     },
   ],
 };
@@ -157,22 +163,30 @@ describe('HomePage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.places[0].id}`);
   });
 
-  it('toggles .on class on a single .like when clicked', async () => {
-    const { wrapper } = mountHomePage();
+  it('clicking a .like dispatches toggleLike and reflects the server response', async () => {
+    const { wrapper, store } = mountHomePage();
     await flushPromises();
 
     const likes = wrapper.findAll('.photo-card .like');
     expect(likes.length).toBe(fixture.places.length);
-
-    // Initially no card is liked.
     expect(likes.every((l) => !l.classes('on'))).toBe(true);
+
+    const toggleSpy = vi
+      .spyOn(store, 'toggleLike')
+      .mockImplementation(async (id: number) => {
+        const p = store.places.find((x) => x.id === id);
+        if (p) {
+          p.liked = true;
+          p.likeCount += 1;
+        }
+      });
 
     await likes[0].trigger('click');
     await flushPromises();
 
+    expect(toggleSpy).toHaveBeenCalledWith(fixture.places[0].id);
     const likesAfter = wrapper.findAll('.photo-card .like');
     expect(likesAfter[0].classes()).toContain('on');
-    // Other cards remain un-liked.
     expect(likesAfter[1].classes()).not.toContain('on');
     expect(likesAfter[2].classes()).not.toContain('on');
   });

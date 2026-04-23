@@ -4,13 +4,17 @@ import { setActivePinia, createPinia } from 'pinia';
 vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
 import api from '@/services/api';
 import { usePlaceDetailStore, type PlaceDetailResponse } from '@/stores/placeDetail';
 
-const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
+const mockApi = api as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+};
 
 const fixture: PlaceDetailResponse = {
   place: {
@@ -30,6 +34,7 @@ const fixture: PlaceDetailResponse = {
     reviewCount: 312,
     photoCount: 1204,
     likeCount: 3200,
+    liked: false,
     nearbyRestaurantCount: 12,
     recommendedTimeLabel: '일몰',
     distanceKm: 0.1,
@@ -62,6 +67,7 @@ describe('placeDetail store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApi.get.mockReset();
+    mockApi.post.mockReset();
   });
 
   it('fetch happy path populates place/photos/related and clears loading/error', async () => {
@@ -101,16 +107,24 @@ describe('placeDetail store', () => {
     expect(store.place).toBeNull();
   });
 
-  it('toggleLikeLocal flips likedIds membership and isLiked getter', () => {
+  it('toggleLike posts to /api/places/:id/like and updates place.liked/likeCount', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = usePlaceDetailStore();
+    await store.fetch(10);
     expect(store.isLiked(10)).toBe(false);
 
-    store.toggleLikeLocal(10);
-    expect(store.likedIds).toContain(10);
+    mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 3201 } });
+    await store.toggleLike();
+
+    const [url] = mockApi.post.mock.calls[0];
+    expect(url).toBe('/api/places/10/like');
+    expect(store.place?.liked).toBe(true);
+    expect(store.place?.likeCount).toBe(3201);
     expect(store.isLiked(10)).toBe(true);
 
-    store.toggleLikeLocal(10);
-    expect(store.likedIds).not.toContain(10);
+    mockApi.post.mockResolvedValueOnce({ data: { liked: false, likeCount: 3200 } });
+    await store.toggleLike();
+    expect(store.place?.liked).toBe(false);
     expect(store.isLiked(10)).toBe(false);
   });
 

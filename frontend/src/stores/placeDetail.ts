@@ -18,6 +18,7 @@ export interface PlaceDetailPlace {
   reviewCount: number;
   photoCount: number;
   likeCount: number;
+  liked: boolean;
   nearbyRestaurantCount: number;
   recommendedTimeLabel: string | null;
   distanceKm: number | null;
@@ -55,7 +56,6 @@ interface State {
   related: RelatedPlace[];
   loading: boolean;
   error: string | null;
-  likedIds: number[];
   savedIds: number[];
 }
 
@@ -66,11 +66,11 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
     related: [],
     loading: false,
     error: null,
-    likedIds: [],
     savedIds: [],
   }),
   getters: {
-    isLiked: (state) => (id: number): boolean => state.likedIds.includes(id),
+    isLiked: (state) => (id: number): boolean =>
+      state.place !== null && state.place.id === id && state.place.liked === true,
     isSaved: (state) => (id: number): boolean => state.savedIds.includes(id),
   },
   actions: {
@@ -91,10 +91,18 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
         this.loading = false;
       }
     },
-    toggleLikeLocal(id: number): void {
-      const i = this.likedIds.indexOf(id);
-      if (i >= 0) this.likedIds.splice(i, 1);
-      else this.likedIds.push(id);
+    async toggleLike(): Promise<void> {
+      const p = this.place;
+      if (!p) return;
+      try {
+        const { data } = await api.post<{ liked: boolean; likeCount: number }>(
+          `/api/places/${p.id}/like`,
+        );
+        p.liked = data.liked;
+        p.likeCount = data.likeCount;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Failed to toggle like';
+      }
     },
     toggleSaveLocal(id: number): void {
       const i = this.savedIds.indexOf(id);

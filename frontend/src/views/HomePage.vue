@@ -123,8 +123,9 @@ async function onSelectScope(s: HomeScope): Promise<void> {
   if (error.value) await showError(error.value);
 }
 
-function onToggleLike(id: number): void {
-  homeStore.toggleLikeLocal(id);
+async function onToggleLike(id: number): Promise<void> {
+  await homeStore.toggleLike(id);
+  if (error.value) await showError(error.value);
 }
 
 async function onOpenDetail(id: number): Promise<void> {

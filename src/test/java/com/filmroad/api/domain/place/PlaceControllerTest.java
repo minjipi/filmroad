@@ -41,6 +41,8 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.results.place.workEpisode", notNullValue()))
                 .andExpect(jsonPath("$.results.place.sceneTimestamp", notNullValue()))
                 .andExpect(jsonPath("$.results.place.reviewCount", greaterThan(0)))
+                // 좋아요(#46): place=10은 user=1 시드 place_like에 포함되어 liked=true.
+                .andExpect(jsonPath("$.results.place.liked", is(true)))
                 .andExpect(jsonPath("$.results.photos", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.photos", hasSize(lessThanOrEqualTo(6))))
                 .andExpect(jsonPath("$.results.related", hasSize(greaterThanOrEqualTo(1))))

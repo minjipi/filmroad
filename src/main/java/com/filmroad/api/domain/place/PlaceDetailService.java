@@ -1,8 +1,10 @@
 package com.filmroad.api.domain.place;
 
+import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.common.util.GeoUtils;
+import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.place.dto.PlaceDetailResponse;
 import com.filmroad.api.domain.place.dto.PlaceFullDto;
 import com.filmroad.api.domain.place.dto.PlacePhotoDto;
@@ -24,6 +26,8 @@ public class PlaceDetailService {
 
     private final PlaceRepository placeRepository;
     private final PlacePhotoRepository placePhotoRepository;
+    private final PlaceLikeRepository placeLikeRepository;
+    private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
     public PlaceDetailResponse getPlaceDetail(Long id, Double lat, Double lng) {
@@ -32,6 +36,7 @@ public class PlaceDetailService {
 
         Double distanceKm = distanceKm(lat, lng, place);
         Integer driveTimeMin = driveTimeMin(distanceKm);
+        boolean liked = placeLikeRepository.existsByUserIdAndPlaceId(currentUser.currentUserId(), place.getId());
 
         List<PlacePhotoDto> photos = placePhotoRepository
                 .findByPlaceIdOrderByOrderIndexAscIdAsc(place.getId(), PageRequest.of(0, PHOTO_LIMIT))
@@ -47,7 +52,7 @@ public class PlaceDetailService {
                 .toList();
 
         return PlaceDetailResponse.builder()
-                .place(PlaceFullDto.of(place, distanceKm, driveTimeMin))
+                .place(PlaceFullDto.of(place, distanceKm, driveTimeMin, liked))
                 .photos(photos)
                 .related(related)
                 .build();

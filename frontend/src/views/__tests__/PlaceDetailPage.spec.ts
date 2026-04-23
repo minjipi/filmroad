@@ -48,6 +48,7 @@ const fixture: PlaceDetailResponse = {
     reviewCount: 312,
     photoCount: 1204,
     likeCount: 3200,
+    liked: false,
     nearbyRestaurantCount: 12,
     recommendedTimeLabel: '일몰',
     distanceKm: 0.1,
@@ -162,11 +163,11 @@ describe('PlaceDetailPage.vue', () => {
     const { wrapper, store } = mountPlaceDetailPage();
     await flushPromises();
 
-    const likeSpy = vi.spyOn(store, 'toggleLikeLocal');
+    const likeSpy = vi.spyOn(store, 'toggleLike').mockResolvedValue();
     const saveSpy = vi.spyOn(store, 'toggleSaveLocal');
 
     await wrapper.find('.act.like').trigger('click');
-    expect(likeSpy).toHaveBeenCalledWith(fixture.place.id);
+    expect(likeSpy).toHaveBeenCalledTimes(1);
 
     // .act without .like = bookmark/save button.
     const bookmarkBtn = wrapper.findAll('.act').find((b) => !b.classes('like'));

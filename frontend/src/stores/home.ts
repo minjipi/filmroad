@@ -14,6 +14,7 @@ export interface PlaceSummary {
   workId: number;
   workTitle: string;
   liked: boolean;
+  likeCount: number;
 }
 
 export interface Hero {
@@ -87,9 +88,19 @@ export const useHomeStore = defineStore('home', {
       this.scope = s;
       await this.fetchHome();
     },
-    toggleLikeLocal(placeId: number): void {
-      const place = this.places.find((p) => p.id === placeId);
-      if (place) place.liked = !place.liked;
+    async toggleLike(placeId: number): Promise<void> {
+      try {
+        const { data } = await api.post<{ liked: boolean; likeCount: number }>(
+          `/api/places/${placeId}/like`,
+        );
+        const place = this.places.find((p) => p.id === placeId);
+        if (place) {
+          place.liked = data.liked;
+          place.likeCount = data.likeCount;
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Failed to toggle like';
+      }
     },
   },
 });

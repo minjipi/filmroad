@@ -5,13 +5,17 @@ import { setActivePinia, createPinia } from 'pinia';
 vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
 import api from '@/services/api';
 import { useHomeStore, type HomeResponse } from '@/stores/home';
 
-const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
+const mockApi = api as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+};
 
 const fixture: HomeResponse = {
   hero: {
@@ -35,6 +39,7 @@ const fixture: HomeResponse = {
       workId: 1,
       workTitle: '도깨비',
       liked: false,
+      likeCount: 3200,
     },
     {
       id: 11,
@@ -44,6 +49,7 @@ const fixture: HomeResponse = {
       workId: 2,
       workTitle: '이태원 클라쓰',
       liked: false,
+      likeCount: 640,
     },
   ],
 };
@@ -52,6 +58,7 @@ describe('home store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApi.get.mockReset();
+    mockApi.post.mockReset();
   });
 
   it('fetchHome happy path populates hero/works/places and clears loading/error', async () => {
@@ -101,17 +108,24 @@ describe('home store', () => {
     expect(store.scope).toBe('TRENDING');
   });
 
-  it('toggleLikeLocal(placeId) flips liked only for the matching place', async () => {
+  it('toggleLike(placeId) posts to /api/places/:id/like and updates liked/likeCount from response', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
 
     const store = useHomeStore();
     await store.fetchHome();
 
-    store.toggleLikeLocal(10);
+    mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 3201 } });
+    await store.toggleLike(10);
+
+    const [url] = mockApi.post.mock.calls[0];
+    expect(url).toBe('/api/places/10/like');
     expect(store.places.find((p) => p.id === 10)?.liked).toBe(true);
+    expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(3201);
     expect(store.places.find((p) => p.id === 11)?.liked).toBe(false);
 
-    store.toggleLikeLocal(10);
+    mockApi.post.mockResolvedValueOnce({ data: { liked: false, likeCount: 3200 } });
+    await store.toggleLike(10);
     expect(store.places.find((p) => p.id === 10)?.liked).toBe(false);
+    expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(3200);
   });
 });

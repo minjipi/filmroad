@@ -39,7 +39,9 @@ class HomeControllerTest {
                 .andExpect(jsonPath("$.results.works", hasSize(greaterThanOrEqualTo(4))))
                 .andExpect(jsonPath("$.results.places", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.places", hasSize(lessThanOrEqualTo(20))))
-                .andExpect(jsonPath("$.results.hero.workId", notNullValue()));
+                .andExpect(jsonPath("$.results.hero.workId", notNullValue()))
+                // 좋아요(#46): place=10은 user=1 시드 place_like에 포함되어 liked=true.
+                .andExpect(jsonPath("$.results.places[?(@.id == 10)].liked", contains(true)));
     }
 
     @Test

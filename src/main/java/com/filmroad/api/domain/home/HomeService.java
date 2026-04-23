@@ -1,10 +1,12 @@
 package com.filmroad.api.domain.home;
 
+import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.util.GeoUtils;
 import com.filmroad.api.domain.home.dto.HeroDto;
 import com.filmroad.api.domain.home.dto.HomeResponse;
 import com.filmroad.api.domain.home.dto.PlaceSummaryDto;
 import com.filmroad.api.domain.home.dto.WorkSummaryDto;
+import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.place.Place;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.work.WorkRepository;
@@ -14,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +36,8 @@ public class HomeService {
 
     private final PlaceRepository placeRepository;
     private final WorkRepository workRepository;
+    private final PlaceLikeRepository placeLikeRepository;
+    private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
     public HomeResponse getHome(Double lat, Double lng, Long workId, HomeScope scope) {
@@ -54,8 +60,13 @@ public class HomeService {
                     .toList();
         }
 
+        List<Long> placeIds = places.stream().map(Place::getId).toList();
+        Set<Long> likedPlaceIds = placeIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(placeLikeRepository.findPlaceIdsLikedByUser(currentUser.currentUserId(), placeIds));
+
         List<PlaceSummaryDto> placeDtos = places.stream()
-                .map(PlaceSummaryDto::from)
+                .map(p -> PlaceSummaryDto.from(p, likedPlaceIds.contains(p.getId())))
                 .toList();
 
         List<WorkSummaryDto> workDtos = workRepository.findAll().stream()

@@ -11,7 +11,10 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "place")
+@Table(name = "place", indexes = {
+        @Index(name = "idx_place_lat_lng", columnList = "latitude, longitude"),
+        @Index(name = "idx_place_work", columnList = "work_id")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
@@ -72,4 +75,20 @@ public class Place extends BaseEntity {
 
     @Column(name = "review_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private int reviewCount;
+
+    @Column(length = 200)
+    private String address;
+
+    @Column(name = "place_type", length = 40)
+    private String placeType;
+
+    @Column(length = 30)
+    private String phone;
+
+    @Column(name = "operating_hours", length = 100)
+    private String operatingHours;
+
+    public void applyLikeDelta(int delta) {
+        this.likeCount = Math.max(0, this.likeCount + delta);
+    }
 }

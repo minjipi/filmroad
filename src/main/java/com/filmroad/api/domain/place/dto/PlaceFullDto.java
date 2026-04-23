@@ -23,12 +23,13 @@ public class PlaceFullDto {
     private int reviewCount;
     private int photoCount;
     private int likeCount;
+    private boolean liked;
     private int nearbyRestaurantCount;
     private String recommendedTimeLabel;
     private Double distanceKm;
     private Integer driveTimeMin;
 
-    public static PlaceFullDto of(Place place, Double distanceKm, Integer driveTimeMin) {
+    public static PlaceFullDto of(Place place, Double distanceKm, Integer driveTimeMin, boolean liked) {
         return PlaceFullDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -46,6 +47,7 @@ public class PlaceFullDto {
                 .reviewCount(place.getReviewCount())
                 .photoCount(place.getPhotoCount())
                 .likeCount(place.getLikeCount())
+                .liked(liked)
                 .nearbyRestaurantCount(place.getNearbyRestaurantCount())
                 .recommendedTimeLabel(place.getRecommendedTimeLabel())
                 .distanceKm(distanceKm)

@@ -232,9 +232,10 @@ function onBack(): void {
   router.back();
 }
 
-function onToggleLike(): void {
+async function onToggleLike(): Promise<void> {
   if (!place.value) return;
-  detailStore.toggleLikeLocal(place.value.id);
+  await detailStore.toggleLike();
+  if (error.value) await showError(error.value);
 }
 
 function onToggleSave(): void {

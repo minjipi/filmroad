@@ -15,7 +15,7 @@ public class PlaceSummaryDto {
     private String workTitle;
     private boolean liked;
 
-    public static PlaceSummaryDto from(Place place) {
+    public static PlaceSummaryDto from(Place place, boolean liked) {
         return PlaceSummaryDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -23,7 +23,7 @@ public class PlaceSummaryDto {
                 .coverImageUrl(place.getCoverImageUrl())
                 .workId(place.getWork().getId())
                 .workTitle(place.getWork().getTitle())
-                .liked(false)
+                .liked(liked)
                 .build();
     }
 }
