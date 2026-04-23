@@ -32,11 +32,8 @@ npm-debug.log*
 /www
 
 ### 환경변수 / 시크릿 ###
-.env.development
-.env.*.local
 .env
+.env.*
 !.env.example
 
-db
-
-.env*
+db/

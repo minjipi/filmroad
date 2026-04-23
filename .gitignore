@@ -41,13 +41,16 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/coverage/
+frontend/node_modules
 
 ### 환경변수 / 시크릿 ###
 .env
 .env.*
-.env.example
-db
+!.env.example
 
-.bkit
-.claude
-example
+### 로컬 DB 덤프 / 빌드 캐시 ###
+db/
+.bkit/
+
+### Claude Code 로컬 설정 (팀원 개인용) ###
+.claude/
