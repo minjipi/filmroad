@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
-vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
-}));
+vi.mock('@/services/api', async () => {
+  const actual = await vi.importActual<typeof import('@/services/api')>('@/services/api');
+  return {
+    ...actual,
+    default: { get: vi.fn(), post: vi.fn() },
+  };
+});
 
-import api from '@/services/api';
+import api, { ApiError } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import type { ProfileUser } from '@/stores/profile';
 
@@ -28,13 +32,9 @@ const fixtureUser: ProfileUser = {
   followingCount: 234,
 };
 
-// Mimics an axios error so axios.isAxiosError() returns true (it checks the flag).
-function makeAxiosError(status: number, message = 'http error') {
-  return {
-    isAxiosError: true,
-    message,
-    response: { status, data: null, statusText: '', headers: {}, config: {} },
-  };
+// Mirrors what services/api.ts rejects with after unwrapping the envelope.
+function makeAxiosError(status: number, message = 'http error'): ApiError {
+  return new ApiError(message, status, null);
 }
 
 describe('auth store', () => {

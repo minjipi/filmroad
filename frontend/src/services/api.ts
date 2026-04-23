@@ -7,6 +7,17 @@ export interface ApiEnvelope<T> {
   results: T;
 }
 
+export class ApiError extends Error {
+  readonly status: number | null;
+  readonly code: number | null;
+  constructor(message: string, status: number | null, code: number | null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
 
 export const api = axios.create({
@@ -28,12 +39,12 @@ api.interceptors.response.use(
       if (body.success) {
         return { ...response, data: body.results } as AxiosResponse<unknown>;
       }
-      return Promise.reject(new Error(body.message || 'Request failed'));
+      return Promise.reject(new ApiError(body.message || 'Request failed', response.status, body.code ?? null));
     }
     return response;
   },
   (error: AxiosError<ApiEnvelope<unknown>>) => {
-    const status = error.response?.status;
+    const status = error.response?.status ?? null;
     const requestUrl = error.config?.url;
     if (status === 401 && typeof window !== 'undefined') {
       const path = window.location.pathname;
@@ -41,8 +52,10 @@ api.interceptors.response.use(
         window.location.href = '/onboarding';
       }
     }
-    const msg = error.response?.data?.message ?? error.message ?? 'Network error';
-    return Promise.reject(new Error(msg));
+    const body = error.response?.data;
+    const msg = body?.message ?? error.message ?? 'Network error';
+    const code = body?.code ?? null;
+    return Promise.reject(new ApiError(msg, status, code));
   },
 );
 

@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
-import axios from 'axios';
-import api from '@/services/api';
+import api, { ApiError } from '@/services/api';
 import type { ProfileUser } from '@/stores/profile';
 
 interface State {
@@ -11,6 +10,10 @@ interface State {
 
 interface MeResponse {
   user: ProfileUser;
+}
+
+function isUnauthorized(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401;
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -31,7 +34,8 @@ export const useAuthStore = defineStore('auth', {
         this.user = data.user;
       } catch (e) {
         this.user = null;
-        if (axios.isAxiosError(e) && e.response?.status === 401) {
+        // Missing/expired session is the normal pre-login state, not a user-facing error.
+        if (isUnauthorized(e)) {
           return;
         }
         this.error = e instanceof Error ? e.message : 'Failed to load session';
@@ -43,7 +47,10 @@ export const useAuthStore = defineStore('auth', {
       try {
         await api.post('/api/auth/logout');
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Failed to logout';
+        // Already-expired sessions return 401 on logout — still treat as success.
+        if (!isUnauthorized(e)) {
+          this.error = e instanceof Error ? e.message : 'Failed to logout';
+        }
       } finally {
         this.user = null;
       }
