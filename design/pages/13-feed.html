@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>13 · 탐색 (SNS 피드)</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .feed-head { padding: 0 20px 8px; display:flex; align-items:center; justify-content:space-between; }
+  .feed-head h1 { font-size: 24px; font-weight: 900; letter-spacing:-0.03em; margin:0; }
+  .icon-btn { width:40px; height:40px; border-radius:12px; background:var(--fr-bg-muted); color:var(--fr-ink-2); border:none; display:flex; align-items:center; justify-content:center; position:relative; }
+  .icon-btn .dot { position:absolute; top:10px; right:10px; width:8px; height:8px; border-radius:50%; background:var(--fr-coral); border:2px solid var(--fr-bg-muted); }
+
+  /* Search */
+  .search-row { padding: 4px 20px 12px; }
+  .search-bar { display:flex; align-items:center; gap:8px; background:var(--fr-bg-muted); border-radius:14px; padding:11px 14px; color:var(--fr-ink-3); font-size:14px; }
+
+  /* Tabs */
+  .feed-tabs { display:flex; gap:22px; padding: 0 20px; border-bottom:1px solid var(--fr-line); }
+  .feed-tabs .t { padding: 10px 0; font-size:15px; font-weight:700; color:var(--fr-ink-4); border-bottom:2px solid transparent; letter-spacing:-0.02em; }
+  .feed-tabs .t.on { color:var(--fr-ink); border-bottom-color:var(--fr-ink); }
+
+  /* Stories */
+  .stories { display:flex; gap:14px; overflow-x:auto; padding: 14px 20px 6px; }
+  .story { flex-shrink:0; width:64px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .story .ring { width:62px; height:62px; border-radius:50%; padding:2px; background: linear-gradient(135deg, #14BCED, #ff5a5f); position:relative; }
+  .story .inner { width:100%; height:100%; border-radius:50%; border:2px solid white; overflow:hidden; background:#eee; }
+  .story .inner img { width:100%; height:100%; object-fit:cover; }
+  .story .nm { font-size: 11px; font-weight:600; color:var(--fr-ink-2); max-width:62px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .story.me .ring { background:var(--fr-bg-muted); }
+  .story.me .add { position:absolute; bottom:-2px; right:-2px; width:20px; height:20px; border-radius:50%; background:var(--fr-primary); color:white; display:flex; align-items:center; justify-content:center; border:2px solid white; }
+
+  /* Post card */
+  .post { padding: 18px 0 16px; border-bottom:8px solid var(--fr-line-soft); }
+  .post-head { display:flex; align-items:center; gap:10px; padding: 0 20px 12px; }
+  .avatar { width:38px; height:38px; border-radius:50%; overflow:hidden; flex-shrink:0; background:#eee; }
+  .avatar img { width:100%; height:100%; object-fit:cover; }
+  .post-head .meta { flex:1; min-width:0; }
+  .post-head .nm { font-size:13.5px; font-weight:800; letter-spacing:-0.02em; display:flex; align-items:center; gap:4px; }
+  .post-head .verified { width:14px; height:14px; color:var(--fr-primary); }
+  .post-head .loc { display:flex; align-items:center; gap:3px; font-size:11.5px; color:var(--fr-ink-3); margin-top:2px; }
+  .post-head .loc .drama { color:var(--fr-primary); font-weight:700; }
+  .post-head .more { width:28px; height:28px; color:var(--fr-ink-3); display:flex; align-items:center; justify-content:center; }
+
+  /* Scene compare (split) */
+  .post-image { position:relative; background:#000; }
+  .compare-wrap { position:relative; aspect-ratio: 4/5; overflow:hidden; }
+  .compare-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .compare-top { clip-path: inset(0 0 50% 0); }
+  .compare-divider { position:absolute; left:0; right:0; top:50%; height:2px; background:white; z-index:2; }
+  .compare-divider::before, .compare-divider::after {
+    content:""; position:absolute; width:24px; height:24px; border-radius:50%; background:white; top:50%; transform:translateY(-50%);
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .compare-divider::before { left:-12px; }
+  .compare-divider::after { right:-12px; }
+  .compare-lbl-top, .compare-lbl-bot { position:absolute; z-index:3; background:rgba(0,0,0,.75); color:white; font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; letter-spacing:-0.01em; backdrop-filter:blur(6px); }
+  .compare-lbl-top { top:12px; left:12px; }
+  .compare-lbl-bot { bottom:12px; left:12px; }
+  .drama-badge { position:absolute; top:12px; right:12px; z-index:3; background:rgba(20,188,237,.95); color:white; padding:5px 10px; border-radius:999px; font-size:10.5px; font-weight:700; display:flex; align-items:center; gap:4px; backdrop-filter:blur(6px); }
+
+  /* Single image post */
+  .single-img { aspect-ratio: 4/5; }
+  .single-img img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* Actions */
+  .post-actions { display:flex; align-items:center; gap:18px; padding: 12px 20px 6px; color:var(--fr-ink-2); }
+  .post-actions .a { display:flex; align-items:center; gap:5px; font-size:13px; font-weight:700; }
+  .post-actions .a.on { color:var(--fr-coral); }
+  .post-actions .spacer { flex:1; }
+
+  .post-likes { padding: 0 20px; font-size:13px; font-weight:700; }
+  .post-caption { padding: 6px 20px 4px; font-size:14px; line-height:1.5; }
+  .post-caption b { font-weight:800; }
+  .post-caption .tag { color:var(--fr-primary); font-weight:700; }
+  .post-time { padding: 8px 20px 0; font-size:11px; color:var(--fr-ink-4); text-transform:uppercase; letter-spacing:0.04em; }
+
+  /* Visit chip inside caption */
+  .visit-chip { display:inline-flex; align-items:center; gap:5px; margin-top:10px; padding:7px 11px; background:var(--fr-primary-soft); color:var(--fr-primary); border-radius:10px; font-size:12px; font-weight:700; letter-spacing:-0.01em; }
+
+  /* Recommendation strip (between posts) */
+  .reco-strip { padding: 18px 0; border-bottom:8px solid var(--fr-line-soft); background:#fafbfc; }
+  .reco-strip h3 { padding: 0 20px; font-size:14px; font-weight:800; margin: 0 0 12px; letter-spacing:-0.02em; display:flex; align-items:center; gap:6px; }
+  .reco-strip h3 .sp { font-size:10px; color:white; background:var(--fr-violet); padding:2px 7px; border-radius:999px; font-weight:800; letter-spacing:0; }
+  .reco-row { display:flex; gap:10px; overflow-x:auto; padding: 0 20px; }
+  .reco-card { flex-shrink:0; width:128px; background:white; border:1px solid var(--fr-line); border-radius:14px; overflow:hidden; }
+  .reco-card .th { width:100%; height:128px; background:#eef2f6; overflow:hidden; }
+  .reco-card .th img { width:100%; height:100%; object-fit:cover; }
+  .reco-card .body { padding:10px; }
+  .reco-card .t { font-size:12px; font-weight:800; letter-spacing:-0.02em; line-height:1.25; }
+  .reco-card .s { font-size:10.5px; color:var(--fr-ink-3); margin-top:3px; }
+  .reco-card .follow { margin-top:8px; height:28px; border-radius:8px; background:var(--fr-primary); color:white; border:none; font-weight:700; font-size:11.5px; width:100%; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="feed-head">
+    <h1>탐색</h1>
+    <div style="display:flex; gap:6px;">
+      <button class="icon-btn"><i data-lucide="heart" class="ic-20"></i><span class="dot"></span></button>
+      <button class="icon-btn"><i data-lucide="send" class="ic-20"></i></button>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <div class="search-bar">
+      <i data-lucide="search" class="ic-16"></i>
+      <span>작품, 장소, 사용자 검색</span>
+    </div>
+  </div>
+
+  <div class="feed-tabs">
+    <div class="t">팔로잉</div>
+    <div class="t on">인기</div>
+    <div class="t">내 주변</div>
+    <div class="t">작품별</div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <!-- Post 1: scene compare -->
+    <div class="post">
+      <div class="post-head">
+        <div class="avatar"><img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="meta">
+          <div class="nm">soyeon_film <i data-lucide="badge-check" class="verified" style="fill:currentColor"></i></div>
+          <div class="loc"><span class="drama">도깨비</span>·주문진 영진해변 방파제</div>
+        </div>
+        <div class="more"><i data-lucide="more-horizontal" class="ic-20"></i></div>
+      </div>
+
+      <div class="post-image">
+        <div class="compare-wrap">
+          <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80" class="compare-top">
+          <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80">
+          <div class="compare-divider"></div>
+          <div class="compare-lbl-top">드라마 원본</div>
+          <div class="compare-lbl-bot">내 인증샷</div>
+          <div class="drama-badge"><i data-lucide="film" class="ic-16"></i>1회 00:15:24</div>
+        </div>
+      </div>
+
+      <div class="post-actions">
+        <span class="a on"><i data-lucide="heart" class="ic-22" style="fill:currentColor"></i>1,248</span>
+        <span class="a"><i data-lucide="message-circle" class="ic-22"></i>89</span>
+        <span class="a"><i data-lucide="send" class="ic-22"></i></span>
+        <span class="spacer"></span>
+        <span class="a"><i data-lucide="bookmark" class="ic-22"></i></span>
+      </div>
+
+      <div class="post-caption">
+        <b>soyeon_film</b> 메밀꽃 한 다발 들고 기다렸어요 🌾<br/>진짜 김신 나올 뻔... <span class="tag">#도깨비</span> <span class="tag">#성지순례</span> <span class="tag">#주문진</span>
+        <div class="visit-chip"><i data-lucide="check-circle-2" class="ic-16" style="fill:currentColor; color:white;"></i>여기 다녀왔어요 · 2025.10.14</div>
+      </div>
+      <div class="post-time">2시간 전</div>
+    </div>
+
+    <!-- Reco strip -->
+    <div class="reco-strip">
+      <h3><span class="sp">추천</span> 같은 작품 인증 중인 사람들</h3>
+      <div class="reco-row no-scrollbar">
+        <div class="reco-card">
+          <div class="th"><img src="https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&w=300&q=80"></div>
+          <div class="body"><div class="t">trip_hj</div><div class="s">도깨비 14/24</div><button class="follow">팔로우</button></div>
+        </div>
+        <div class="reco-card">
+          <div class="th"><img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=300&q=80"></div>
+          <div class="body"><div class="t">dokkaebi.love</div><div class="s">도깨비 21/24</div><button class="follow">팔로우</button></div>
+        </div>
+        <div class="reco-card">
+          <div class="th"><img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80"></div>
+          <div class="body"><div class="t">eunbyul_</div><div class="s">도깨비 · 완주</div><button class="follow">팔로우</button></div>
+        </div>
+        <div class="reco-card">
+          <div class="th"><img src="https://images.unsplash.com/photo-1502378735452-bc7d86632805?auto=format&fit=crop&w=300&q=80"></div>
+          <div class="body"><div class="t">min_travels</div><div class="s">도깨비 8/24</div><button class="follow">팔로우</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post 2: single image -->
+    <div class="post">
+      <div class="post-head">
+        <div class="avatar"><img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="meta">
+          <div class="nm">trip_hj</div>
+          <div class="loc"><span class="drama">미스터 션샤인</span>·논산 선샤인 스튜디오</div>
+        </div>
+        <div class="more"><i data-lucide="more-horizontal" class="ic-20"></i></div>
+      </div>
+
+      <div class="post-image single-img">
+        <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80">
+        <div class="drama-badge" style="background:rgba(15,23,42,.85);"><i data-lucide="map-pin" class="ic-16"></i>충남 논산</div>
+      </div>
+
+      <div class="post-actions">
+        <span class="a"><i data-lucide="heart" class="ic-22"></i>834</span>
+        <span class="a"><i data-lucide="message-circle" class="ic-22"></i>42</span>
+        <span class="a"><i data-lucide="send" class="ic-22"></i></span>
+        <span class="spacer"></span>
+        <span class="a"><i data-lucide="bookmark" class="ic-22" style="fill:currentColor; color:var(--fr-ink);"></i></span>
+      </div>
+
+      <div class="post-caption">
+        <b>trip_hj</b> 대한제국이 숨 쉬는 곳. 여운이 오래 남아요.<br/>
+        <span class="tag">#미스터션샤인</span> <span class="tag">#논산여행</span>
+        <div class="visit-chip"><i data-lucide="check-circle-2" class="ic-16" style="fill:currentColor; color:white;"></i>여기 다녀왔어요 · 2025.10.12</div>
+      </div>
+      <div class="post-time">어제</div>
+    </div>
+
+    <!-- Post 3: compare -->
+    <div class="post">
+      <div class="post-head">
+        <div class="avatar"><img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="meta">
+          <div class="nm">dokkaebi.love <i data-lucide="badge-check" class="verified" style="fill:currentColor"></i></div>
+          <div class="loc"><span class="drama">갯마을차차차</span>·청하공진시장</div>
+        </div>
+        <div class="more"><i data-lucide="more-horizontal" class="ic-20"></i></div>
+      </div>
+
+      <div class="post-image">
+        <div class="compare-wrap">
+          <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80" class="compare-top">
+          <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80">
+          <div class="compare-divider"></div>
+          <div class="compare-lbl-top">드라마 원본</div>
+          <div class="compare-lbl-bot">내 인증샷</div>
+          <div class="drama-badge"><i data-lucide="film" class="ic-16"></i>3회 00:42:11</div>
+        </div>
+      </div>
+
+      <div class="post-actions">
+        <span class="a"><i data-lucide="heart" class="ic-22"></i>562</span>
+        <span class="a"><i data-lucide="message-circle" class="ic-22"></i>31</span>
+        <span class="a"><i data-lucide="send" class="ic-22"></i></span>
+        <span class="spacer"></span>
+        <span class="a"><i data-lucide="bookmark" class="ic-22"></i></span>
+      </div>
+
+      <div class="post-caption">
+        <b>dokkaebi.love</b> 혜진이 커피트럭 하던 자리 🚚☕ 커피도 진짜 맛있었어요.
+        <div class="visit-chip"><i data-lucide="check-circle-2" class="ic-16" style="fill:currentColor; color:white;"></i>여기 다녀왔어요 · 2025.10.09</div>
+      </div>
+      <div class="post-time">2일 전</div>
+    </div>
+
+    <div style="height:20px;"></div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item is-active"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
