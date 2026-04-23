@@ -10,7 +10,7 @@
           <span class="logo-name">필름로드</span>
         </div>
         <div class="head-actions">
-          <button class="icon-btn" type="button" aria-label="search">
+          <button class="icon-btn" type="button" aria-label="search" @click="onSearch">
             <ion-icon :icon="searchOutline" class="ic-20" />
           </button>
           <button class="icon-btn" type="button" aria-label="notifications">
@@ -130,6 +130,10 @@ async function onToggleLike(id: number): Promise<void> {
 
 async function onOpenDetail(id: number): Promise<void> {
   await router.push(`/place/${id}`);
+}
+
+async function onSearch(): Promise<void> {
+  await router.push('/search');
 }
 
 onMounted(async () => {

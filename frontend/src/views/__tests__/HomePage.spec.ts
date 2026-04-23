@@ -151,6 +151,15 @@ describe('HomePage.vue', () => {
     }));
   });
 
+  it('search icon pushes /search', async () => {
+    const { wrapper } = mountHomePage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('button[aria-label="search"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/search');
+  });
+
   it('clicking a .photo-card pushes /place/:id', async () => {
     const { wrapper } = mountHomePage();
     await flushPromises();
