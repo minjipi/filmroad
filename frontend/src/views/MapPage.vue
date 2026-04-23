@@ -277,6 +277,7 @@ import {
   DETAIL_ZOOM,
 } from '@/stores/map';
 import { useSavedStore } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
@@ -291,6 +292,7 @@ const router = useRouter();
 const visibleMarkers = computed<MapMarker[]>(() => mapStore.visibleMarkers);
 const visitedIds = computed<number[]>(() => mapStore.visitedIds);
 const savedStore = useSavedStore();
+const uiStore = useUiStore();
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 // Draggable sheet — the composable owns the live drag height + pointer
@@ -525,8 +527,13 @@ async function onSearch(): Promise<void> {
 
 async function onToggleSave(): Promise<void> {
   if (!selected.value) return;
-  await savedStore.toggleSave(selected.value.id);
-  if (savedStore.error) await showError(savedStore.error);
+  const pid = selected.value.id;
+  if (savedStore.isSaved(pid)) {
+    await savedStore.toggleSave(pid);
+    if (savedStore.error) await showError(savedStore.error);
+    return;
+  }
+  uiStore.openCollectionPicker(pid);
 }
 
 async function onOpenDetail(): Promise<void> {

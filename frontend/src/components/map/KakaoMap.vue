@@ -29,6 +29,7 @@ const props = defineProps<{
   markers: MapMarker[];
   selectedId: number | null;
   visitedIds: number[];
+  routePath?: LatLng[];
 }>();
 
 const emit = defineEmits<{
@@ -51,6 +52,7 @@ let kakao: AnyObj | null = null;
 let mapInstance: AnyObj | null = null;
 let overlays: AnyObj[] = [];
 let meOverlay: AnyObj | null = null;
+let routePolyline: AnyObj | null = null;
 
 // Pre-computed renderables (pins + clusters). Recomputed whenever markers,
 // zoom, or selectedId change so the clusterer stays in sync with the view.
@@ -231,13 +233,39 @@ async function init(): Promise<void> {
     emitBounds();
   });
   renderOverlays();
+  renderRoute();
   // Prime the consumer with the initial bounds so it can kick off the first
   // viewport-scoped fetch without waiting for the user to pan.
   emitBounds();
 }
 
+function renderRoute(): void {
+  if (routePolyline) {
+    (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(null);
+    routePolyline = null;
+  }
+  if (!kakao || !mapInstance) return;
+  const path = props.routePath ?? [];
+  if (path.length < 2) return;
+  const k = kakao as unknown as {
+    maps: {
+      LatLng: new (lat: number, lng: number) => unknown;
+      Polyline: new (opts: unknown) => AnyObj;
+    };
+  };
+  routePolyline = new k.maps.Polyline({
+    path: path.map((pt) => new k.maps.LatLng(pt.lat, pt.lng)),
+    strokeWeight: 4,
+    strokeColor: '#14BCED',
+    strokeOpacity: 0.85,
+    strokeStyle: 'shortdash',
+  });
+  (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(mapInstance);
+}
+
 watch(renderables, () => renderOverlays(), { deep: true });
 watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
+watch(() => props.routePath, () => renderRoute(), { deep: true });
 watch(
   () => [props.center.lat, props.center.lng],
   () => {
@@ -259,6 +287,10 @@ watch(
 onMounted(init);
 onBeforeUnmount(() => {
   clearOverlays();
+  if (routePolyline) {
+    (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(null);
+    routePolyline = null;
+  }
   mapInstance = null;
   kakao = null;
 });

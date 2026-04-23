@@ -62,6 +62,8 @@ public class WorkDetailService {
                     .visited(s != null)
                     .visitedAt(s == null ? null : s.getAcquiredAt())
                     .orderIndex(p.getId())
+                    .latitude(p.getLatitude())
+                    .longitude(p.getLongitude())
                     .build();
         }).toList();
 

@@ -146,6 +146,32 @@ describe('WorkDetailPage.vue', () => {
     expect(spots[1].classes()).not.toContain('done');
   });
 
+  it('spots section header shows "회차순" + a chevron-down affordance (09-design)', async () => {
+    const { wrapper } = mountWorkDetail();
+    await flushPromises();
+
+    const trigger = wrapper.find('[data-testid="spots-sort"]');
+    expect(trigger.exists()).toBe(true);
+    expect(trigger.text()).toContain('회차순');
+    // The chevron is an <ion-icon> stub — its presence marks the design's sort arrow.
+    expect(trigger.findAll('ion-icon-stub').length + trigger.findAll('ion-icon').length).toBeGreaterThan(0);
+  });
+
+  it('visited spot shows "인증완료" with the check glyph (design mint badge)', async () => {
+    const { wrapper } = mountWorkDetail();
+    await flushPromises();
+
+    const badge = wrapper.find('[data-testid="spot-visited"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toContain('인증완료');
+    // Mint class ties the tint to var(--fr-mint).
+    expect(badge.classes()).toContain('mint');
+    // Inline check icon must be there (design 의 "✓").
+    expect(
+      badge.findAll('ion-icon-stub').length + badge.findAll('ion-icon').length,
+    ).toBeGreaterThan(0);
+  });
+
   it('clicking a spot pushes /place/:id', async () => {
     const { wrapper } = mountWorkDetail();
     await flushPromises();
@@ -155,5 +181,24 @@ describe('WorkDetailPage.vue', () => {
     await spots[1].trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/place/11');
+  });
+
+  it('spots view toggle switches between list and map', async () => {
+    const { wrapper } = mountWorkDetail();
+    await flushPromises();
+
+    // Default is list view
+    expect(wrapper.find('.spots').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="spots-map"]').exists()).toBe(false);
+
+    // Toggle to map
+    await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
+    expect(wrapper.find('[data-testid="spots-map"]').exists()).toBe(true);
+    expect(wrapper.find('.spots').exists()).toBe(false);
+
+    // Toggle back to list
+    await wrapper.find('[data-testid="spots-view-list"]').trigger('click');
+    expect(wrapper.find('.spots').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="spots-map"]').exists()).toBe(false);
   });
 });
