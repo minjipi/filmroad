@@ -67,6 +67,14 @@ public class GlobalExceptionHandler {
         if (statusCode == BaseResponseStatus.UNAUTHORIZED_COMMENT.getCode()) {
             return 403;
         }
+        // 자격증명 실패 계열은 401, 리소스 충돌(중복 이메일 등)은 409.
+        if (statusCode == BaseResponseStatus.INVALID_USER_INFO.getCode()
+                || statusCode == BaseResponseStatus.INVALID_USER_PASSWORD.getCode()) {
+            return 401;
+        }
+        if (statusCode == BaseResponseStatus.DUPLICATE_USER_EMAIL.getCode()) {
+            return 409;
+        }
         // 40000번대 응답 오류 -> 400, 30000번대 요청 오류 -> 400, 기타 -> 500
         if (statusCode >= 40000 && statusCode < 50000) {
             return 400;

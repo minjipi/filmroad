@@ -75,10 +75,10 @@ import {
   chatbubbleEllipsesOutline,
   mailOutline,
 } from 'ionicons/icons';
-import { useRouter } from 'vue-router';
-import { markOnboarded } from '@/composables/useOnboarding';
+import { useRoute, useRouter } from 'vue-router';
 
 const router = useRouter();
+const route = useRoute();
 
 function onGoogle(): void {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
@@ -91,8 +91,13 @@ function onKakao(): void {
 }
 
 async function onEmail(): Promise<void> {
-  markOnboarded();
-  await router.replace('/home');
+  // Hand off to the dedicated email signup/login page — markOnboarded fires
+  // only after the user successfully authenticates there. Pass the original
+  // destination through so the guard's ?redirect survives the extra hop.
+  const q = route.query.redirect;
+  const redirect = Array.isArray(q) ? q[0] : q;
+  const query = typeof redirect === 'string' && redirect ? { redirect } : undefined;
+  await router.push({ path: '/email-auth', query });
 }
 </script>
 

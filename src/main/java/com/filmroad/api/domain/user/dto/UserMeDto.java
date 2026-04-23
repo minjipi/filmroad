@@ -10,6 +10,7 @@ public class UserMeDto {
     private Long id;
     private String nickname;
     private String handle;
+    private String email;
     private String avatarUrl;
     private String bio;
     private int level;
@@ -24,6 +25,7 @@ public class UserMeDto {
                 .id(user.getId())
                 .nickname(user.getNickname())
                 .handle(user.getHandle())
+                .email(user.getEmail())
                 .avatarUrl(user.getAvatarUrl())
                 .bio(user.getBio())
                 .level(user.getLevel())

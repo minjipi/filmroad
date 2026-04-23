@@ -60,6 +60,10 @@ public class User extends BaseEntity {
     @Column(length = 200)
     private String email;
 
+    // BCrypt hash. Only populated for AuthProvider.EMAIL users; OAuth/DEMO users remain null.
+    @Column(name = "password_hash", length = 200)
+    private String passwordHash;
+
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean verified;
 

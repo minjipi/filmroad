@@ -1,8 +1,8 @@
 <template>
   <ion-modal
     :is-open="open"
-    :initial-breakpoint="0.6"
-    :breakpoints="[0, 0.6]"
+    :initial-breakpoint="0.55"
+    :breakpoints="[0, 0.55]"
     handle="true"
     @did-dismiss="onDismiss"
   >
@@ -17,11 +17,11 @@
       </div>
 
       <div class="lp-actions">
-        <button class="lp-btn google" type="button" @click="onGoogle">
-          <ion-icon :icon="logoGoogle" class="ic-20" />Google로 계속하기
+        <button class="lp-btn primary" type="button" @click="onStart">
+          시작하기
         </button>
-        <button class="lp-btn kakao" type="button" @click="onKakao">
-          <ion-icon :icon="chatbubbleOutline" class="ic-20" />카카오로 계속하기
+        <button class="lp-btn email" type="button" @click="onEmail">
+          이메일로 로그인 / 가입
         </button>
         <button class="lp-btn cancel" type="button" @click="onClose">
           다음에 하기
@@ -34,26 +34,29 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonModal, IonIcon } from '@ionic/vue';
-import { logoGoogle, chatbubbleOutline, lockClosedOutline } from 'ionicons/icons';
+import { lockClosedOutline } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useUiStore } from '@/stores/ui';
 
 const uiStore = useUiStore();
+const router = useRouter();
 const { loginPromptOpen, loginPromptReason } = storeToRefs(uiStore);
 
 const open = computed(() => loginPromptOpen.value);
 const reason = computed(() => loginPromptReason.value);
 
-function apiBase(): string {
-  return import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+// All gated-action triggers now funnel users through /onboarding (the central
+// auth hub), where Google/Kakao OAuth and email signup/login are offered side
+// by side. The dedicated email flow lives at /email-auth for a direct jump.
+async function onStart(): Promise<void> {
+  uiStore.closeLoginPrompt();
+  await router.push('/onboarding');
 }
 
-function onGoogle(): void {
-  window.location.href = `${apiBase()}/oauth2/authorization/google`;
-}
-
-function onKakao(): void {
-  window.location.href = `${apiBase()}/oauth2/authorization/kakao`;
+async function onEmail(): Promise<void> {
+  uiStore.closeLoginPrompt();
+  await router.push('/email-auth');
 }
 
 function onClose(): void {
@@ -113,8 +116,16 @@ function onDismiss(): void {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   cursor: pointer;
 }
-.lp-btn.google { background: #ffffff; color: #0f172a; border: 1px solid var(--fr-line); }
-.lp-btn.kakao { background: #FEE500; color: #191919; }
+.lp-btn.primary {
+  background: var(--fr-primary);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(20, 188, 237, 0.35);
+}
+.lp-btn.email {
+  background: #ffffff;
+  color: var(--fr-ink);
+  border: 1px solid var(--fr-line);
+}
 .lp-btn.cancel {
   background: transparent;
   color: var(--fr-ink-3);

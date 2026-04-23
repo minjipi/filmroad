@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -24,6 +24,38 @@ export const api = axios.create({
   baseURL,
   timeout: 10_000,
   withCredentials: true,
+});
+
+// Read the access token lazily from localStorage so this module stays
+// loadable before Pinia is installed (e.g. inside Vitest setup). The auth
+// store owns writes via setToken(); this just mirrors what's persisted.
+const TOKEN_STORAGE_KEY = 'filmroad_access_token';
+function readAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = readAccessToken();
+  if (token) {
+    // Back-compat with axios v1: headers may be an AxiosHeaders instance.
+    if (config.headers && typeof (config.headers as { set?: unknown }).set === 'function') {
+      (config.headers as { set: (k: string, v: string) => void }).set(
+        'Authorization',
+        `Bearer ${token}`,
+      );
+    } else {
+      (config.headers as Record<string, string>) = {
+        ...(config.headers as Record<string, string>),
+        Authorization: `Bearer ${token}`,
+      };
+    }
+  }
+  return config;
 });
 
 function isSessionProbe(url: string | undefined): boolean {

@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
-const { pushSpy, replaceSpy, backSpy } = vi.hoisted(() => ({
+const { pushSpy, replaceSpy, backSpy, routeRef } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   replaceSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
+  routeRef: { current: { query: {} as Record<string, string | string[] | undefined> } },
 }));
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy, replace: replaceSpy, back: backSpy }),
+  useRoute: () => routeRef.current,
 }));
 
 const { toastCreateSpy } = vi.hoisted(() => ({
@@ -31,6 +33,7 @@ describe('OnboardingPage.vue', () => {
     replaceSpy.mockClear();
     backSpy.mockClear();
     toastCreateSpy.mockClear();
+    routeRef.current = { query: {} };
     localStorage.clear();
   });
 
@@ -88,14 +91,30 @@ describe('OnboardingPage.vue', () => {
     Object.defineProperty(window, 'location', { configurable: true, value: original });
   });
 
-  it('Email button: marks onboarded and replaces /home without showing a toast', async () => {
+  it('Email button: pushes /email-auth without marking onboarded or showing a toast', async () => {
     const { wrapper } = mountWithStubs(OnboardingPage);
 
     await wrapper.find('.auth-btn.email').trigger('click');
     await flushPromises();
 
     expect(toastCreateSpy).not.toHaveBeenCalled();
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
-    expect(replaceSpy).toHaveBeenCalledWith('/home');
+    // Onboarded flag must flip only after successful signup/login in EmailAuthPage,
+    // never as a side-effect of navigating into the form.
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(pushSpy).toHaveBeenCalledWith({ path: '/email-auth', query: undefined });
+    expect(replaceSpy).not.toHaveBeenCalled();
+  });
+
+  it('Email button: forwards ?redirect query through to /email-auth', async () => {
+    routeRef.current = { query: { redirect: '/upload' } };
+    const { wrapper } = mountWithStubs(OnboardingPage);
+
+    await wrapper.find('.auth-btn.email').trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/email-auth',
+      query: { redirect: '/upload' },
+    });
   });
 });
