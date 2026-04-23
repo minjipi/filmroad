@@ -20,4 +20,45 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     Page<PlacePhoto> findByPlaceIdOrderByOrderIndexDescIdDesc(Long placeId, Pageable pageable);
 
     long countByPlaceId(Long placeId);
+
+    @Query("""
+            SELECT p FROM PlacePhoto p
+            JOIN FETCH p.place pl
+            JOIN FETCH pl.work w
+            LEFT JOIN FETCH p.user u
+            WHERE (:workId IS NULL OR w.id = :workId)
+              AND (:cursor IS NULL OR p.id < :cursor)
+            ORDER BY p.likeCount DESC, p.id DESC
+            """)
+    List<PlacePhoto> findFeedPopular(@Param("workId") Long workId,
+                                     @Param("cursor") Long cursor,
+                                     Pageable pageable);
+
+    @Query("""
+            SELECT p FROM PlacePhoto p
+            JOIN FETCH p.place pl
+            JOIN FETCH pl.work w
+            LEFT JOIN FETCH p.user u
+            WHERE (:workId IS NULL OR w.id = :workId)
+              AND (:cursor IS NULL OR p.id < :cursor)
+            ORDER BY p.id DESC
+            """)
+    List<PlacePhoto> findFeedRecent(@Param("workId") Long workId,
+                                    @Param("cursor") Long cursor,
+                                    Pageable pageable);
+
+    @Query("""
+            SELECT p FROM PlacePhoto p
+            JOIN FETCH p.place pl
+            JOIN FETCH pl.work w
+            LEFT JOIN FETCH p.user u
+            WHERE p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :followerId)
+              AND (:workId IS NULL OR w.id = :workId)
+              AND (:cursor IS NULL OR p.id < :cursor)
+            ORDER BY p.id DESC
+            """)
+    List<PlacePhoto> findFeedByFollowedUsers(@Param("followerId") Long followerId,
+                                             @Param("workId") Long workId,
+                                             @Param("cursor") Long cursor,
+                                             Pageable pageable);
 }

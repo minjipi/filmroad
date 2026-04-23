@@ -20,9 +20,9 @@
 <script setup lang="ts">
 import { IonIcon } from '@ionic/vue';
 import { useRouter } from 'vue-router';
-import { home, map, camera, bookmark, person } from 'ionicons/icons';
+import { home, map, camera, search, person } from 'ionicons/icons';
 
-export type TabKey = 'home' | 'map' | 'camera' | 'saved' | 'me';
+export type TabKey = 'home' | 'map' | 'camera' | 'feed' | 'me';
 
 interface TabItem {
   key: TabKey;
@@ -38,7 +38,7 @@ const items: TabItem[] = [
   { key: 'home', label: '홈', icon: home },
   { key: 'map', label: '지도', icon: map },
   { key: 'camera', label: '', icon: camera, isCta: true },
-  { key: 'saved', label: '저장', icon: bookmark },
+  { key: 'feed', label: '탐색', icon: search },
   { key: 'me', label: '나', icon: person },
 ];
 
@@ -46,7 +46,7 @@ const ROUTES: Record<TabKey, string> = {
   home: '/home',
   map: '/map',
   camera: '/camera',
-  saved: '/saved',
+  feed: '/feed',
   me: '/profile',
 };
 

@@ -100,7 +100,7 @@
       </div>
 
     </ion-content>
-    <FrTabBar :model-value="'saved'" />
+    <FrTabBar :model-value="'me'" />
   </ion-page>
 </template>
 

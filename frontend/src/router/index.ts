@@ -71,6 +71,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/WorkDetailPage.vue'),
     props: true,
   },
+  {
+    path: '/feed',
+    name: 'Feed',
+    component: () => import('../views/FeedPage.vue'),
+  },
 ];
 
 const router = createRouter({

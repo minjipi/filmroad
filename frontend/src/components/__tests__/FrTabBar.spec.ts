@@ -14,7 +14,7 @@ const ROUTE_MAP: Array<{ key: TabKey; selectorIndex: number; path: string }> = [
   { key: 'home', selectorIndex: 0, path: '/home' },
   { key: 'map', selectorIndex: 1, path: '/map' },
   { key: 'camera', selectorIndex: 2, path: '/camera' },
-  { key: 'saved', selectorIndex: 3, path: '/saved' },
+  { key: 'feed', selectorIndex: 3, path: '/feed' },
   { key: 'me', selectorIndex: 4, path: '/profile' },
 ];
 
@@ -52,7 +52,7 @@ describe('FrTabBar.vue', () => {
   it("model-value='map' marks only the map item with is-active", () => {
     const { wrapper } = mountWithStubs(FrTabBar, { props: { modelValue: 'map' } });
     const items = wrapper.findAll('.fr-nav-row > div');
-    // home(0)=no, map(1)=yes, camera(2)=no(CTA, never active), saved(3)=no, me(4)=no.
+    // home(0)=no, map(1)=yes, camera(2)=no(CTA, never active), feed(3)=no, me(4)=no.
     expect(items[0].classes()).not.toContain('is-active');
     expect(items[1].classes()).toContain('is-active');
     expect(items[1].classes()).toContain('fr-nav-item');

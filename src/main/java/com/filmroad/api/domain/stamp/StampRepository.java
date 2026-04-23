@@ -23,4 +23,16 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
 
     @Query("SELECT DISTINCT s.place.work.id FROM Stamp s WHERE s.user.id = :userId")
     List<Long> findDistinctWorkIdsByUserId(@Param("userId") Long userId);
+
+    java.util.Optional<Stamp> findByUserIdAndPlaceId(Long userId, Long placeId);
+
+    @Query("""
+            SELECT s.user.id AS userId, COUNT(s) AS cnt
+            FROM Stamp s
+            WHERE (:workId IS NULL OR s.place.work.id = :workId)
+            GROUP BY s.user.id
+            ORDER BY COUNT(s) DESC, s.user.id ASC
+            """)
+    List<Object[]> aggregateUserStampCount(@Param("workId") Long workId,
+                                           org.springframework.data.domain.Pageable pageable);
 }

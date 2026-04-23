@@ -60,11 +60,22 @@ public class User extends BaseEntity {
     @Column(length = 200)
     private String email;
 
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean verified;
+
     // 업로드 보상 로직에서 포인트/레벨/스트릭/사진수 증가에 쓰는 상태 업데이트 헬퍼.
     public void applyUploadReward(int pointsDelta, int newStreakDays, int newLevel) {
         this.points += pointsDelta;
         this.streakDays = newStreakDays;
         this.level = newLevel;
         this.totalPhotoCount += 1;
+    }
+
+    public void applyFollowerDelta(int delta) {
+        this.followersCount = Math.max(0, this.followersCount + delta);
+    }
+
+    public void applyFollowingDelta(int delta) {
+        this.followingCount = Math.max(0, this.followingCount + delta);
     }
 }

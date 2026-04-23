@@ -149,6 +149,132 @@ UPDATE users SET level = 5, points = 350, streak_days = 7, followers_count = 120
 -- OAuth 도입(#33) 전까지 데모 유저는 provider=DEMO로 유지. 실 Google 유저는 로그인 시 자동 INSERT.
 UPDATE users SET provider = 'DEMO', provider_id = NULL, email = NULL WHERE id = 1;
 
+-- 피드(#42) 데모 유저 추가 + 기존 유저 verified 승격.
+UPDATE users SET verified = true WHERE id = 1;
+
+INSERT IGNORE INTO users (id, nickname, handle, avatar_url, bio, level, points, streak_days, followers_count, following_count, total_photo_count, provider, provider_id, email, verified, CREATE_DATE, UPDATE_DATE) VALUES
+  (2, '이서준', '@seojun',
+   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
+   '드라마 촬영지 수집가', 4, 280, 3, 820, 180, 92, 'DEMO', NULL, NULL, true, NOW(), NOW()),
+  (3, '박하늘', '@haneul',
+   'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=300&q=80',
+   '주말마다 성지순례', 3, 180, 2, 430, 95, 54, 'DEMO', NULL, NULL, false, NOW(), NOW()),
+  (4, '최도윤', '@doyoon',
+   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
+   '사진 찍는 여행자', 5, 420, 5, 1500, 210, 120, 'DEMO', NULL, NULL, true, NOW(), NOW()),
+  (5, '김지안', '@jian',
+   'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+   '드라마 덕후', 2, 90, 1, 210, 60, 18, 'DEMO', NULL, NULL, false, NOW(), NOW());
+
+-- place_photo.user_id 순환 배치 + like_count 분산 시드. POPULAR 정렬이 likeCount 내림차순이라 의미 있는 편차 필요.
+UPDATE place_photo SET user_id = 1, like_count = 128 WHERE id = 100;
+UPDATE place_photo SET user_id = 2, like_count = 84 WHERE id = 101;
+UPDATE place_photo SET user_id = 3, like_count = 61 WHERE id = 102;
+UPDATE place_photo SET user_id = 4, like_count = 40 WHERE id = 103;
+UPDATE place_photo SET user_id = 5, like_count = 22 WHERE id = 104;
+UPDATE place_photo SET user_id = 1, like_count = 17 WHERE id = 105;
+UPDATE place_photo SET user_id = 2, like_count = 95 WHERE id = 110;
+UPDATE place_photo SET user_id = 3, like_count = 70 WHERE id = 111;
+UPDATE place_photo SET user_id = 4, like_count = 48 WHERE id = 112;
+UPDATE place_photo SET user_id = 1, like_count = 33 WHERE id = 113;
+UPDATE place_photo SET user_id = 5, like_count = 21 WHERE id = 114;
+UPDATE place_photo SET user_id = 2, like_count = 12 WHERE id = 115;
+UPDATE place_photo SET user_id = 3, like_count = 88 WHERE id = 120;
+UPDATE place_photo SET user_id = 4, like_count = 67 WHERE id = 121;
+UPDATE place_photo SET user_id = 1, like_count = 45 WHERE id = 122;
+UPDATE place_photo SET user_id = 2, like_count = 30 WHERE id = 123;
+UPDATE place_photo SET user_id = 5, like_count = 18 WHERE id = 124;
+UPDATE place_photo SET user_id = 3, like_count = 10 WHERE id = 125;
+UPDATE place_photo SET user_id = 4, like_count = 110 WHERE id = 130;
+UPDATE place_photo SET user_id = 1, like_count = 82 WHERE id = 131;
+UPDATE place_photo SET user_id = 2, like_count = 63 WHERE id = 132;
+UPDATE place_photo SET user_id = 3, like_count = 44 WHERE id = 133;
+UPDATE place_photo SET user_id = 5, like_count = 26 WHERE id = 134;
+UPDATE place_photo SET user_id = 4, like_count = 15 WHERE id = 135;
+UPDATE place_photo SET user_id = 1, like_count = 102 WHERE id = 140;
+UPDATE place_photo SET user_id = 2, like_count = 76 WHERE id = 141;
+UPDATE place_photo SET user_id = 3, like_count = 55 WHERE id = 142;
+UPDATE place_photo SET user_id = 4, like_count = 38 WHERE id = 143;
+UPDATE place_photo SET user_id = 5, like_count = 20 WHERE id = 144;
+UPDATE place_photo SET user_id = 1, like_count = 14 WHERE id = 145;
+UPDATE place_photo SET user_id = 2, like_count = 71 WHERE id = 150;
+UPDATE place_photo SET user_id = 3, like_count = 52 WHERE id = 151;
+UPDATE place_photo SET user_id = 4, like_count = 36 WHERE id = 152;
+UPDATE place_photo SET user_id = 1, like_count = 24 WHERE id = 153;
+UPDATE place_photo SET user_id = 5, like_count = 13 WHERE id = 154;
+UPDATE place_photo SET user_id = 2, like_count = 9 WHERE id = 155;
+UPDATE place_photo SET user_id = 3, like_count = 99 WHERE id = 160;
+UPDATE place_photo SET user_id = 4, like_count = 73 WHERE id = 161;
+UPDATE place_photo SET user_id = 1, like_count = 51 WHERE id = 162;
+UPDATE place_photo SET user_id = 2, like_count = 35 WHERE id = 163;
+UPDATE place_photo SET user_id = 5, like_count = 22 WHERE id = 164;
+UPDATE place_photo SET user_id = 3, like_count = 16 WHERE id = 165;
+UPDATE place_photo SET user_id = 4, like_count = 65 WHERE id = 170;
+UPDATE place_photo SET user_id = 1, like_count = 49 WHERE id = 171;
+UPDATE place_photo SET user_id = 2, like_count = 33 WHERE id = 172;
+UPDATE place_photo SET user_id = 3, like_count = 24 WHERE id = 173;
+UPDATE place_photo SET user_id = 5, like_count = 14 WHERE id = 174;
+UPDATE place_photo SET user_id = 4, like_count = 8 WHERE id = 175;
+
+-- 좋아요(#46) 시드. user=1이 일부 place/photo 좋아요.
+INSERT IGNORE INTO place_like (id, user_id, place_id, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 1, 10, NOW(), NOW()),
+  (2, 1, 13, NOW(), NOW()),
+  (3, 1, 14, NOW(), NOW()),
+  (4, 1, 16, NOW(), NOW()),
+  (5, 1, 17, NOW(), NOW());
+
+INSERT IGNORE INTO photo_like (id, user_id, photo_id, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 1, 100, NOW(), NOW()),
+  (2, 1, 110, NOW(), NOW()),
+  (3, 1, 130, NOW(), NOW()),
+  (4, 1, 140, NOW(), NOW()),
+  (5, 1, 150, NOW(), NOW()),
+  (6, 1, 160, NOW(), NOW());
+
+-- 댓글(#49) 시드. 여러 유저가 여러 photo에 댓글.
+INSERT IGNORE INTO post_comment (id, user_id, photo_id, content, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 2, 100, '이 각도 너무 예뻐요!', NOW(), NOW()),
+  (2, 3, 100, '저도 꼭 가봐야겠네요', NOW(), NOW()),
+  (3, 4, 100, '도깨비 생각나요', NOW(), NOW()),
+  (4, 5, 110, '개화기 감성', NOW(), NOW()),
+  (5, 1, 110, '저도 여기 가봤어요', NOW(), NOW()),
+  (6, 2, 130, '단밤 포차!!', NOW(), NOW()),
+  (7, 3, 130, '추억의 장소', NOW(), NOW()),
+  (8, 4, 140, '덕수궁 돌담길 최고', NOW(), NOW()),
+  (9, 5, 140, '가을에 가면 더 예쁠듯', NOW(), NOW()),
+  (10, 1, 150, '델루나 외경 찐', NOW(), NOW()),
+  (11, 2, 160, '이태원 밤 분위기 좋죠', NOW(), NOW()),
+  (12, 3, 170, '합천 테마파크 재밌어요', NOW(), NOW());
+
+-- comment_count 컬럼 보정 (기존 행은 0, 새 댓글 row 수와 맞춤).
+UPDATE place_photo SET comment_count = 3 WHERE id = 100;
+UPDATE place_photo SET comment_count = 2 WHERE id = 110;
+UPDATE place_photo SET comment_count = 2 WHERE id = 130;
+UPDATE place_photo SET comment_count = 2 WHERE id = 140;
+UPDATE place_photo SET comment_count = 1 WHERE id = 150;
+UPDATE place_photo SET comment_count = 1 WHERE id = 160;
+UPDATE place_photo SET comment_count = 1 WHERE id = 170;
+
+-- 팔로우(#56) 시드. user=1 follows 2,3,4 / user=2 follows 1,3 / user=3 follows 2,4 / user=4 follows 1,2 / user=5 follows 1
+INSERT IGNORE INTO user_follow (id, follower_id, followee_id, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 1, 2, NOW(), NOW()),
+  (2, 1, 3, NOW(), NOW()),
+  (3, 1, 4, NOW(), NOW()),
+  (4, 2, 1, NOW(), NOW()),
+  (5, 2, 3, NOW(), NOW()),
+  (6, 3, 2, NOW(), NOW()),
+  (7, 3, 4, NOW(), NOW()),
+  (8, 4, 1, NOW(), NOW()),
+  (9, 4, 2, NOW(), NOW()),
+  (10, 5, 1, NOW(), NOW());
+
+UPDATE users SET followers_count = 3, following_count = 3 WHERE id = 1;
+UPDATE users SET followers_count = 3, following_count = 2 WHERE id = 2;
+UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 3;
+UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 4;
+UPDATE users SET followers_count = 0, following_count = 1 WHERE id = 5;
+
 INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_work_id, CREATE_DATE, UPDATE_DATE) VALUES
   (1, 'COASTAL_RUNNER', '바다 러너', '바다 성지 5곳 이상 방문', 'waves', 'sky-violet', 1, 'COASTAL_COUNT', 5, NULL, NOW(), NOW()),
   (2, 'STREAK_7', '연속 7일', '7일 연속 성지 방문', 'flame', 'amber-coral', 2, 'STREAK', 7, NULL, NOW(), NOW()),

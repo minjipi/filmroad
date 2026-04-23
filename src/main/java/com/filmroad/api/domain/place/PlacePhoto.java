@@ -1,6 +1,7 @@
 package com.filmroad.api.domain.place;
 
 import com.filmroad.api.common.model.BaseEntity;
+import com.filmroad.api.domain.user.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -42,4 +43,22 @@ public class PlacePhoto extends BaseEntity {
 
     @Column(name = "tags_csv", length = 500)
     private String tagsCsv;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    @Column(name = "like_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int likeCount;
+
+    @Column(name = "comment_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int commentCount;
+
+    public void applyLikeDelta(int delta) {
+        this.likeCount = Math.max(0, this.likeCount + delta);
+    }
+
+    public void applyCommentDelta(int delta) {
+        this.commentCount = Math.max(0, this.commentCount + delta);
+    }
 }
