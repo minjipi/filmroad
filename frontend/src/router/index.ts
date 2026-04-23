@@ -87,6 +87,12 @@ const routes: Array<RouteRecordRaw> = [
     props: true,
   },
   {
+    path: '/shot/:id',
+    name: 'ShotDetail',
+    component: () => import('../views/ShotDetailPage.vue'),
+    props: true,
+  },
+  {
     path: '/feed',
     name: 'Feed',
     component: () => import('../views/FeedPage.vue'),

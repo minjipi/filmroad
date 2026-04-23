@@ -130,16 +130,16 @@ describe('ProfilePage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/saved');
   });
 
-  it('stampbook tab "자세히 보기" button pushes /stampbook', async () => {
+  it('stampbook tab renders only the "수집 중인 작품" list (no summary card)', async () => {
     const { wrapper } = mountProfile();
     await flushPromises();
     await wrapper.findAll('.local-tabs .tab-i')[1].trigger('click');
     await flushPromises();
 
-    pushSpy.mockClear();
-    await wrapper.find('[data-testid="stampbook-detail-btn"]').trigger('click');
-    await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith('/stampbook');
+    expect(wrapper.find('[data-testid="stampbook-detail-btn"]').exists()).toBe(false);
+    expect(wrapper.find('.stampbook-card').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="stampbook-works-list"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('수집 중인 작품');
   });
 
   it('"지도로 보기" overlay link pushes /map', async () => {

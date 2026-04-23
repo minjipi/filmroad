@@ -73,41 +73,56 @@
         <!-- 인증샷 (기존) -->
         <div v-if="localTab === 'photos'" class="grid3" data-testid="tab-photos">
           <div
-            v-for="cell in gridCells"
+            v-for="(cell, idx) in gridCells"
             :key="cell.key"
             class="c"
-            @click="onOpenPlace(cell.placeId)"
+            data-testid="shot-cell"
+            @click="onOpenShot(idx + 1)"
           >
             <img v-if="cell.imageUrl" :src="cell.imageUrl" :alt="cell.tag ?? ''" />
             <span v-if="cell.tag" class="tag">{{ cell.tag }}</span>
           </div>
         </div>
 
-        <!-- 스탬프북 요약 + 전체보기 이동 -->
+        <!-- 수집 중인 작품 목록 -->
         <section
           v-else-if="localTab === 'stampbook'"
           class="stampbook-summary"
           data-testid="tab-stampbook"
         >
-          <div class="stampbook-card">
-            <div class="sb-icon">
-              <ion-icon :icon="ribbonOutline" class="ic-28" />
-            </div>
-            <div class="sb-body">
-              <div class="sb-title">스탬프북</div>
-              <div class="sb-sub">
-                전국 {{ stats?.visitedCount ?? 0 }}곳 방문 · 레벨 {{ user?.level ?? 1 }}
-              </div>
-            </div>
-            <button
-              type="button"
-              class="sb-btn"
-              data-testid="stampbook-detail-btn"
+          <div class="sb-section-title">
+            <h3>수집 중인 작품</h3>
+          </div>
+
+          <div class="drama-list" data-testid="stampbook-works-list">
+            <div
+              v-for="w in stampbookWorks"
+              :key="w.workId"
+              class="drama-card"
+              data-testid="stampbook-work-card"
               @click="onOpenStampbook"
             >
-              자세히 보기
-              <ion-icon :icon="chevronForwardOutline" class="ic-16" />
-            </button>
+              <div v-if="w.completed" class="completed-badge">
+                <ion-icon :icon="trophyOutline" class="ic-16" />완주
+              </div>
+              <div class="drama-poster">
+                <img :src="w.posterUrl" :alt="w.title" />
+              </div>
+              <div class="drama-mid">
+                <div class="t">{{ w.title }}</div>
+                <div class="s"><template v-if="w.year">{{ w.year }}</template></div>
+                <div class="bar">
+                  <div class="f" :style="{ width: `${w.percent}%`, background: w.gradient }" />
+                </div>
+                <div class="meta">
+                  <span>{{ w.collectedCount }} / {{ w.totalCount }} 성지</span>
+                  <span>{{ w.percent }}%</span>
+                </div>
+              </div>
+            </div>
+            <p v-if="stampbookWorks.length === 0" class="empty-note">
+              수집 중인 작품이 없어요
+            </p>
           </div>
         </section>
 
@@ -135,10 +150,12 @@ import {
   ribbonOutline,
   bookmarkOutline,
   logOutOutline,
+  trophyOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useProfileStore, type MiniMapPin } from '@/stores/profile';
+import { useStampbookStore } from '@/stores/stampbook';
 import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
@@ -147,8 +164,10 @@ type LocalTab = 'photos' | 'stampbook' | 'saved';
 
 const router = useRouter();
 const profileStore = useProfileStore();
+const stampbookStore = useStampbookStore();
 const authStore = useAuthStore();
 const { user, stats, miniMapPins, error } = storeToRefs(profileStore);
+const { works: stampbookWorks } = storeToRefs(stampbookStore);
 const { showError, showInfo } = useToast();
 
 // photos / stampbook 는 in-place 렌더, '저장' 탭은 task #20 에서 다시
@@ -199,7 +218,6 @@ function pinStyle(p: MiniMapPin): Record<string, string> {
 
 interface GridCell {
   key: string;
-  placeId: number | null;
   imageUrl: string | null;
   tag: string | null;
 }
@@ -222,7 +240,6 @@ const gridCells = computed<GridCell[]>(() => {
   for (let i = 0; i < cellCount; i += 1) {
     cells.push({
       key: `c-${i}`,
-      placeId: null,
       imageUrl: PLACEHOLDER_IMAGES[i % PLACEHOLDER_IMAGES.length],
       tag: null,
     });
@@ -238,6 +255,9 @@ async function onSelectLocalTab(t: LocalTab): Promise<void> {
     return;
   }
   localTab.value = t;
+  if (t === 'stampbook' && stampbookWorks.value.length === 0) {
+    await stampbookStore.fetch();
+  }
 }
 
 async function onOpenStampbook(): Promise<void> {
@@ -248,12 +268,8 @@ async function onOpenMap(): Promise<void> {
   await router.push('/map');
 }
 
-async function onOpenPlace(id: number | null): Promise<void> {
-  if (id == null) {
-    await showInfo('인증샷 상세는 곧 공개됩니다');
-    return;
-  }
-  await router.push(`/place/${id}`);
+async function onOpenShot(id: number): Promise<void> {
+  await router.push(`/shot/${id}`);
 }
 
 async function onEdit(): Promise<void> {
@@ -520,55 +536,90 @@ ion-content.pf-content {
 .stampbook-summary {
   padding: 16px;
 }
-.stampbook-card {
+
+.sb-section-title {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #fff7ed, #fff1f2);
-  border: 1px solid #fde68a;
+  justify-content: space-between;
+  padding: 4px 4px 12px;
 }
-.stampbook-card .sb-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--fr-amber);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.stampbook-card .sb-body {
-  flex: 1;
-  min-width: 0;
-}
-.stampbook-card .sb-title {
-  font-size: 14.5px;
+.sb-section-title h3 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--fr-ink);
 }
-.stampbook-card .sb-sub {
-  font-size: 12px;
-  color: var(--fr-ink-3);
-  margin-top: 2px;
+
+.drama-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.stampbook-card .sb-btn {
+.drama-card {
   background: #ffffff;
-  border: none;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 700;
+  border: 1px solid var(--fr-line);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.drama-poster {
+  width: 56px; height: 76px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #eef2f6;
+}
+.drama-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.drama-mid { flex: 1; min-width: 0; }
+.drama-mid .t {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--fr-ink);
-  display: inline-flex;
+}
+.drama-mid .s {
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+  margin: 2px 0 8px;
+}
+.drama-mid .meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--fr-ink-3);
+  font-weight: 700;
+}
+.bar {
+  height: 6px;
+  background: var(--fr-bg-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar .f { height: 100%; border-radius: 999px; }
+.completed-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: #fff7e6;
+  color: #d97706;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  display: flex;
   align-items: center;
   gap: 3px;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-  white-space: nowrap;
+}
+.empty-note {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--fr-ink-3);
+  font-size: 13px;
 }
 
 </style>
