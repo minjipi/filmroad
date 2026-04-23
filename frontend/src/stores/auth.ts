@@ -7,6 +7,11 @@ interface State {
   accessToken: string | null;
   loading: boolean;
   error: string | null;
+  // Memoized promise for the first-load session probe. Shared between
+  // App.vue's onMounted call and router guards that need to wait for the
+  // /api/users/me response before deciding requiresAuth. `null` means
+  // "not yet initiated" — ensureSessionReady() starts it.
+  sessionReady: Promise<void> | null;
 }
 
 // Minimal user shape the /api/auth/{signup,login} endpoints return. The richer
@@ -111,6 +116,7 @@ export const useAuthStore = defineStore('auth', {
     accessToken: readStoredToken(),
     loading: false,
     error: null,
+    sessionReady: null,
   }),
   getters: {
     isAuthenticated: (state): boolean => state.user !== null,
@@ -119,6 +125,17 @@ export const useAuthStore = defineStore('auth', {
     setToken(token: string | null): void {
       this.accessToken = token;
       writeStoredToken(token);
+    },
+    // Lazily kicks off — and caches — the first /api/users/me call so the
+    // router guard and App.vue's onMounted share a single in-flight promise.
+    // Subsequent callers receive the same resolved promise immediately.
+    // Not reset on logout (the already-resolved promise stays valid; login /
+    // signup actions write the user directly without re-fetching).
+    ensureSessionReady(): Promise<void> {
+      if (!this.sessionReady) {
+        this.sessionReady = this.fetchMe();
+      }
+      return this.sessionReady;
     },
     async fetchMe(): Promise<void> {
       this.loading = true;

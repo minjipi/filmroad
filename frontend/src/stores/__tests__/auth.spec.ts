@@ -104,6 +104,34 @@ describe('auth store', () => {
     expect(store.error).toBeNull();
   });
 
+  it('ensureSessionReady memoizes the first fetchMe — repeated callers share one network probe', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { user: fixtureUser } });
+
+    const store = useAuthStore();
+    // Three near-simultaneous callers must collapse into a single /me probe.
+    await Promise.all([
+      store.ensureSessionReady(),
+      store.ensureSessionReady(),
+      store.ensureSessionReady(),
+    ]);
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    expect(store.isAuthenticated).toBe(true);
+
+    // After resolution, subsequent callers still skip the network — memo stays.
+    await store.ensureSessionReady();
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensureSessionReady 401 resolves silently with isAuthenticated=false (so guards can redirect)', async () => {
+    mockApi.get.mockRejectedValueOnce(makeAxiosError(401, 'unauthorized'));
+
+    const store = useAuthStore();
+    await store.ensureSessionReady();
+
+    expect(store.isAuthenticated).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
   it('logout still clears user when the server call fails (and surfaces the error)', async () => {
     mockApi.post.mockRejectedValueOnce(new Error('500 server'));
 

@@ -10,6 +10,7 @@ import com.filmroad.api.domain.user.AuthProvider;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
 import com.filmroad.api.domain.user.dto.UserMeDto;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -84,6 +85,27 @@ public class AuthService {
             throw BaseException.of(BaseResponseStatus.INVALID_USER_INFO);
         }
 
+        return issueTokens(user);
+    }
+
+    /**
+     * RTOKEN 으로 access+refresh 재발급. refresh rotation 은 "새 RTOKEN 덮어쓰기" 만 수행하고
+     * 이전 토큰을 블랙리스트에 넣지 않는다 — 만료(7일) 로 자연 소멸 + 세션 하이재킹 위협 낮음.
+     * 실패 사유(없음/만료/변조/삭제된 유저) 모두 INVALID_USER_INFO 로 통일해 쿠키 정리는 Controller 담당.
+     */
+    @Transactional(readOnly = true)
+    public AuthTokens refresh(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw BaseException.of(BaseResponseStatus.INVALID_USER_INFO);
+        }
+        Long userId;
+        try {
+            userId = jwtTokenService.parseUserId(refreshToken);
+        } catch (JwtException | IllegalArgumentException | IllegalStateException e) {
+            throw BaseException.of(BaseResponseStatus.INVALID_USER_INFO);
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.INVALID_USER_INFO));
         return issueTokens(user);
     }
 

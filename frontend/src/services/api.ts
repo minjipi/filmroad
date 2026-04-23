@@ -1,4 +1,9 @@
-import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -26,9 +31,11 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Read the access token lazily from localStorage so this module stays
+// Read/write the access token lazily from localStorage so this module stays
 // loadable before Pinia is installed (e.g. inside Vitest setup). The auth
-// store owns writes via setToken(); this just mirrors what's persisted.
+// store owns writes via setToken() from its own code path; the refresh
+// flow here also has to keep the stored token in sync after a successful
+// /api/auth/refresh so the retry request picks up the new Bearer.
 const TOKEN_STORAGE_KEY = 'filmroad_access_token';
 function readAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -36,6 +43,15 @@ function readAccessToken(): string | null {
     return window.localStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
     return null;
+  }
+}
+function writeAccessToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token === null) window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    else window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } catch {
+    /* localStorage unavailable */
   }
 }
 
@@ -58,9 +74,15 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+function isAuthRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.includes('/api/auth/');
+}
+// Kept for back-compat with the old behavior: /api/users/me is a session
+// probe that should silently fail rather than opening the login prompt.
 function isSessionProbe(url: string | undefined): boolean {
   if (!url) return false;
-  return url.includes('/api/users/me') || url.includes('/api/auth/');
+  return url.includes('/api/users/me') || isAuthRequest(url);
 }
 
 // Lazily import the ui store so the api module stays loadable before Pinia
@@ -74,6 +96,105 @@ async function openLoginPromptFromInterceptor(): Promise<void> {
   }
 }
 
+async function clearSessionFromInterceptor(): Promise<void> {
+  // Best-effort session cleanup after refresh fails. Keeps the same
+  // semantics as authStore.logout() minus the server POST.
+  writeAccessToken(null);
+  try {
+    const { useAuthStore } = await import('@/stores/auth');
+    const auth = useAuthStore();
+    auth.user = null;
+    auth.accessToken = null;
+  } catch {
+    /* Pinia not ready — storage cleared, next load will reconcile */
+  }
+}
+
+// ----- 401 refresh-and-retry -----
+// Concurrent 401s from parallel requests must not fan out into N refresh
+// calls; a singleton promise coalesces them. Cleared after settle so a
+// subsequent expiry (hours later) starts a fresh refresh.
+let refreshInFlight: Promise<AxiosResponse<{ accessToken?: string } | unknown>> | null = null;
+
+function ensureRefresh(
+  instance: AxiosInstance,
+): Promise<AxiosResponse<{ accessToken?: string } | unknown>> {
+  if (!refreshInFlight) {
+    refreshInFlight = instance
+      .post<{ accessToken?: string }>('/api/auth/refresh')
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+// Flag we stamp on a retried config so we never loop indefinitely if the
+// refreshed token still 401s (server-side invalidation race etc.).
+const RETRY_FLAG = '_filmroadRetry' as const;
+
+type RetriableConfig = InternalAxiosRequestConfig & {
+  [RETRY_FLAG]?: boolean;
+};
+
+/**
+ * Exported for unit tests — the module-level interceptor below is a thin
+ * closure over `api` that just forwards to this handler. Tests build a
+ * fake instance (`post` + callable) and drive this directly; that lets us
+ * assert the full 401 → refresh → retry path without an HTTP adapter.
+ */
+export async function handleResponseError(
+  instance: AxiosInstance,
+  error: AxiosError<ApiEnvelope<unknown>>,
+): Promise<AxiosResponse<unknown>> {
+  const status = error.response?.status ?? null;
+  const cfg = error.config as RetriableConfig | undefined;
+  const requestUrl = cfg?.url;
+
+  // Path 1: 401 on a non-auth endpoint → try refresh + retry once.
+  if (status === 401 && cfg && !isAuthRequest(requestUrl) && !cfg[RETRY_FLAG]) {
+    cfg[RETRY_FLAG] = true;
+    try {
+      const refreshRes = await ensureRefresh(instance);
+      // Envelope is already unwrapped by the success interceptor — data
+      // is `{ accessToken?, ... }` directly. Sync localStorage so the
+      // retry's request interceptor attaches the new Bearer.
+      const body = (refreshRes as AxiosResponse<{ accessToken?: string }>).data;
+      if (body && typeof body.accessToken === 'string') {
+        writeAccessToken(body.accessToken);
+        // Best-effort: keep the auth store's `accessToken` mirror in sync
+        // so other reactive consumers see the new token immediately.
+        try {
+          const { useAuthStore } = await import('@/stores/auth');
+          useAuthStore().accessToken = body.accessToken;
+        } catch {
+          /* Pinia not ready */
+        }
+      }
+      return instance(cfg) as Promise<AxiosResponse<unknown>>;
+    } catch {
+      // refresh failed — drop the session and fall through to the normal
+      // 401 prompt + error surfacing below.
+      await clearSessionFromInterceptor();
+      void openLoginPromptFromInterceptor();
+    }
+  } else if (status === 401 && !isSessionProbe(requestUrl)) {
+    // Path 2: 401 on an already-retried or a bare-protected endpoint with
+    // no refresh available — prompt sign-in but don't loop.
+    void openLoginPromptFromInterceptor();
+  }
+
+  const body = error.response?.data;
+  const msg = body?.message ?? error.message ?? 'Network error';
+  const code = body?.code ?? null;
+  throw new ApiError(msg, status, code);
+}
+
+// Visible for tests only — resets the refresh singleton between cases.
+export function __resetRefreshState(): void {
+  refreshInFlight = null;
+}
+
 // Unwrap { success, code, message, results } envelope; surface message on failure.
 api.interceptors.response.use(
   (response: AxiosResponse<ApiEnvelope<unknown>>) => {
@@ -82,24 +203,13 @@ api.interceptors.response.use(
       if (body.success) {
         return { ...response, data: body.results } as AxiosResponse<unknown>;
       }
-      return Promise.reject(new ApiError(body.message || 'Request failed', response.status, body.code ?? null));
+      return Promise.reject(
+        new ApiError(body.message || 'Request failed', response.status, body.code ?? null),
+      );
     }
     return response;
   },
-  (error: AxiosError<ApiEnvelope<unknown>>) => {
-    const status = error.response?.status ?? null;
-    const requestUrl = error.config?.url;
-    // Protected endpoints return 401 when anonymous; prompt the user to sign in
-    // in place rather than yanking them out of their current page. Session probes
-    // (/api/users/me, /api/auth/*) are silent since App.vue fires them on load.
-    if (status === 401 && !isSessionProbe(requestUrl)) {
-      void openLoginPromptFromInterceptor();
-    }
-    const body = error.response?.data;
-    const msg = body?.message ?? error.message ?? 'Network error';
-    const code = body?.code ?? null;
-    return Promise.reject(new ApiError(msg, status, code));
-  },
+  (error: AxiosError<ApiEnvelope<unknown>>) => handleResponseError(api, error),
 );
 
 export default api;

@@ -47,7 +47,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/check-email").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/home",
@@ -58,6 +58,7 @@ public class SecurityConfig {
                                 "/api/works/*",
                                 "/api/feed",
                                 "/api/feed/**",
+                                "/api/search",
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**").permitAll()

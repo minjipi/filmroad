@@ -91,6 +91,11 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Feed',
     component: () => import('../views/FeedPage.vue'),
   },
+  {
+    path: '/search',
+    name: 'Search',
+    component: () => import('../views/SearchPage.vue'),
+  },
 ];
 
 const router = createRouter({
@@ -98,11 +103,16 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (!to.meta?.requiresAuth) return true;
   // Pinia must be installed before the first navigation completes; this runs
   // after main.ts has called app.use(createPinia()) so it's safe.
   const auth = useAuthStore();
+  // Wait for the first /api/users/me probe to resolve so a hard refresh on
+  // a requiresAuth route doesn't bounce to /onboarding just because the
+  // cookie-backed session hasn't been rehydrated yet. Memoized — subsequent
+  // navigations during the same session get the already-settled promise.
+  await auth.ensureSessionReady();
   if (auth.isAuthenticated) return true;
   return {
     path: '/onboarding',

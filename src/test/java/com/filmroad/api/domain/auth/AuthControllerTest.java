@@ -1,6 +1,7 @@
 package com.filmroad.api.domain.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ class AuthControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JwtTokenService jwtTokenService;
 
     @Test
     @DisplayName("POST /api/auth/logout returns 204 with Max-Age=0 cookies")
@@ -162,5 +166,72 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/check-email").param("email", "not-an-email"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is(20010)));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — 유효 RTOKEN 쿠키 → 200 + 새 ATOKEN/RTOKEN 쿠키 + body accessToken")
+    void refresh_withValidRtoken_reissuesTokens() throws Exception {
+        // 시드상 user id=1 이 항상 존재 (data.sql 참조).
+        String rtoken = jwtTokenService.issueRefresh(1L);
+
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("RTOKEN", rtoken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.user.id", is(1)))
+                .andExpect(jsonPath("$.results.accessToken", notNullValue()))
+                .andReturn();
+
+        java.util.List<String> setCookies = result.getResponse().getHeaders("Set-Cookie");
+        assertThat(setCookies).anyMatch(h -> h.startsWith("ATOKEN=") && !h.contains("Max-Age=0"));
+        assertThat(setCookies).anyMatch(h -> h.startsWith("RTOKEN=") && !h.contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — RTOKEN 쿠키 없음 → 401 INVALID_USER_INFO(20004)")
+    void refresh_missingRtoken_returns401() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is(20004)));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — 위조 RTOKEN → 401 + Max-Age=0 쿠키 2개")
+    void refresh_tamperedRtoken_returns401AndClearsCookies() throws Exception {
+        String tampered = jwtTokenService.issueRefresh(1L) + "garbage";
+
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("RTOKEN", tampered)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is(20004)))
+                .andReturn();
+
+        java.util.List<String> setCookies = result.getResponse().getHeaders("Set-Cookie");
+        assertThat(setCookies).anyMatch(h -> h.startsWith("ATOKEN=") && h.contains("Max-Age=0"));
+        assertThat(setCookies).anyMatch(h -> h.startsWith("RTOKEN=") && h.contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — 만료된 RTOKEN → 401")
+    void refresh_expiredRtoken_returns401() throws Exception {
+        // TTL=1ms 로 발급 후 sleep 하면 expired 상태가 된다 (JwtTokenServiceTest 와 동일 패턴).
+        String expired = jwtTokenService.issueWithTtl(1L, 1L);
+        Thread.sleep(20);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("RTOKEN", expired)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is(20004)));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — 존재하지 않는 userId 의 RTOKEN → 401")
+    void refresh_unknownUser_returns401() throws Exception {
+        String rtokenForGhost = jwtTokenService.issueRefresh(999_999L);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("RTOKEN", rtokenForGhost)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is(20004)));
     }
 }
