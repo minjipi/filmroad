@@ -72,8 +72,3 @@ app:
 project:
   upload:
     path: /tmp/filmroad-uploads
-
-filmroad:
-  seed:
-    spot:
-      enabled: false
