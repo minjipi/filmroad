@@ -78,7 +78,7 @@ const fixture: MapResponse = {
 const KakaoMapStub = {
   name: 'KakaoMap',
   props: ['center', 'zoom', 'markers', 'selectedId', 'visitedIds'],
-  emits: ['markerClick', 'mapClick', 'centerChange'],
+  emits: ['markerClick', 'clusterClick', 'mapClick', 'centerChange', 'boundsChange', 'zoomChange'],
   template:
     '<div class="kakao-map-stub" :data-markers="markers?.length ?? 0" :data-selected="selectedId ?? \'\'" :data-visited="(visitedIds ?? []).join(\',\')" @click="$emit(\'markerClick\', markers?.[1]?.id)"></div>',
 };
@@ -104,7 +104,6 @@ function mountMapPage(opts: { firstEntry?: boolean; sheetMode?: SheetMode } = {}
             hasBeenViewed: false,
             sheetMode,
             visitedIds: [10],
-            savedIds: [],
           }
         : {
             markers: [...fixture.markers],
@@ -119,7 +118,6 @@ function mountMapPage(opts: { firstEntry?: boolean; sheetMode?: SheetMode } = {}
             hasBeenViewed: true,
             sheetMode,
             visitedIds: [10],
-            savedIds: [],
           },
     },
     stubs: {
@@ -197,6 +195,14 @@ describe('MapPage.vue', () => {
     expect(store.selected).toBeNull();
   });
 
+  it('first entry hides both .sheet and .reopen — the map is visually clean until a place is picked', async () => {
+    const { wrapper } = mountMapPage({ firstEntry: true });
+    await flushPromises();
+
+    expect(wrapper.find('.sheet').exists()).toBe(false);
+    expect(wrapper.find('.reopen').exists()).toBe(false);
+  });
+
   it('re-entry (selected present, hasBeenViewed=true) preserves center + DETAIL_ZOOM', async () => {
     const { store } = mountMapPage();
     await flushPromises();
@@ -268,6 +274,122 @@ describe('MapPage.vue', () => {
     expect(wrapper.find('.sheet').attributes('style')).toContain(
       `height: ${expectedFull}px`,
     );
+  });
+
+  it('country-view first entry suppresses the initial bounds-change flurry so Seoul-only bbox does not overwrite country markers', async () => {
+    vi.useFakeTimers();
+    const { wrapper, store } = mountMapPage({ firstEntry: true });
+    await flushPromises();
+    // Clear the onMounted fetchMap({ countryView: true }) so the spy below
+    // only sees later calls.
+    const fetchSpy = vi.spyOn(store, 'fetchMap');
+    fetchSpy.mockClear();
+
+    const kakaoStub = wrapper.findComponent({ name: 'KakaoMap' });
+    // Simulate Kakao's post-mount bounds_changed (tight Seoul viewport).
+    kakaoStub.vm.$emit('boundsChange', {
+      sw: { lat: 37.4, lng: 126.8 },
+      ne: { lat: 37.7, lng: 127.2 },
+    });
+
+    // Even well past the 350ms debounce the suppression window is still on —
+    // no fetchMap should fire during the country-view settle window.
+    vi.advanceTimersByTime(500);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // After the suppression window closes, a real user pan still works.
+    vi.advanceTimersByTime(800); // past the 1200ms suppression total
+    kakaoStub.vm.$emit('boundsChange', {
+      sw: { lat: 35.0, lng: 126.0 },
+      ne: { lat: 38.0, lng: 129.0 },
+    });
+    vi.advanceTimersByTime(400);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith({
+      swLat: 35.0,
+      swLng: 126.0,
+      neLat: 38.0,
+      neLng: 129.0,
+    });
+
+    vi.useRealTimers();
+  });
+
+  it('bounds-change from the map is debounced (~350ms) then forwarded to fetchMap with the bbox', async () => {
+    vi.useFakeTimers();
+    const { wrapper, store } = mountMapPage();
+    // Drain the synchronous onMounted fetch — it uses real API mock.
+    await flushPromises();
+    const fetchSpy = vi.spyOn(store, 'fetchMap');
+    const kakaoStub = wrapper.findComponent({ name: 'KakaoMap' });
+
+    const sw = { lat: 35.0, lng: 126.0 };
+    const ne = { lat: 38.0, lng: 129.0 };
+    kakaoStub.vm.$emit('boundsChange', { sw, ne });
+    // Fire twice inside the debounce window to prove coalescing.
+    kakaoStub.vm.$emit('boundsChange', {
+      sw: { lat: 35.1, lng: 126.1 },
+      ne: { lat: 38.1, lng: 129.1 },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(349);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(10); // cross the 350ms boundary
+    // Only the latest bounds are fetched — first emit got swallowed by debounce.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith({
+      swLat: 35.1,
+      swLng: 126.1,
+      neLat: 38.1,
+      neLng: 129.1,
+    });
+    vi.useRealTimers();
+  });
+
+  it('zoom-change from Kakao syncs store.zoom so clusterMarkers re-runs with the new level', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+    // Seed a known starting zoom so the sync target is unambiguous.
+    store.setZoom(5);
+    const setZoomSpy = vi.spyOn(store, 'setZoom');
+
+    const kakaoStub = wrapper.findComponent({ name: 'KakaoMap' });
+    kakaoStub.vm.$emit('zoomChange', 9);
+    expect(setZoomSpy).toHaveBeenCalledWith(9);
+
+    // Echoing the same level again is a no-op — breaks the
+    // store.zoom → setLevel → zoom_changed → store.zoom feedback loop.
+    setZoomSpy.mockClear();
+    kakaoStub.vm.$emit('zoomChange', 9);
+    expect(setZoomSpy).not.toHaveBeenCalled();
+  });
+
+  it('cluster-click zooms the map in by 2 levels and recenters on the cluster centroid', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+    store.setZoom(8);
+    const centerSpy = vi.spyOn(store, 'setCenter');
+    const zoomSpy = vi.spyOn(store, 'setZoom');
+
+    const kakaoStub = wrapper.findComponent({ name: 'KakaoMap' });
+    kakaoStub.vm.$emit('clusterClick', {
+      latitude: 37.5,
+      longitude: 127.0,
+      markerIds: [1, 2, 3],
+    });
+
+    expect(zoomSpy).toHaveBeenCalledWith(6);
+    expect(centerSpy).toHaveBeenCalledWith(37.5, 127.0);
+  });
+
+  it('top search pill pushes /search (global search takes over from the map-local filter)', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('button.search-box[aria-label="search"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/search');
   });
 
   it('filter chip VISITED switches the store filter', async () => {

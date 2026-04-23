@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
-import { useAuthStore } from '@/stores/auth';
-import { useUiStore } from '@/stores/ui';
+import { useSavedStore } from '@/stores/saved';
 
 export interface MapMarker {
   id: number;
@@ -46,6 +45,17 @@ export type SheetMode = 'closed' | 'peek' | 'full';
 interface FetchOptions {
   lat?: number;
   lng?: number;
+  // Viewport bounding box (south-west + north-east corners). When all four are
+  // provided the backend constrains the marker list to places inside the box;
+  // without them the backend falls back to its default radius/country query.
+  swLat?: number;
+  swLng?: number;
+  neLat?: number;
+  neLng?: number;
+  // First-entry (country view) calls set this to true so a server-seeded
+  // `selected` doesn't sneak the bottom sheet open before the user has
+  // explicitly picked a place. Markers still update as normal.
+  countryView?: boolean;
 }
 
 interface State {
@@ -63,19 +73,22 @@ interface State {
   // itself back into this store via markLastViewed.
   hasBeenViewed: boolean;
   sheetMode: SheetMode;
-  // Client-side mock: a real app would persist these per-user on the server.
+  // Client-side mock: a real app would persist visited places per-user on
+  // the server. Saved-place state is the savedStore's job (task #19 unified
+  // that across the app).
   visitedIds: number[];
-  savedIds: number[];
 }
 
 // Approximate geographic centre of South Korea (between 충북 and 경북) — picked
 // so the first-entry map frames Seoul, 제주, and the east/west coasts at the
 // country zoom below.
 export const KOREA_CENTER = { lat: 36.0, lng: 127.8 };
-// Kakao Map "level" — higher = zoomed out. Level 13 shows the full peninsula
-// plus 제주 on a typical 390×844 mobile viewport; 5 is the regional detail zoom
-// the old default used when the sheet showed a selected place.
-export const COUNTRY_ZOOM = 13;
+// Kakao Map "level" — higher = zoomed out. Level 14 is the SDK's max and
+// frames the entire peninsula (제주 포함) on a 390pt-wide mobile viewport;
+// level 13 clipped to roughly 서울~충청 on the same viewport which was the
+// primary trigger of task #11's "first entry shows only Seoul" bug. 5 is
+// the regional detail zoom used when the sheet shows a selected place.
+export const COUNTRY_ZOOM = 14;
 export const DETAIL_ZOOM = 5;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 14;
@@ -94,7 +107,6 @@ export const useMapStore = defineStore('map', {
     hasBeenViewed: false,
     sheetMode: 'peek',
     visitedIds: [10],
-    savedIds: [],
   }),
   getters: {
     visibleMarkers(state): MapMarker[] {
@@ -103,13 +115,14 @@ export const useMapStore = defineStore('map', {
         return state.markers.filter((m) => v.has(m.id));
       }
       if (state.filter === 'SAVED') {
-        const s = new Set(state.savedIds);
-        return state.markers.filter((m) => s.has(m.id));
+        // Delegate to the unified savedStore so the map filter stays in sync
+        // with bookmark state from every other page (Feed / Gallery / etc.).
+        const saved = useSavedStore();
+        return state.markers.filter((m) => saved.isSaved(m.id));
       }
       return state.markers;
     },
     isVisited: (state) => (id: number): boolean => state.visitedIds.includes(id),
-    isSaved: (state) => (id: number): boolean => state.savedIds.includes(id),
   },
   actions: {
     async fetchMap(opts: FetchOptions = {}): Promise<void> {
@@ -119,13 +132,31 @@ export const useMapStore = defineStore('map', {
         const params: Record<string, string | number> = {};
         params.lat = opts.lat ?? this.center.lat;
         params.lng = opts.lng ?? this.center.lng;
+        if (
+          opts.swLat !== undefined &&
+          opts.swLng !== undefined &&
+          opts.neLat !== undefined &&
+          opts.neLng !== undefined
+        ) {
+          params.swLat = opts.swLat;
+          params.swLng = opts.swLng;
+          params.neLat = opts.neLat;
+          params.neLng = opts.neLng;
+        }
         if (this.workId !== null) params.workId = this.workId;
         if (this.q.trim()) params.q = this.q.trim();
         if (this.selected) params.selectedId = this.selected.id;
         const { data } = await api.get<MapResponse>('/api/map/places', { params });
         this.markers = data.markers;
-        this.selected = data.selected;
-        if (data.selected) this.hasBeenViewed = true;
+        if (opts.countryView) {
+          // Country view is the "I haven't looked at anything yet" state —
+          // discard the server's pre-seeded selected and leave the sheet
+          // closed so the first-entry map is visually clean.
+          this.selected = null;
+        } else {
+          this.selected = data.selected;
+          if (data.selected) this.hasBeenViewed = true;
+        }
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to load map';
       } finally {
@@ -234,15 +265,6 @@ export const useMapStore = defineStore('map', {
         rating: 0,
         distanceKm: next.distanceKm,
       };
-    },
-    toggleSave(id: number): void {
-      if (!useAuthStore().isAuthenticated) {
-        useUiStore().showLoginPrompt('저장은 로그인 후 이용할 수 있어요.');
-        return;
-      }
-      const i = this.savedIds.indexOf(id);
-      if (i >= 0) this.savedIds.splice(i, 1);
-      else this.savedIds.push(id);
     },
     markVisited(id: number): void {
       if (!this.visitedIds.includes(id)) this.visitedIds.push(id);

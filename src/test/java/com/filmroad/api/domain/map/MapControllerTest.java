@@ -77,4 +77,59 @@ class MapControllerTest {
                 .andExpect(jsonPath("$.results.markers", hasSize(0)))
                 .andExpect(jsonPath("$.results.selected").value(nullValue()));
     }
+
+    @Test
+    @DisplayName("GET /api/map/places with Seoul bbox keeps markers inside the box only")
+    void getPlaces_withBounds_filtersToViewport() throws Exception {
+        // 시드상 서울 근방(위도 37.4~37.7, 경도 126.9~127.1): place 13(이태원), 14(덕수궁), 16(녹사평).
+        // 강릉(10)·논산(11)·포항(12,15)·합천(17) 은 바깥이어야 한다.
+        mockMvc.perform(get("/api/map/places")
+                        .param("swLat", "37.4")
+                        .param("swLng", "126.9")
+                        .param("neLat", "37.7")
+                        .param("neLng", "127.1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.markers", not(empty())))
+                .andExpect(jsonPath("$.results.markers[*].id",
+                        everyItem(anyOf(is(13), is(14), is(16)))))
+                .andExpect(jsonPath("$.results.markers[*].id",
+                        not(hasItem(is(10)))));
+    }
+
+    @Test
+    @DisplayName("GET /api/map/places with bounds + selectedId outside bbox still returns selected via fallback")
+    void getPlaces_withBoundsAndDeepLinkedSelected_returnsSelectedDetail() throws Exception {
+        // 서울 bbox 를 주되 강릉(10) 을 selectedId 로 지정 → markers 에는 없어도 selected 는 내려가야 함.
+        mockMvc.perform(get("/api/map/places")
+                        .param("swLat", "37.4")
+                        .param("swLng", "126.9")
+                        .param("neLat", "37.7")
+                        .param("neLng", "127.1")
+                        .param("selectedId", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.selected.id", is(10)))
+                .andExpect(jsonPath("$.results.markers[*].id", not(hasItem(is(10)))));
+    }
+
+    @Test
+    @DisplayName("GET /api/map/places with malformed bounds (sw > ne) returns 400 REQUEST_ERROR")
+    void getPlaces_withSwappedBounds_returns400() throws Exception {
+        mockMvc.perform(get("/api/map/places")
+                        .param("swLat", "37.9")
+                        .param("swLng", "127.2")
+                        .param("neLat", "37.5")
+                        .param("neLng", "126.9"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(30001)));
+    }
+
+    @Test
+    @DisplayName("GET /api/map/places with partial bounds params is ignored (전국 반환)")
+    void getPlaces_withPartialBounds_ignoresFilter() throws Exception {
+        // swLat 만 넘겨도 필터가 활성화되지 않아야 함. markers 는 시드 전체가 내려와야.
+        mockMvc.perform(get("/api/map/places").param("swLat", "37.4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.markers[*].id", hasItem(is(10))))
+                .andExpect(jsonPath("$.results.markers[*].id", hasItem(is(17))));
+    }
 }

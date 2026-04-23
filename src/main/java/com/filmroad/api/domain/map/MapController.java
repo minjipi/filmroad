@@ -23,8 +23,14 @@ public class MapController {
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Long workId,
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) Long selectedId
+            @RequestParam(required = false) Long selectedId,
+            // viewport bounds. 넷 다 넘기면 bbox 필터가 활성화되고, 비워두면 전국 범위 fallback.
+            @RequestParam(required = false) Double swLat,
+            @RequestParam(required = false) Double swLng,
+            @RequestParam(required = false) Double neLat,
+            @RequestParam(required = false) Double neLng
     ) {
-        return BaseResponse.success(mapService.getMap(lat, lng, workId, q, selectedId));
+        return BaseResponse.success(
+                mapService.getMap(lat, lng, workId, q, selectedId, swLat, swLng, neLat, neLng));
     }
 }

@@ -89,6 +89,33 @@ describe('map store', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('fetchMap forwards viewport bounds as swLat/swLng/neLat/neLng query params', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap({
+      swLat: 33.0,
+      swLng: 124.0,
+      neLat: 39.0,
+      neLng: 132.0,
+    });
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({
+      swLat: 33.0,
+      swLng: 124.0,
+      neLat: 39.0,
+      neLng: 132.0,
+    });
+  });
+
+  it('fetchMap omits bounds params when any corner is missing (partial bounds = no filter)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap({ swLat: 33.0, swLng: 124.0 }); // no ne*
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params.swLat).toBeUndefined();
+    expect(opts?.params.neLat).toBeUndefined();
+  });
+
   it('setQuery triggers a refetch with q in the query params', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
     const store = useMapStore();
@@ -146,18 +173,18 @@ describe('map store', () => {
     expect(store.visibleMarkers.map((m) => m.id)).toEqual([10, 13]);
   });
 
-  it('toggleSave flips savedIds membership and powers the SAVED filter', async () => {
+  it('SAVED filter reads the unified savedStore (task #19) — mapStore no longer owns savedIds', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useMapStore();
     await store.fetchMap();
 
-    store.toggleSave(13);
-    expect(store.isSaved(13)).toBe(true);
+    const savedMod = await import('@/stores/saved');
+    const saved = savedMod.useSavedStore();
+    saved.savedPlaceIds = [13];
     store.setFilter('SAVED');
     expect(store.visibleMarkers.map((m) => m.id)).toEqual([13]);
 
-    store.toggleSave(13);
-    expect(store.isSaved(13)).toBe(false);
+    saved.savedPlaceIds = [];
     expect(store.visibleMarkers).toEqual([]);
   });
 
@@ -170,6 +197,18 @@ describe('map store', () => {
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
     expect(opts?.params).toMatchObject({ lat: 37.5, lng: 127.0 });
+  });
+
+  it('fetchMap({ countryView: true }) updates markers but leaves selected null + hasBeenViewed false', async () => {
+    // Simulate a server that pre-seeds a selected place even on the country
+    // view — we should throw that away so the sheet stays hidden.
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap({ countryView: true });
+
+    expect(store.markers).toEqual(fixture.markers);
+    expect(store.selected).toBeNull();
+    expect(store.hasBeenViewed).toBe(false);
   });
 
   it('initial state: country-level center + zoom, hasBeenViewed=false, selected=null', () => {
@@ -318,8 +357,10 @@ describe('map store', () => {
     store.setFilter('SAVED');
     expect(store.selected).toBeNull();
 
-    // Save id=13 and flip back to SAVED — selected should promote to id=13.
-    store.toggleSave(13);
+    // Save id=13 via the unified savedStore and flip back to SAVED — selected
+    // should promote to id=13.
+    const savedMod = await import('@/stores/saved');
+    savedMod.useSavedStore().savedPlaceIds = [13];
     store.setFilter('SPOTS');
     // Force selected back to 10, then SAVED should retarget to 13.
     store.selected = { ...fixture.selected! };

@@ -8,13 +8,19 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { MapMarker } from '@/stores/map';
 import { loadKakaoMap } from '@/services/kakaoMap';
+import { clusterMarkers } from '@/utils/clusterMarkers';
 
 interface LatLng {
   lat: number;
   lng: number;
+}
+
+interface BoundsPayload {
+  sw: LatLng;
+  ne: LatLng;
 }
 
 const props = defineProps<{
@@ -27,8 +33,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'markerClick', id: number): void;
+  (e: 'clusterClick', payload: { latitude: number; longitude: number; markerIds: number[] }): void;
   (e: 'mapClick'): void;
   (e: 'centerChange', v: LatLng): void;
+  (e: 'boundsChange', v: BoundsPayload): void;
+  // Emitted when Kakao's internal zoom changes (pinch, wheel, double-tap).
+  // The parent syncs the store so the clusterer recomputes with the new level.
+  (e: 'zoomChange', level: number): void;
 }>();
 
 const mapEl = ref<HTMLDivElement | null>(null);
@@ -40,6 +51,12 @@ let kakao: AnyObj | null = null;
 let mapInstance: AnyObj | null = null;
 let overlays: AnyObj[] = [];
 let meOverlay: AnyObj | null = null;
+
+// Pre-computed renderables (pins + clusters). Recomputed whenever markers,
+// zoom, or selectedId change so the clusterer stays in sync with the view.
+const renderables = computed(() =>
+  clusterMarkers(props.markers, props.zoom, { selectedId: props.selectedId }),
+);
 
 function clearOverlays(): void {
   overlays.forEach((o) => {
@@ -76,6 +93,20 @@ function buildPinContent(m: MapMarker, isVisited: boolean, isActive: boolean): H
   return root;
 }
 
+function buildClusterContent(count: number, onClick: () => void): HTMLDivElement {
+  const root = document.createElement('div');
+  root.className = 'pin cluster';
+  const bubble = document.createElement('div');
+  bubble.className = 'cluster-bubble';
+  bubble.textContent = String(count);
+  root.appendChild(bubble);
+  root.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    onClick();
+  });
+  return root;
+}
+
 function buildMeContent(): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'kakao-me';
@@ -92,19 +123,46 @@ function renderOverlays(): void {
     };
   };
   const visitedSet = new Set(props.visitedIds);
-  props.markers.forEach((m) => {
-    const position = new k.maps.LatLng(m.latitude, m.longitude);
-    const content = buildPinContent(m, visitedSet.has(m.id), props.selectedId === m.id);
+
+  renderables.value.forEach((r) => {
+    if (r.kind === 'pin') {
+      const m = r.marker;
+      const position = new k.maps.LatLng(m.latitude, m.longitude);
+      const content = buildPinContent(m, visitedSet.has(m.id), props.selectedId === m.id);
+      const overlay = new k.maps.CustomOverlay({
+        position,
+        content,
+        yAnchor: 1,
+        clickable: true,
+      });
+      const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
+      setMap.call(overlay, mapInstance);
+      overlays.push(overlay);
+      return;
+    }
+
+    // Cluster overlay
+    const position = new k.maps.LatLng(r.latitude, r.longitude);
+    const content = buildClusterContent(r.count, () => {
+      emit('clusterClick', {
+        latitude: r.latitude,
+        longitude: r.longitude,
+        markerIds: r.markerIds,
+      });
+    });
     const overlay = new k.maps.CustomOverlay({
       position,
       content,
-      yAnchor: 1,
+      yAnchor: 0.5,
+      xAnchor: 0.5,
       clickable: true,
     });
     const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
     setMap.call(overlay, mapInstance);
     overlays.push(overlay);
   });
+
+  // "You are here" dot — always rendered on top.
   const mePos = new k.maps.LatLng(props.center.lat, props.center.lng);
   const me = new k.maps.CustomOverlay({
     position: mePos,
@@ -116,6 +174,24 @@ function renderOverlays(): void {
   const setMap = (me as unknown as { setMap: (v: unknown) => void }).setMap;
   setMap.call(me, mapInstance);
   meOverlay = me;
+}
+
+function emitBounds(): void {
+  if (!mapInstance) return;
+  const b = (
+    mapInstance as unknown as {
+      getBounds: () => {
+        getSouthWest: () => { getLat: () => number; getLng: () => number };
+        getNorthEast: () => { getLat: () => number; getLng: () => number };
+      };
+    }
+  ).getBounds();
+  const sw = b.getSouthWest();
+  const ne = b.getNorthEast();
+  emit('boundsChange', {
+    sw: { lat: sw.getLat(), lng: sw.getLng() },
+    ne: { lat: ne.getLat(), lng: ne.getLng() },
+  });
 }
 
 async function init(): Promise<void> {
@@ -143,16 +219,24 @@ async function init(): Promise<void> {
     if (!mapInstance) return;
     const c = (mapInstance as unknown as { getCenter: () => { getLat: () => number; getLng: () => number } }).getCenter();
     emit('centerChange', { lat: c.getLat(), lng: c.getLng() });
+    emitBounds();
+  });
+  // Kakao fires `bounds_changed` on any pan/zoom/drag end; the consumer is
+  // responsible for debouncing before hitting the server.
+  k.maps.event.addListener(mapInstance, 'bounds_changed', () => emitBounds());
+  k.maps.event.addListener(mapInstance, 'zoom_changed', () => {
+    if (!mapInstance) return;
+    const level = (mapInstance as unknown as { getLevel: () => number }).getLevel();
+    emit('zoomChange', level);
+    emitBounds();
   });
   renderOverlays();
+  // Prime the consumer with the initial bounds so it can kick off the first
+  // viewport-scoped fetch without waiting for the user to pan.
+  emitBounds();
 }
 
-watch(
-  () => props.markers,
-  () => renderOverlays(),
-  { deep: true },
-);
-watch(() => props.selectedId, () => renderOverlays());
+watch(renderables, () => renderOverlays(), { deep: true });
 watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
 watch(
   () => [props.center.lat, props.center.lng],
@@ -252,6 +336,34 @@ onBeforeUnmount(() => {
 .kakao-map .pin.active .dot { background: #0f172a; transform: scale(1.1); }
 .kakao-map .pin.active .bubble { background: #0f172a; color: #ffffff; }
 .kakao-map .pin.active .bubble::after { background: #0f172a; box-shadow: none; }
+
+/* Cluster badge — shown when overlapping pins are collapsed at low zoom.
+   Intentionally smaller + translucent so a dense cluster doesn't mask the
+   map beneath, and so a single pin nearby still reads as "more important". */
+.kakao-map .pin.cluster {
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+.kakao-map .pin.cluster .cluster-bubble {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(20, 188, 237, 0.78);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 3px rgba(20, 188, 237, 0.14),
+    0 4px 12px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
 .kakao-map .kakao-me {
   width: 18px;
   height: 18px;

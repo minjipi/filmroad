@@ -8,20 +8,21 @@
         :selected-id="selected?.id ?? null"
         :visited-ids="visitedIds"
         @marker-click="onSelect"
+        @cluster-click="onClusterClick"
+        @bounds-change="onBoundsChange"
+        @zoom-change="onKakaoZoomChange"
       />
 
       <div class="top-bar">
-        <div class="search-box" @click="onSearchFocus">
+        <button
+          class="search-box"
+          type="button"
+          aria-label="search"
+          @click="onSearch"
+        >
           <ion-icon :icon="searchOutline" class="ic-18 search-ic" />
-          <input
-            v-model="query"
-            class="search-input"
-            type="search"
-            enterkeyhint="search"
-            :placeholder="'강릉 · 도깨비 촬영지'"
-            @keyup.enter="onSearchSubmit"
-          />
-        </div>
+          <span class="search-placeholder">강릉 · 도깨비 촬영지</span>
+        </button>
         <button class="icon-btn" type="button" aria-label="filters">
           <ion-icon :icon="optionsOutline" class="ic-20" />
         </button>
@@ -275,6 +276,7 @@ import {
   COUNTRY_ZOOM,
   DETAIL_ZOOM,
 } from '@/stores/map';
+import { useSavedStore } from '@/stores/saved';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
@@ -288,9 +290,8 @@ const route = useRoute();
 const router = useRouter();
 const visibleMarkers = computed<MapMarker[]>(() => mapStore.visibleMarkers);
 const visitedIds = computed<number[]>(() => mapStore.visitedIds);
-const isSaved = (id: number) => mapStore.isSaved(id);
-
-const query = ref('');
+const savedStore = useSavedStore();
+const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 // Draggable sheet — the composable owns the live drag height + pointer
 // handlers; snap endpoints push the resulting mode back into the store so
@@ -452,17 +453,80 @@ async function onSelect(id: number): Promise<void> {
   await mapStore.selectMarker(id);
 }
 
-function onSearchFocus(): void {
-  // Keep parity with the design: tapping the bar focuses the input; nothing else here.
+// Debounced viewport fetch — Kakao fires bounds_changed on every pan frame,
+// so we wait ~350ms of quiet before hitting the server.
+interface Bounds {
+  sw: { lat: number; lng: number };
+  ne: { lat: number; lng: number };
+}
+let boundsFetchTimer: ReturnType<typeof setTimeout> | null = null;
+let lastBounds: Bounds | null = null;
+const BOUNDS_DEBOUNCE_MS = 350;
+
+// After a country-view fetch, Kakao emits a flurry of bounds_changed events
+// while the map settles (center set, tile load, initial render). Those emits
+// report the literal 390×viewport bbox — e.g. Seoul-only at KOREA_CENTER +
+// zoom 13 — which, if fetched, would overwrite the country-wide marker set
+// with a narrow one. Hold off on the debounced fetch for a window long
+// enough to cover the settle, then resume so real user pans still work.
+const COUNTRY_BOUNDS_SUPPRESS_MS = 1200;
+let suppressBoundsUntil = 0;
+
+function suppressBoundsFetchForCountryView(): void {
+  suppressBoundsUntil = Date.now() + COUNTRY_BOUNDS_SUPPRESS_MS;
 }
 
-async function onSearchSubmit(): Promise<void> {
-  await mapStore.setQuery(query.value);
+function onBoundsChange(b: Bounds): void {
+  lastBounds = b;
+  if (Date.now() < suppressBoundsUntil) {
+    // Still in the country-view settle window; don't re-arm the debounce.
+    return;
+  }
+  if (boundsFetchTimer) clearTimeout(boundsFetchTimer);
+  boundsFetchTimer = setTimeout(() => {
+    boundsFetchTimer = null;
+    if (!lastBounds) return;
+    void mapStore.fetchMap({
+      swLat: lastBounds.sw.lat,
+      swLng: lastBounds.sw.lng,
+      neLat: lastBounds.ne.lat,
+      neLng: lastBounds.ne.lng,
+    });
+  }, BOUNDS_DEBOUNCE_MS);
 }
 
-function onToggleSave(): void {
+// Keep the store's zoom in sync with whatever the user does on the map
+// directly (pinch, wheel, double-tap). The guard against equal values breaks
+// the setLevel → zoom_changed → setZoom → setLevel loop.
+function onKakaoZoomChange(level: number): void {
+  if (level === zoom.value) return;
+  mapStore.setZoom(level);
+}
+
+function onClusterClick(payload: {
+  latitude: number;
+  longitude: number;
+  markerIds: number[];
+}): void {
+  // Zoom the user into the cluster. Kakao levels: smaller = closer, so we
+  // step down by 2 (bounded) and recenter on the cluster's centroid. The
+  // subsequent bounds_changed event will refetch.
+  const nextLevel = Math.max(1, zoom.value - 2);
+  mapStore.setZoom(nextLevel);
+  void mapStore.setCenter(payload.latitude, payload.longitude);
+}
+
+// The map's search pill delegates to the global /search page — Map's own
+// `q` store field stays for in-map filter hooks (filter chips etc.) but
+// isn't typed into directly anymore.
+async function onSearch(): Promise<void> {
+  await router.push('/search');
+}
+
+async function onToggleSave(): Promise<void> {
   if (!selected.value) return;
-  mapStore.toggleSave(selected.value.id);
+  await savedStore.toggleSave(selected.value.id);
+  if (savedStore.error) await showError(savedStore.error);
 }
 
 async function onOpenDetail(): Promise<void> {
@@ -545,9 +609,15 @@ onMounted(async () => {
     // First entry this session: country-wide view so the user sees all regions.
     // Center/zoom may already be the defaults, but explicit re-set protects
     // against leftover state from an earlier resetToCountryView() toggle.
+    // The sheet stays hidden (selected stays null, sheetMode closed) until
+    // the user picks a marker or lands here via a place-aware deep-link.
     mapStore.center = { ...KOREA_CENTER };
     mapStore.setZoom(COUNTRY_ZOOM);
-    await mapStore.fetchMap();
+    mapStore.setSheetMode('closed');
+    // Ignore the post-mount bounds_changed flurry so the country marker set
+    // isn't immediately overwritten by a viewport-scoped refetch.
+    suppressBoundsFetchForCountryView();
+    await mapStore.fetchMap({ countryView: true });
   } else {
     // Re-entry: keep whatever center/zoom the store already holds (restored
     // via markLastViewed() from PlaceDetailPage, or a previous selectMarker).
@@ -575,23 +645,23 @@ ion-content.map-content {
   flex: 1;
   height: 48px;
   background: #ffffff;
+  border: none;
   border-radius: 16px;
   display: flex; align-items: center;
   padding: 0 16px; gap: 10px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04);
   font-size: 14px;
   color: var(--fr-ink);
+  text-align: left;
+  cursor: pointer;
 }
 .search-ic { color: var(--fr-ink-4); }
-.search-input {
+.search-placeholder {
   flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
+  color: var(--fr-ink-3);
   font: inherit;
-  color: var(--fr-ink);
+  letter-spacing: -0.01em;
 }
-.search-input::placeholder { color: var(--fr-ink-3); }
 .icon-btn {
   width: 48px; height: 48px;
   background: #ffffff;
