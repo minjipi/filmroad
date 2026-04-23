@@ -1,0 +1,13 @@
+version: '3'
+services:
+  mariadb:
+    ports:
+      - 3306:3306
+    image: mariadb:latest
+    environment:
+      # 비밀번호는 로컬 .env 의 DB_PASSWORD 에서 읽어옴 (docker-compose 자동 변수 치환).
+      - MARIADB_ROOT_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      - MARIADB_DATABASE=filmroad
+      - innodb_force_recovery=1
+    volumes:
+      - ./db:/var/lib/mysql

@@ -16,7 +16,7 @@ spring:
             client-name: Kakao
             authorization-grant-type: authorization_code
             redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8080/login/oauth2/code/kakao}
-            scope: profile_nickname, profile_image, account_email
+            scope: profile_nickname, profile_image
             client-authentication-method: client_secret_post
         provider:
           kakao:
@@ -55,7 +55,9 @@ spring:
 
   sql:
     init:
-      mode: always
+      # 기본 never — 앱 기동 시 data.sql 을 자동 실행하지 않는다.
+      # 데모 시드가 필요하면 환경변수 SQL_INIT_MODE=always 로 opt-in.
+      mode: ${SQL_INIT_MODE:never}
 
 logging:
   level:
