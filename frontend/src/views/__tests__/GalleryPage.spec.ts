@@ -67,6 +67,13 @@ function mountGallery() {
   return mountWithStubs(GalleryPage, {
     props: { placeId: 10 },
     initialState: { gallery: { ...galleryState } },
+    stubs: {
+      CommentSheet: {
+        props: ['photoId', 'open'],
+        template:
+          '<div class="comment-sheet-stub" :data-photo-id="photoId ?? \'\'" :data-open="open"></div>',
+      },
+    },
   });
 }
 
@@ -128,5 +135,22 @@ describe('GalleryPage.vue', () => {
     expect(posts.length).toBe(galleryState.photos.length);
     // .grid-view is not rendered in FEED mode.
     expect(wrapper.find('.grid-view').exists()).toBe(false);
+  });
+
+  it('clicking a post comment icon opens the CommentSheet with that photoId', async () => {
+    const { wrapper } = mountGallery();
+    await flushPromises();
+
+    const sheetBefore = wrapper.find('.comment-sheet-stub');
+    expect(sheetBefore.attributes('data-open')).toBe('false');
+
+    const posts = wrapper.findAll('.gal-feed .post');
+    const commentIcon = posts[1].findAll('.post-actions .a')[1];
+    await commentIcon.trigger('click');
+    await flushPromises();
+
+    const sheetAfter = wrapper.find('.comment-sheet-stub');
+    expect(sheetAfter.attributes('data-open')).toBe('true');
+    expect(sheetAfter.attributes('data-photo-id')).toBe(String(galleryState.photos[1].id));
   });
 });

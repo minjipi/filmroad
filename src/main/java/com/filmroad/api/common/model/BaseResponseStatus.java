@@ -66,6 +66,9 @@ public enum BaseResponseStatus {
     WORK_NOT_FOUND(false, 40051, "작품을 찾을 수 없습니다."),
     INVALID_FILE_TYPE(false, 40060, "지원하지 않는 파일 형식입니다."),
     UPLOAD_FAILED(false, 40061, "파일 업로드에 실패했습니다."),
+    SELF_FOLLOW_FORBIDDEN(false, 40080, "자기 자신을 팔로우할 수 없습니다."),
+    USER_NOT_FOUND(false, 40081, "사용자를 찾을 수 없습니다."),
+    UNAUTHORIZED_COMMENT(false, 40370, "댓글 삭제 권한이 없습니다."),
 
     /**
      * 50000 : Database 오류

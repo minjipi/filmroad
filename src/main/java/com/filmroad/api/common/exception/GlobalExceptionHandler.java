@@ -59,8 +59,13 @@ public class GlobalExceptionHandler {
     private int mapToHttpStatus(int statusCode) {
         // 리소스 조회 실패 계열은 HTTP 404로 매핑해 RESTful 시맨틱 유지.
         if (statusCode == BaseResponseStatus.PLACE_NOT_FOUND.getCode()
-                || statusCode == BaseResponseStatus.WORK_NOT_FOUND.getCode()) {
+                || statusCode == BaseResponseStatus.WORK_NOT_FOUND.getCode()
+                || statusCode == BaseResponseStatus.USER_NOT_FOUND.getCode()
+                || statusCode == BaseResponseStatus.COMMENT_NOT_FOUND.getCode()) {
             return 404;
+        }
+        if (statusCode == BaseResponseStatus.UNAUTHORIZED_COMMENT.getCode()) {
+            return 403;
         }
         // 40000번대 응답 오류 -> 400, 30000번대 요청 오류 -> 400, 기타 -> 500
         if (statusCode >= 40000 && statusCode < 50000) {

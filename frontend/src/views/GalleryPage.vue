@@ -72,7 +72,7 @@
               <span class="a">
                 <ion-icon :icon="heartOutline" class="ic-20" />{{ formatCount(p.likeCount) }}
               </span>
-              <span class="a">
+              <span class="a" @click="onComment(p.id)">
                 <ion-icon :icon="chatbubbleOutline" class="ic-20" />{{ formatCount(p.commentCount) }}
               </span>
               <span class="a">
@@ -111,11 +111,17 @@
         <div v-if="photos.length < total" class="load-more" @click="onLoadMore">더 보기</div>
       </div>
     </ion-content>
+    <CommentSheet
+      :photo-id="activeCommentPhotoId"
+      :open="activeCommentPhotoId !== null"
+      @close="activeCommentPhotoId = null"
+      @created="onCommentCreated"
+    />
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -137,6 +143,7 @@ import {
   type GallerySort,
   type GalleryViewMode,
 } from '@/stores/gallery';
+import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ placeId: string | number }>();
@@ -145,6 +152,19 @@ const router = useRouter();
 const galleryStore = useGalleryStore();
 const { placeHeader, photos, total, sort, viewMode, loading, error } = storeToRefs(galleryStore);
 const { showError } = useToast();
+
+const activeCommentPhotoId = ref<number | null>(null);
+
+function onComment(id: number): void {
+  activeCommentPhotoId.value = id;
+}
+
+function onCommentCreated(): void {
+  const id = activeCommentPhotoId.value;
+  if (id == null) return;
+  const photo = photos.value.find((p) => p.id === id);
+  if (photo) photo.commentCount += 1;
+}
 
 const placeIdNum = computed(() => Number(props.placeId));
 

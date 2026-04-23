@@ -32,8 +32,8 @@ public class GalleryPhotoDto {
                 .authorHandle(handle)
                 .authorAvatarUrl(null)
                 .authorVerified(false)
-                .likeCount(0)
-                .commentCount(0)
+                .likeCount(photo.getLikeCount())
+                .commentCount(photo.getCommentCount())
                 .createdAt(photo.getCreatedAt())
                 .sceneCompare(false)
                 .build();
