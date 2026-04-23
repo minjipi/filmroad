@@ -45,6 +45,11 @@ interface FetchOptions {
 interface State {
   collections: SavedCollection[];
   items: SavedItem[];
+  // Canonical "is this place saved?" index, kept in sync with the server via
+  // fetch / toggleSave. Separate from `items` because bookmark buttons across
+  // the app (PlaceDetail, Feed, Gallery, Map) need to know saved state for
+  // places that aren't necessarily rendered on SavedPage.
+  savedPlaceIds: number[];
   totalCount: number;
   suggestion: NearbyRouteSuggestion | null;
   loading: boolean;
@@ -55,11 +60,16 @@ export const useSavedStore = defineStore('saved', {
   state: (): State => ({
     collections: [],
     items: [],
+    savedPlaceIds: [],
     totalCount: 0,
     suggestion: null,
     loading: false,
     error: null,
   }),
+  getters: {
+    isSaved: (state) => (placeId: number): boolean =>
+      state.savedPlaceIds.includes(placeId),
+  },
   actions: {
     async fetch(opts: FetchOptions = {}): Promise<void> {
       this.loading = true;
@@ -71,6 +81,7 @@ export const useSavedStore = defineStore('saved', {
         const { data } = await api.get<SavedResponse>('/api/saved', { params });
         this.collections = data.collections;
         this.items = data.items;
+        this.savedPlaceIds = data.items.map((i) => i.placeId);
         this.totalCount = data.totalCount;
         this.suggestion = data.nearbyRouteSuggestion;
       } catch (e) {
@@ -87,7 +98,18 @@ export const useSavedStore = defineStore('saved', {
       try {
         const { data } = await api.post<{ saved: boolean; totalCount: number }>('/api/saved/toggle', { placeId });
         this.totalCount = data.totalCount;
-        if (!data.saved) {
+        if (data.saved) {
+          if (!this.savedPlaceIds.includes(placeId)) {
+            this.savedPlaceIds.push(placeId);
+          }
+          // Re-hydrate items so SavedPage / ProfilePage saved tab renders
+          // the full place card (thumbnail, region, work) right away. The
+          // toggle response only carries { saved, totalCount } — without
+          // this refetch, the item exists in savedPlaceIds but never shows
+          // up in the list until the next manual page visit.
+          await this.fetch();
+        } else {
+          this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
           this.items = this.items.filter((i) => i.placeId !== placeId);
         }
       } catch (e) {

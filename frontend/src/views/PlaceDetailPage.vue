@@ -168,6 +168,7 @@ import FrChip from '@/components/ui/FrChip.vue';
 import { usePlaceDetailStore, type PlacePhoto } from '@/stores/placeDetail';
 import { useUploadStore } from '@/stores/upload';
 import { useMapStore } from '@/stores/map';
+import { useSavedStore } from '@/stores/saved';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ id: string | number }>();
@@ -176,11 +177,15 @@ const router = useRouter();
 const detailStore = usePlaceDetailStore();
 const uploadStore = useUploadStore();
 const mapStore = useMapStore();
+const savedStore = useSavedStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError } = useToast();
 
 const isLiked = (id: number): boolean => detailStore.isLiked(id);
-const isSaved = (id: number): boolean => detailStore.isSaved(id);
+// Saved state is global (used on Feed / Gallery / Map / Profile too); route
+// bookmark reads + writes through the single savedStore so the on/off icon
+// stays consistent across pages without manual syncing.
+const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 const placeId = computed(() => Number(props.id));
 
@@ -240,9 +245,10 @@ async function onToggleLike(): Promise<void> {
   if (error.value) await showError(error.value);
 }
 
-function onToggleSave(): void {
+async function onToggleSave(): Promise<void> {
   if (!place.value) return;
-  detailStore.toggleSaveLocal(place.value.id);
+  await savedStore.toggleSave(place.value.id);
+  if (savedStore.error) await showError(savedStore.error);
 }
 
 async function onViewMap(): Promise<void> {

@@ -25,32 +25,11 @@ vi.mock('@ionic/vue', async () => {
 });
 
 import SavedPage from '@/views/SavedPage.vue';
-import type { NearbyRouteSuggestion } from '@/stores/saved';
+import { useUploadStore } from '@/stores/upload';
 import { mountWithStubs } from './__helpers__/mount';
 
-const savedState: {
-  collections: Array<{ id: number; name: string; coverImageUrl: string | null; count: number; gradient: string | null }>;
-  items: Array<{
-    placeId: number;
-    name: string;
-    regionLabel: string;
-    coverImageUrl: string;
-    workId: number;
-    workTitle: string;
-    distanceKm: number | null;
-    likeCount: number;
-    visited: boolean;
-    collectionId: number | null;
-  }>;
-  totalCount: number;
-  suggestion: NearbyRouteSuggestion | null;
-  loading: boolean;
-  error: string | null;
-} = {
-  collections: [
-    { id: 1, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c1.jpg', count: 8, gradient: null },
-    { id: 2, name: '도깨비 컴플리트', coverImageUrl: 'https://img/c2.jpg', count: 24, gradient: null },
-  ],
+const savedState = {
+  collections: [] as Array<unknown>,
   items: [
     {
       placeId: 10,
@@ -78,11 +57,7 @@ const savedState: {
     },
   ],
   totalCount: 2,
-  suggestion: {
-    title: '근처 성지 4곳, 하루에 돌 수 있어요',
-    subtitle: 'AI가 자동으로 루트를 짜드려요',
-    placeCount: 4,
-  },
+  suggestion: null,
   loading: false,
   error: null as string | null,
 };
@@ -101,6 +76,59 @@ describe('SavedPage.vue', () => {
     toastCreateSpy.mockClear();
   });
 
+  it('back button triggers router.back() when there is history to go back to', async () => {
+    // jsdom default: window.history.length === 1 (about:blank). Push a
+    // phantom entry so the guard falls through to router.back().
+    window.history.pushState({}, '', '/saved');
+    try {
+      const { wrapper } = mountSaved();
+      await flushPromises();
+      backSpy.mockClear();
+      pushSpy.mockClear();
+      replaceSpy.mockClear();
+
+      await wrapper.find('[data-testid="saved-back"]').trigger('click');
+      expect(backSpy).toHaveBeenCalledTimes(1);
+      expect(replaceSpy).not.toHaveBeenCalled();
+    } finally {
+      window.history.back(); // restore — best-effort, jsdom forgives
+    }
+  });
+
+  it('back button falls back to router.replace("/profile") when there is no history', async () => {
+    // Force jsdom's history.length to 1 so the guard picks the fallback.
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      Window.prototype,
+      'history',
+    );
+    Object.defineProperty(window, 'history', {
+      configurable: true,
+      value: { length: 1 } as unknown as History,
+    });
+    try {
+      const { wrapper } = mountSaved();
+      await flushPromises();
+      backSpy.mockClear();
+      replaceSpy.mockClear();
+
+      await wrapper.find('[data-testid="saved-back"]').trigger('click');
+      expect(backSpy).not.toHaveBeenCalled();
+      expect(replaceSpy).toHaveBeenCalledWith('/profile');
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window, 'history', originalDescriptor);
+      }
+    }
+  });
+
+  it('search icon pushes /search', async () => {
+    const { wrapper } = mountSaved();
+    await flushPromises();
+
+    await wrapper.find('button[aria-label="search"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/search');
+  });
+
   it('renders the top bar title and total count in the section header', async () => {
     const { wrapper } = mountSaved();
     await flushPromises();
@@ -114,47 +142,80 @@ describe('SavedPage.vue', () => {
     ]);
   });
 
-  it('renders one collection card per entry plus the "new" card', async () => {
+  it('renders the 3 mock collections + "new" card from the design (task #20)', async () => {
     const { wrapper } = mountSaved();
     await flushPromises();
 
-    const colls = wrapper.findAll('.coll');
-    // 2 collections + 1 "new" = 3.
-    expect(colls.length).toBe(3);
-    expect(colls.find((c) => c.classes().includes('new'))).toBeTruthy();
+    const cards = wrapper.findAll('[data-testid="coll-card"]');
+    expect(cards.length).toBe(3);
+    expect(cards[0].find('.name').text()).toBe('다음 여행 · 강릉');
+    expect(cards[1].find('.name').text()).toBe('도깨비 컴플리트');
+    expect(cards[2].find('.name').text()).toBe('서울 야경 성지');
+    expect(wrapper.find('[data-testid="coll-new"]').exists()).toBe(true);
   });
 
-  it('renders the nearby-route banner when suggestion is set and hides it when null', async () => {
+  it('AI 루트 배너는 항상 렌더되고 디자인의 mock 문구를 표시한다', async () => {
     const { wrapper } = mountSaved();
     await flushPromises();
 
-    const banner = wrapper.find('.banner');
+    const banner = wrapper.find('[data-testid="ai-route-banner"]');
     expect(banner.exists()).toBe(true);
     expect(banner.text()).toContain('근처 성지 4곳');
     expect(banner.text()).toContain('AI가 자동으로 루트를 짜드려요');
-
-    // Mount again with null suggestion → banner should not render.
-    const { wrapper: wrapper2 } = mountSaved({ suggestion: null });
-    await flushPromises();
-    expect(wrapper2.find('.banner').exists()).toBe(false);
   });
 
   it('saved-list renders one row per item with visited-specific action class', async () => {
     const { wrapper } = mountSaved();
     await flushPromises();
 
-    const rows = wrapper.findAll('.saved');
+    const rows = wrapper.findAll('[data-testid="saved-card"]');
     expect(rows.length).toBe(2);
     // First item not visited → primary action, no visited flag.
-    expect(rows[0].find('.saved-action').classes()).toContain('primary');
-    expect(rows[0].find('.visited-flag').exists()).toBe(false);
+    expect(rows[0].find('[data-testid="saved-action"]').classes()).toContain('primary');
+    expect(rows[0].find('[data-testid="visited-flag"]').exists()).toBe(false);
     // Second item visited → mint action + visited flag rendered.
-    expect(rows[1].find('.saved-action').classes()).toContain('mint');
-    expect(rows[1].find('.visited-flag').exists()).toBe(true);
+    expect(rows[1].find('[data-testid="saved-action"]').classes()).toContain('mint');
+    expect(rows[1].find('[data-testid="visited-flag"]').exists()).toBe(true);
 
     // Clicking the row pushes /place/:id.
     await rows[0].trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/place/10');
+  });
+
+  it('미방문 장소의 카메라 아이콘 → uploadStore.beginCapture + push /camera', async () => {
+    const { wrapper } = mountSaved();
+    await flushPromises();
+    const upload = useUploadStore();
+    const beginSpy = vi.spyOn(upload, 'beginCapture');
+
+    const actions = wrapper.findAll('[data-testid="saved-action"]');
+    await actions[0].trigger('click'); // 1st row: visited=false
+
+    expect(beginSpy).toHaveBeenCalledWith({
+      placeId: 10,
+      workId: 1,
+      workTitle: '도깨비',
+      workEpisode: null,
+      placeName: '주문진 영진해변 방파제',
+      sceneImageUrl: null,
+    });
+    expect(pushSpy).toHaveBeenCalledWith('/camera');
+  });
+
+  it('방문한 장소의 체크 아이콘은 placeholder 토스트만 띄우고 /camera 로 이동하지 않는다', async () => {
+    const { wrapper } = mountSaved();
+    await flushPromises();
+    const upload = useUploadStore();
+    const beginSpy = vi.spyOn(upload, 'beginCapture');
+    pushSpy.mockClear();
+
+    const actions = wrapper.findAll('[data-testid="saved-action"]');
+    await actions[1].trigger('click'); // 2nd row: visited=true
+    await flushPromises();
+
+    expect(beginSpy).not.toHaveBeenCalled();
+    expect(pushSpy).not.toHaveBeenCalledWith('/camera');
+    expect(toastCreateSpy).toHaveBeenCalled();
   });
 });

@@ -70,7 +70,8 @@
           </div>
         </nav>
 
-        <div class="grid3">
+        <!-- 인증샷 (기존) -->
+        <div v-if="localTab === 'photos'" class="grid3" data-testid="tab-photos">
           <div
             v-for="cell in gridCells"
             :key="cell.key"
@@ -81,6 +82,37 @@
             <span v-if="cell.tag" class="tag">{{ cell.tag }}</span>
           </div>
         </div>
+
+        <!-- 스탬프북 요약 + 전체보기 이동 -->
+        <section
+          v-else-if="localTab === 'stampbook'"
+          class="stampbook-summary"
+          data-testid="tab-stampbook"
+        >
+          <div class="stampbook-card">
+            <div class="sb-icon">
+              <ion-icon :icon="ribbonOutline" class="ic-28" />
+            </div>
+            <div class="sb-body">
+              <div class="sb-title">스탬프북</div>
+              <div class="sb-sub">
+                전국 {{ stats?.visitedCount ?? 0 }}곳 방문 · 레벨 {{ user?.level ?? 1 }}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="sb-btn"
+              data-testid="stampbook-detail-btn"
+              @click="onOpenStampbook"
+            >
+              자세히 보기
+              <ion-icon :icon="chevronForwardOutline" class="ic-16" />
+            </button>
+          </div>
+        </section>
+
+        <!-- 저장 탭은 task #20 에서 다시 `/saved` 페이지로 라우팅되도록 환원.
+             onSelectLocalTab 이 즉시 push 하므로 이 탭의 본문은 렌더되지 않는다. -->
       </div>
 
     </ion-content>
@@ -89,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { IonPage, IonContent, IonIcon, actionSheetController } from '@ionic/vue';
 import {
   shareSocialOutline,
@@ -119,7 +151,9 @@ const authStore = useAuthStore();
 const { user, stats, miniMapPins, error } = storeToRefs(profileStore);
 const { showError, showInfo } = useToast();
 
-const localTab = computed<LocalTab>(() => 'photos');
+// photos / stampbook 는 in-place 렌더, '저장' 탭은 task #20 에서 다시
+// `/saved` 페이지로 라우팅하도록 환원.
+const localTab = ref<LocalTab>('photos');
 
 const localTabs: Array<{ key: LocalTab; label: string; icon: string }> = [
   { key: 'photos', label: '인증샷', icon: gridOutline },
@@ -197,8 +231,17 @@ const gridCells = computed<GridCell[]>(() => {
 });
 
 async function onSelectLocalTab(t: LocalTab): Promise<void> {
-  if (t === 'stampbook') await router.push('/stampbook');
-  else if (t === 'saved') await router.push('/saved');
+  if (t === 'saved') {
+    // 저장 탭은 전용 페이지(/saved)에서 컬렉션 · AI 루트 배너까지 함께
+    // 보여주는 구조라 in-place 렌더 대신 라우팅한다 (task #20).
+    await router.push('/saved');
+    return;
+  }
+  localTab.value = t;
+}
+
+async function onOpenStampbook(): Promise<void> {
+  await router.push('/stampbook');
 }
 
 async function onOpenMap(): Promise<void> {
@@ -472,4 +515,60 @@ ion-content.pf-content {
   font-size: 9px; font-weight: 700;
   backdrop-filter: blur(4px);
 }
+
+/* ---------- 스탬프북 요약 ---------- */
+.stampbook-summary {
+  padding: 16px;
+}
+.stampbook-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff7ed, #fff1f2);
+  border: 1px solid #fde68a;
+}
+.stampbook-card .sb-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--fr-amber);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.stampbook-card .sb-body {
+  flex: 1;
+  min-width: 0;
+}
+.stampbook-card .sb-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.stampbook-card .sb-sub {
+  font-size: 12px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+.stampbook-card .sb-btn {
+  background: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fr-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  white-space: nowrap;
+}
+
 </style>

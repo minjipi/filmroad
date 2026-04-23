@@ -46,11 +46,23 @@ function mountUpload(overrides: Partial<{
   caption: string;
   visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
   addToStampbook: boolean;
+  targetPlace: CaptureTarget | null;
+  homePlaces: Array<{
+    id: number;
+    name: string;
+    regionLabel: string;
+    coverImageUrl: string;
+    workId: number;
+    workTitle: string;
+    liked: boolean;
+    likeCount: number;
+  }>;
 }> = {}) {
   return mountWithStubs(UploadPage, {
     initialState: {
       upload: {
-        targetPlace: { ...target },
+        targetPlace:
+          overrides.targetPlace === undefined ? { ...target } : overrides.targetPlace,
         photos: overrides.photos ?? [photoA, photoB],
         selectedIndex: overrides.selectedIndex ?? 0,
         caption: overrides.caption ?? '',
@@ -59,6 +71,15 @@ function mountUpload(overrides: Partial<{
         addToStampbook: overrides.addToStampbook ?? true,
         loading: false,
         error: null,
+      },
+      home: {
+        hero: null,
+        works: [],
+        places: overrides.homePlaces ?? [],
+        loading: false,
+        error: null,
+        selectedWorkId: null,
+        scope: 'NEAR',
       },
     },
   });
@@ -131,6 +152,68 @@ describe('UploadPage.vue', () => {
     await toggles[1].trigger('click');
     expect(store.visibility).toBe('PUBLIC');
     expect(wrapper.findAll('button.toggle')[1].classes()).not.toContain('off');
+  });
+
+  it('bottom-nav entry with no targetPlace: renders the "장소 선택" CTA and disables 공유하기', async () => {
+    const { wrapper } = mountUpload({ targetPlace: null, photos: [photoA] });
+    await flushPromises();
+
+    // Preview still renders the shot photo — user just hasn't attached a place yet.
+    expect(wrapper.find('.preview img').attributes('src')).toBe(photoA);
+    // Frame sticker is tied to targetPlace and must stay hidden.
+    expect(wrapper.find('.frame-sticker').exists()).toBe(false);
+    // Place CTA replaces the normal "위치" row.
+    const cta = wrapper.find('[data-testid="pick-place-cta"]');
+    expect(cta.exists()).toBe(true);
+    expect(cta.text()).toContain('장소를 선택해 주세요');
+    // Share button disabled until a place is picked.
+    expect((wrapper.find('button.post').element as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('tapping the place CTA opens the picker sheet with home places; selecting one calls setTargetPlace and closes it', async () => {
+    const homePlaces = [
+      {
+        id: 13,
+        name: '단밤 포차',
+        regionLabel: '서울 용산구',
+        coverImageUrl: 'https://img/13.jpg',
+        workId: 2,
+        workTitle: '이태원 클라쓰',
+        liked: false,
+        likeCount: 0,
+      },
+    ];
+    const { wrapper } = mountUpload({
+      targetPlace: null,
+      photos: [photoA],
+      homePlaces,
+    });
+    await flushPromises();
+    const store = useUploadStore();
+    const setSpy = vi.spyOn(store, 'setTargetPlace');
+
+    // Backdrop / sheet are hidden until the CTA is tapped.
+    expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(false);
+
+    await wrapper.find('[data-testid="pick-place-cta"]').trigger('click');
+    await flushPromises();
+
+    const items = wrapper.findAll('[data-testid="picker-item"]');
+    expect(items.length).toBe(1);
+    expect(items[0].text()).toContain('단밤 포차');
+
+    await items[0].trigger('click');
+
+    expect(setSpy).toHaveBeenCalledWith({
+      placeId: 13,
+      workId: 2,
+      workTitle: '이태원 클라쓰',
+      workEpisode: null,
+      placeName: '단밤 포차',
+      sceneImageUrl: null,
+    });
+    // Sheet closes after selection.
+    expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(false);
   });
 
   it('"공유하기" button triggers uploadStore.submit and routes to /reward/:id on success', async () => {

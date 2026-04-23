@@ -95,7 +95,18 @@ describe('saved store', () => {
     expect(store.loading).toBe(false);
   });
 
-  it('toggleSave(off) drops the place from items and updates totalCount', async () => {
+  it('fetch hydrates savedPlaceIds from items so isSaved(placeId) works across pages', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+
+    expect(store.savedPlaceIds.sort()).toEqual([10, 13]);
+    expect(store.isSaved(10)).toBe(true);
+    expect(store.isSaved(13)).toBe(true);
+    expect(store.isSaved(999)).toBe(false);
+  });
+
+  it('toggleSave(off) drops the place from items + savedPlaceIds and updates totalCount', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useSavedStore();
     await store.fetch();
@@ -106,21 +117,80 @@ describe('saved store', () => {
     expect(store.items.find((i) => i.placeId === 10)).toBeUndefined();
     expect(store.items.length).toBe(1);
     expect(store.totalCount).toBe(1);
+    expect(store.isSaved(10)).toBe(false);
+    expect(store.savedPlaceIds).not.toContain(10);
 
     const [url, body] = mockApi.post.mock.calls[0];
     expect(url).toBe('/api/saved/toggle');
     expect(body).toEqual({ placeId: 10 });
   });
 
-  it('toggleSave(on) keeps items intact and bumps totalCount', async () => {
+  it('toggleSave(on) adds to savedPlaceIds AND re-fetches so items surfaces the new place (not just the id)', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useSavedStore();
     await store.fetch();
 
+    expect(store.isSaved(99)).toBe(false);
+    // Server says "saved" in the toggle response …
     mockApi.post.mockResolvedValueOnce({ data: { saved: true, totalCount: 3 } });
+    // … and the subsequent re-fetch returns the extended list with the new place.
+    const extended: SavedResponse = {
+      ...fixture,
+      items: [
+        ...fixture.items,
+        {
+          placeId: 99,
+          name: '영진 커피숍',
+          regionLabel: '강릉시 주문진읍',
+          coverImageUrl: 'https://img/p99.jpg',
+          workId: 1,
+          workTitle: '도깨비',
+          distanceKm: 0.4,
+          likeCount: 120,
+          visited: false,
+          collectionId: null,
+        },
+      ],
+      totalCount: 3,
+    };
+    mockApi.get.mockResolvedValueOnce({ data: extended });
+
     await store.toggleSave(99);
 
-    expect(store.items.length).toBe(2);
+    expect(store.items.length).toBe(3);
+    expect(store.items.find((i) => i.placeId === 99)?.name).toBe('영진 커피숍');
     expect(store.totalCount).toBe(3);
+    expect(store.isSaved(99)).toBe(true);
+    expect(store.savedPlaceIds).toContain(99);
+    // Initial fetch + post-toggle re-fetch.
+    expect(mockApi.get).toHaveBeenCalledTimes(2);
+    expect(mockApi.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggleSave(off) is still an optimistic local splice — no extra re-fetch', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+    mockApi.get.mockClear();
+
+    mockApi.post.mockResolvedValueOnce({ data: { saved: false, totalCount: 1 } });
+    await store.toggleSave(10);
+
+    expect(store.items.find((i) => i.placeId === 10)).toBeUndefined();
+    expect(mockApi.get).not.toHaveBeenCalled();
+  });
+
+  it('toggleSave on an anonymous visitor opens the login prompt instead of hitting /api/saved/toggle', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    useAuthStore().user = null; // signInForTest ran in beforeEach — undo it.
+
+    const uiMod = await import('@/stores/ui');
+    const promptSpy = vi.spyOn(uiMod.useUiStore(), 'showLoginPrompt');
+    const store = useSavedStore();
+
+    await store.toggleSave(10);
+
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    expect(mockApi.post).not.toHaveBeenCalled();
   });
 });

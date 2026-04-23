@@ -26,6 +26,7 @@ vi.mock('@ionic/vue', async () => {
 
 import GalleryPage from '@/views/GalleryPage.vue';
 import { useGalleryStore } from '@/stores/gallery';
+import { useSavedStore } from '@/stores/saved';
 import { mountWithStubs } from './__helpers__/mount';
 
 function makePhoto(id: number) {
@@ -135,6 +136,23 @@ describe('GalleryPage.vue', () => {
     expect(posts.length).toBe(galleryState.photos.length);
     // .grid-view is not rendered in FEED mode.
     expect(wrapper.find('.grid-view').exists()).toBe(false);
+  });
+
+  it('bookmark on a photo row dispatches savedStore.toggleSave(placeHeader.placeId)', async () => {
+    const { wrapper } = mountGallery();
+    await flushPromises();
+    const saved = useSavedStore();
+    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+
+    const bookmarks = wrapper.findAll('[data-testid="gallery-save"]');
+    // One bookmark per feed-view post.
+    expect(bookmarks.length).toBe(galleryState.photos.length);
+
+    await bookmarks[0].trigger('click');
+    expect(toggleSpy).toHaveBeenCalledWith(galleryState.placeHeader.placeId);
+    // Any photo in the same gallery saves the same place.
+    await bookmarks[2].trigger('click');
+    expect(toggleSpy).toHaveBeenLastCalledWith(galleryState.placeHeader.placeId);
   });
 
   it('clicking a post comment icon opens the CommentSheet with that photoId', async () => {

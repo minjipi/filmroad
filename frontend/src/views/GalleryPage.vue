@@ -78,8 +78,15 @@
               <span class="a">
                 <ion-icon :icon="shareSocialOutline" class="ic-20" />
               </span>
-              <span class="save-r">
-                <ion-icon :icon="bookmarkOutline" class="ic-20" />
+              <span
+                class="save-r"
+                data-testid="gallery-save"
+                @click="onToggleSave"
+              >
+                <ion-icon
+                  :icon="placeSaved ? bookmark : bookmarkOutline"
+                  class="ic-20"
+                />
               </span>
             </div>
             <div v-if="p.caption" class="caption">
@@ -135,6 +142,7 @@ import {
   chatbubbleOutline,
   shareSocialOutline,
   bookmarkOutline,
+  bookmark,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -143,6 +151,7 @@ import {
   type GallerySort,
   type GalleryViewMode,
 } from '@/stores/gallery';
+import { useSavedStore } from '@/stores/saved';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
 
@@ -150,8 +159,22 @@ const props = defineProps<{ placeId: string | number }>();
 
 const router = useRouter();
 const galleryStore = useGalleryStore();
+const savedStore = useSavedStore();
 const { placeHeader, photos, total, sort, viewMode, loading, error } = storeToRefs(galleryStore);
 const { showError } = useToast();
+
+// All photos on a gallery page share the same underlying place — bookmarks
+// on any photo row save that place (not the individual photo).
+const placeSaved = computed<boolean>(() =>
+  placeHeader.value ? savedStore.isSaved(placeHeader.value.placeId) : false,
+);
+
+async function onToggleSave(): Promise<void> {
+  const id = placeHeader.value?.placeId;
+  if (id == null) return;
+  await savedStore.toggleSave(id);
+  if (savedStore.error) await showError(savedStore.error);
+}
 
 const activeCommentPhotoId = ref<number | null>(null);
 

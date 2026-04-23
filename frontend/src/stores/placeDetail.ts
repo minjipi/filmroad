@@ -58,7 +58,6 @@ interface State {
   related: RelatedPlace[];
   loading: boolean;
   error: string | null;
-  savedIds: number[];
 }
 
 export const usePlaceDetailStore = defineStore('placeDetail', {
@@ -68,12 +67,10 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
     related: [],
     loading: false,
     error: null,
-    savedIds: [],
   }),
   getters: {
     isLiked: (state) => (id: number): boolean =>
       state.place !== null && state.place.id === id && state.place.liked === true,
-    isSaved: (state) => (id: number): boolean => state.savedIds.includes(id),
   },
   actions: {
     async fetch(id: number, opts: FetchOptions = {}): Promise<void> {
@@ -109,11 +106,6 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to toggle like';
       }
-    },
-    toggleSaveLocal(id: number): void {
-      const i = this.savedIds.indexOf(id);
-      if (i >= 0) this.savedIds.splice(i, 1);
-      else this.savedIds.push(id);
     },
   },
 });

@@ -11,12 +11,13 @@ vi.mock('@/services/api', () => ({
   },
 }));
 
+const { pushSpy, replaceSpy, backSpy } = vi.hoisted(() => ({
+  pushSpy: vi.fn().mockResolvedValue(undefined),
+  replaceSpy: vi.fn().mockResolvedValue(undefined),
+  backSpy: vi.fn(),
+}));
 vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: vi.fn().mockResolvedValue(undefined),
-    replace: vi.fn().mockResolvedValue(undefined),
-    back: vi.fn(),
-  }),
+  useRouter: () => ({ push: pushSpy, replace: replaceSpy, back: backSpy }),
 }));
 
 const { toastCreateSpy } = vi.hoisted(() => ({
@@ -36,6 +37,7 @@ import {
   type FeedTab,
   type FeedUser,
 } from '@/stores/feed';
+import { useSavedStore } from '@/stores/saved';
 import { mountWithStubs } from './__helpers__/mount';
 
 function makePost(id: number, overrides: Partial<FeedPost> = {}): FeedPost {
@@ -118,6 +120,18 @@ function mountFeed(overrides: {
 describe('FeedPage.vue', () => {
   beforeEach(() => {
     toastCreateSpy.mockClear();
+    pushSpy.mockClear();
+    replaceSpy.mockClear();
+    backSpy.mockClear();
+  });
+
+  it('tapping the search bar pushes /search', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('.search-row').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/search');
   });
 
   it('renders four tabs with the active one marked and setTab is dispatched on click', async () => {
@@ -210,6 +224,30 @@ describe('FeedPage.vue', () => {
     expect(toggleSpy).toHaveBeenCalledWith(2);
     const heart2After = wrapper.findAll('.post')[1].find('.post-actions .a');
     expect(heart2After.classes()).toContain('on');
+  });
+
+  it('bookmark button dispatches savedStore.toggleSave(placeId) and reflects isSaved', async () => {
+    const { wrapper } = mountFeed({
+      posts: [
+        makePost(1),
+        makePost(2),
+      ],
+    });
+    await flushPromises();
+
+    const saved = useSavedStore();
+    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+
+    // Icon state before: neither place saved → outline variants.
+    const savesBefore = wrapper.findAll('[data-testid="feed-save"]');
+    expect(savesBefore.length).toBe(2);
+
+    // Flip saved state for post#1's place (id=10) and confirm icon updates.
+    saved.savedPlaceIds = [10];
+    await flushPromises();
+    // Actual dispatch: tapping bookmark on post#2 (placeId=20).
+    await savesBefore[1].trigger('click');
+    expect(toggleSpy).toHaveBeenCalledWith(20);
   });
 
   it('clicking the comment icon opens the CommentSheet with that photoId', async () => {

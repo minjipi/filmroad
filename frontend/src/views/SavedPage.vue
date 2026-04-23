@@ -2,7 +2,22 @@
   <ion-page>
     <ion-content :fullscreen="true" class="sv-content">
       <header class="top">
-        <h1>저장한 장소</h1>
+        <!-- Back button — not in 11-saved.html (디자인엔 없음) but the app
+             routes here from ProfilePage's "저장" tab, so users need a way
+             back to their profile context. Wrapped with h1 so the title
+             hugs the back button instead of centering between the arrows. -->
+        <div class="top-lead">
+          <button
+            type="button"
+            class="back"
+            aria-label="뒤로"
+            data-testid="saved-back"
+            @click="onBack"
+          >
+            <ion-icon :icon="chevronBackOutline" class="ic-20" />
+          </button>
+          <h1>저장한 장소</h1>
+        </div>
         <div class="actions">
           <button type="button" aria-label="search" @click="onSearch">
             <ion-icon :icon="searchOutline" class="ic-20" />
@@ -21,33 +36,45 @@
           </div>
         </section>
 
+        <!-- 컬렉션 목록 — 백엔드 모델 미구현이라 v1 은 디자인 mock 값을
+             그대로 사용. 백엔드 도입 시 `mockCollections` 를 store 로 교체. -->
         <div class="collection-row no-scrollbar">
           <div
-            v-for="c in collections"
+            v-for="c in mockCollections"
             :key="c.id"
             class="coll"
+            data-testid="coll-card"
             @click="onOpenCollection(c.id)"
           >
-            <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
+            <img :src="c.coverImageUrl" :alt="c.name" />
             <div />
             <div>
               <div class="name">{{ c.name }}</div>
               <div class="count">
-                <ion-icon :icon="locationOutline" class="ic-16" />{{ c.count }}곳
+                <ion-icon :icon="c.icon" class="ic-16" />{{ c.count }}곳
               </div>
             </div>
           </div>
-          <div class="coll new" @click="onCreateCollection">
+          <div
+            class="coll new"
+            data-testid="coll-new"
+            @click="onCreateCollection"
+          >
             <ion-icon :icon="addOutline" class="ic-24" />
             새 컬렉션
           </div>
         </div>
 
-        <div v-if="suggestion" class="banner" @click="onOpenSuggestion">
-          <div class="ico"><ion-icon :icon="mapOutline" class="ic-22" /></div>
+        <!-- AI 루트 배너 — 항상 표시. 백엔드 추천 엔진 붙기 전엔 고정 문구. -->
+        <div
+          class="banner"
+          data-testid="ai-route-banner"
+          @click="onOpenSuggestion"
+        >
+          <div class="ico"><ion-icon :icon="routeIcon" class="ic-22" /></div>
           <div class="banner-text">
-            <div class="t">{{ suggestion.title }}</div>
-            <div class="s">{{ suggestion.subtitle }}</div>
+            <div class="t">{{ aiBanner.title }}</div>
+            <div class="s">{{ aiBanner.subtitle }}</div>
           </div>
           <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
         </div>
@@ -62,6 +89,7 @@
               v-for="i in items"
               :key="i.placeId"
               class="saved"
+              data-testid="saved-card"
               @click="onOpenPlace(i.placeId)"
             >
               <div class="saved-thumb"><img :src="i.coverImageUrl" :alt="i.name" /></div>
@@ -69,7 +97,7 @@
                 <div>
                   <div class="chips">
                     <FrChip variant="soft">{{ i.workTitle }}</FrChip>
-                    <span v-if="i.visited" class="visited-flag">
+                    <span v-if="i.visited" class="visited-flag" data-testid="visited-flag">
                       <ion-icon :icon="checkmark" class="ic-16" />방문함
                     </span>
                   </div>
@@ -87,12 +115,15 @@
                   </span>
                 </div>
               </div>
-              <div
+              <button
+                type="button"
                 :class="['saved-action', i.visited ? 'mint' : 'primary']"
+                :aria-label="i.visited ? '방문함' : '인증샷 찍기'"
+                data-testid="saved-action"
                 @click.stop="onActionTap(i)"
               >
                 <ion-icon :icon="i.visited ? checkmark : cameraOutline" class="ic-18" />
-              </div>
+              </button>
             </div>
             <p v-if="items.length === 0" class="empty-note">저장한 장소가 없어요</p>
           </div>
@@ -112,25 +143,74 @@ import {
   swapVerticalOutline,
   locationOutline,
   addOutline,
-  mapOutline,
   chevronForwardOutline,
   chevronDownOutline,
+  chevronBackOutline,
   checkmark,
   navigateOutline,
   heartOutline,
   cameraOutline,
+  filmOutline,
+  moonOutline,
+  trailSignOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useSavedStore, type SavedItem } from '@/stores/saved';
+import { useUploadStore } from '@/stores/upload';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
 const savedStore = useSavedStore();
-const { collections, items, totalCount, suggestion, error } = storeToRefs(savedStore);
+const uploadStore = useUploadStore();
+const { items, totalCount, error } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
+
+// Design 11-saved.html 의 컬렉션 3개 + 새 컬렉션 카드. 백엔드 SavedCollection
+// 모델이 준비되면 mockCollections 를 store.collections 로 교체.
+interface MockCollection {
+  id: number;
+  name: string;
+  coverImageUrl: string;
+  count: number;
+  icon: string;
+}
+const mockCollections: MockCollection[] = [
+  {
+    id: 1,
+    name: '다음 여행 · 강릉',
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=400&q=80',
+    count: 8,
+    icon: locationOutline,
+  },
+  {
+    id: 2,
+    name: '도깨비 컴플리트',
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=400&q=80',
+    count: 24,
+    icon: filmOutline,
+  },
+  {
+    id: 3,
+    name: '서울 야경 성지',
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=400&q=80',
+    count: 12,
+    icon: moonOutline,
+  },
+];
+
+// AI 루트 배너도 동일하게 v1 은 고정 문구. 추후 `savedStore.suggestion` 으로
+// 교체 가능하나 현재는 서버가 null 을 돌려줘서 렌더되지 않던 상태였음.
+const aiBanner = {
+  title: '근처 성지 4곳, 하루에 돌 수 있어요',
+  subtitle: 'AI가 자동으로 루트를 짜드려요',
+};
+const routeIcon = trailSignOutline;
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -149,14 +229,36 @@ async function onOpenPlace(id: number): Promise<void> {
 
 async function onActionTap(item: SavedItem): Promise<void> {
   if (item.visited) {
+    // 방문 완료한 장소의 체크 아이콘 동작은 "인증샷 보기" 로 확장 예정 —
+    // 현재는 안내 토스트만.
     await showInfo('이미 방문한 성지예요');
     return;
   }
-  await router.push(`/place/${item.placeId}`);
+  // 미방문: 카메라 아이콘 → 바로 인증샷 찍기 플로우. upload store 를 seed
+  // 한 뒤 /camera 로 이동해 scene 오버레이까지 함께 로드.
+  uploadStore.beginCapture({
+    placeId: item.placeId,
+    workId: item.workId,
+    workTitle: item.workTitle,
+    workEpisode: null,
+    placeName: item.name,
+    sceneImageUrl: null,
+  });
+  await router.push('/camera');
+}
+
+function onBack(): void {
+  // Prefer native back so forward/back stack stays accurate; fall back to
+  // /profile when the user deep-linked directly into /saved (no history).
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back();
+  } else {
+    void router.replace('/profile');
+  }
 }
 
 async function onSearch(): Promise<void> {
-  await showInfo('검색은 곧 공개됩니다');
+  await router.push('/search');
 }
 
 async function onSort(): Promise<void> {
@@ -176,7 +278,8 @@ async function onOpenCollection(_id: number): Promise<void> {
 }
 
 async function onOpenSuggestion(): Promise<void> {
-  await router.push('/map');
+  // AI 루트는 후속 기능 — v1 에선 안내만.
+  await showInfo('AI 루트 기능은 곧 공개됩니다');
 }
 
 onMounted(async () => {
@@ -201,11 +304,20 @@ ion-content.sv-content {
   align-items: center;
   background: #ffffff;
 }
+.top .top-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .top h1 {
   margin: 0;
   font-size: 22px; font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--fr-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .top .actions { display: flex; gap: 6px; }
 .top button {

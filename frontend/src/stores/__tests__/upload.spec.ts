@@ -73,6 +73,27 @@ describe('upload store', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('setTargetPlace attaches (or swaps) the target without touching photos or form state', () => {
+    const store = useUploadStore();
+
+    // Simulate the bottom-nav camera flow: shoot first, set place later.
+    store.addPhoto(JPEG_DATA_URL);
+    store.setCaption('hello');
+    expect(store.targetPlace).toBeNull();
+
+    store.setTargetPlace(target);
+    expect(store.targetPlace).toEqual(target);
+    // Photos / caption / toggles survive — this is the key difference from beginCapture.
+    expect(store.photos).toEqual([JPEG_DATA_URL]);
+    expect(store.caption).toBe('hello');
+
+    // Swapping the target works the same way.
+    const other = { ...target, placeId: 99, placeName: '다른 장소' };
+    store.setTargetPlace(other);
+    expect(store.targetPlace).toEqual(other);
+    expect(store.photos).toEqual([JPEG_DATA_URL]);
+  });
+
   it('addPhoto / selectPhoto / removePhoto manage the photo list', () => {
     const store = useUploadStore();
     store.beginCapture(target);

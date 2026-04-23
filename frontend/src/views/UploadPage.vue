@@ -4,19 +4,24 @@
       <header class="top">
         <span class="cancel" @click="onCancel">취소</span>
         <h1>인증샷 올리기</h1>
-        <button class="post" type="button" :disabled="loading" @click="onShare">
+        <button
+          class="post"
+          type="button"
+          :disabled="!canShare"
+          @click="onShare"
+        >
           {{ loading ? '공유 중...' : '공유하기' }}
         </button>
       </header>
 
       <div class="up-scroll no-scrollbar">
-        <div v-if="targetPlace" class="preview-wrap">
+        <div v-if="selectedPhoto" class="preview-wrap">
           <div class="preview">
-            <img v-if="selectedPhoto" :src="selectedPhoto" alt="preview" />
-            <div class="sticker-label">
+            <img :src="selectedPhoto" alt="preview" />
+            <div v-if="targetPlace" class="sticker-label">
               <ion-icon :icon="sparklesOutline" class="ic-16" />장면 비교 ON
             </div>
-            <div class="frame-sticker">
+            <div v-if="targetPlace" class="frame-sticker">
               <div class="ico"><ion-icon :icon="filmOutline" class="ic-18" /></div>
               <div>
                 <div class="t">
@@ -63,25 +68,45 @@
             </div>
           </div>
 
-          <div v-if="targetPlace" class="field row-field">
-            <div class="ico"><ion-icon :icon="filmOutline" class="ic-20" /></div>
-            <div>
-              <div class="k">작품</div>
-              <div class="v">
-                {{ targetPlace.workTitle }}<span v-if="targetPlace.workEpisode"> · {{ targetPlace.workEpisode }}</span>
+          <template v-if="targetPlace">
+            <div class="field row-field">
+              <div class="ico"><ion-icon :icon="filmOutline" class="ic-20" /></div>
+              <div>
+                <div class="k">작품</div>
+                <div class="v">
+                  {{ targetPlace.workTitle }}<span v-if="targetPlace.workEpisode"> · {{ targetPlace.workEpisode }}</span>
+                </div>
               </div>
+              <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
             </div>
-            <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
-          </div>
 
-          <div v-if="targetPlace" class="field row-field">
+            <div class="field row-field" data-testid="target-place-row" @click="onOpenPicker">
+              <div class="ico"><ion-icon :icon="locationOutline" class="ic-20" /></div>
+              <div class="grow">
+                <div class="k">위치</div>
+                <div class="v">{{ targetPlace.placeName }}</div>
+              </div>
+              <span class="change-link">변경</span>
+            </div>
+          </template>
+
+          <!-- No place attached yet (bottom-nav camera CTA entry). Show a
+               single CTA that opens the picker; "공유하기" stays disabled
+               until the user picks something. -->
+          <button
+            v-else
+            class="field row-field place-cta"
+            type="button"
+            data-testid="pick-place-cta"
+            @click="onOpenPicker"
+          >
             <div class="ico"><ion-icon :icon="locationOutline" class="ic-20" /></div>
-            <div>
-              <div class="k">위치</div>
-              <div class="v">{{ targetPlace.placeName }}</div>
+            <div class="grow">
+              <div class="k">장소</div>
+              <div class="v missing">장소를 선택해 주세요</div>
             </div>
             <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
-          </div>
+          </button>
 
           <div class="field row-field">
             <div class="ico"><ion-icon :icon="peopleOutline" class="ic-20" /></div>
@@ -123,6 +148,58 @@
           </div>
         </div>
       </div>
+
+      <!-- Place picker sheet. Backdrop-only dismiss; the list is a client-
+           side filter over home places (recent/popular) — no dedicated
+           search API yet, see task #15 brief. -->
+      <div
+        v-if="pickerOpen"
+        class="picker-backdrop"
+        data-testid="picker-backdrop"
+        @click.self="onClosePicker"
+      >
+        <div class="picker-sheet" role="dialog" aria-label="장소 선택">
+          <header class="picker-head">
+            <h2>장소 선택</h2>
+            <button type="button" aria-label="닫기" class="picker-close" @click="onClosePicker">
+              <ion-icon :icon="closeOutline" class="ic-20" />
+            </button>
+          </header>
+
+          <div class="picker-search">
+            <ion-icon :icon="searchOutline" class="ic-18 search-ic" />
+            <input
+              v-model="pickerQuery"
+              type="search"
+              enterkeyhint="search"
+              placeholder="촬영지나 작품을 검색해 보세요"
+            />
+          </div>
+
+          <div class="picker-list no-scrollbar">
+            <button
+              v-for="p in pickerResults"
+              :key="p.id"
+              type="button"
+              class="picker-item"
+              data-testid="picker-item"
+              @click="onPickPlace(p)"
+            >
+              <div class="thumb">
+                <img v-if="p.coverImageUrl" :src="p.coverImageUrl" :alt="p.name" />
+              </div>
+              <div class="meta">
+                <div class="t">{{ p.name }}</div>
+                <div class="s">{{ p.workTitle }} · {{ p.regionLabel }}</div>
+              </div>
+            </button>
+            <div v-if="pickerResults.length === 0" class="picker-empty">
+              <span v-if="pickerQuery.trim()">검색 결과가 없어요</span>
+              <span v-else>홈에서 장소를 더 둘러본 뒤 다시 시도해 주세요</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -139,14 +216,18 @@ import {
   globeOutline,
   chevronForwardOutline,
   addOutline,
+  closeOutline,
+  searchOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUploadStore } from '@/stores/upload';
+import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
 const uploadStore = useUploadStore();
+const homeStore = useHomeStore();
 const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading } = storeToRefs(uploadStore);
 const selectedPhoto = computed(() => uploadStore.selectedPhoto);
 const { showError, showInfo } = useToast();
@@ -158,6 +239,58 @@ const visibilityLabel = computed(() => {
   if (visibility.value === 'FOLLOWERS') return '팔로워 공개';
   return '나만 보기';
 });
+
+// "공유하기" needs both a place and at least one photo. The button text/state
+// reflects what's missing so the user isn't left guessing.
+const canShare = computed(
+  () => !loading.value && targetPlace.value !== null && photos.value.length > 0,
+);
+
+// ---------- Place picker ----------
+const pickerOpen = ref(false);
+const pickerQuery = ref('');
+
+const pickerResults = computed<PlaceSummary[]>(() => {
+  const q = pickerQuery.value.trim().toLowerCase();
+  const source = homeStore.places;
+  if (!q) return source;
+  return source.filter((p) => {
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.workTitle.toLowerCase().includes(q) ||
+      p.regionLabel.toLowerCase().includes(q)
+    );
+  });
+});
+
+async function onOpenPicker(): Promise<void> {
+  pickerQuery.value = '';
+  pickerOpen.value = true;
+  // Lazy fetch — if the home tab hasn't been visited yet this session, fetch
+  // once so the picker has something to show.
+  if (homeStore.places.length === 0 && !homeStore.loading) {
+    await homeStore.fetchHome();
+  }
+}
+
+function onClosePicker(): void {
+  pickerOpen.value = false;
+}
+
+function onPickPlace(p: PlaceSummary): void {
+  uploadStore.setTargetPlace({
+    placeId: p.id,
+    workId: p.workId,
+    workTitle: p.workTitle,
+    workEpisode: null,
+    placeName: p.name,
+    // Home summary doesn't carry a scene reference — leave null so the
+    // upload preview hides the "장면 비교 ON" sticker until the user
+    // re-enters via PlaceDetail for that spot.
+    sceneImageUrl: null,
+  });
+  pickerOpen.value = false;
+}
 
 function onCaptionInput(e: Event): void {
   const target = e.target as HTMLTextAreaElement;
@@ -216,7 +349,10 @@ async function onShare(): Promise<void> {
 }
 
 onMounted(async () => {
-  if (!targetPlace.value || photos.value.length === 0) {
+  // Only bounce when there's literally nothing to upload. A no-target entry
+  // (bottom-nav camera CTA) lands here with photos already shot — the user
+  // picks a place via the sheet below and shares from there.
+  if (photos.value.length === 0) {
     await router.replace('/home');
   }
 });
@@ -430,4 +566,168 @@ ion-content.up-content {
 }
 .toggle.off { background: #cbd5e1; }
 .toggle.off::after { left: 3px; right: auto; }
+
+/* "장소 선택" CTA — shown when no targetPlace yet (camera-first flow). */
+.place-cta {
+  background: transparent;
+  width: 100%;
+  border: none;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--fr-line);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.place-cta .missing {
+  color: var(--fr-primary);
+}
+.change-link {
+  font-size: 12px;
+  color: var(--fr-primary);
+  font-weight: 700;
+  padding: 4px 10px;
+  background: var(--fr-primary-soft);
+  border-radius: 999px;
+  margin-left: auto;
+}
+
+/* Place picker sheet. Backdrop + bottom sheet — minimal Ionic-free modal
+   so the unit tests can drive it without stubbing ion-modal internals. */
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.picker-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 82vh;
+  background: #ffffff;
+  border-radius: 22px 22px 0 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.24);
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 8px;
+}
+.picker-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.picker-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.picker-search {
+  position: relative;
+  margin: 4px 20px 10px;
+  padding: 0 14px 0 42px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--fr-bg-muted);
+  display: flex;
+  align-items: center;
+}
+.picker-search .search-ic {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fr-ink-4);
+}
+.picker-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--fr-ink);
+}
+.picker-search input::placeholder {
+  color: var(--fr-ink-4);
+}
+.picker-list {
+  overflow-y: auto;
+  padding: 4px 8px 16px;
+  flex: 1;
+}
+.picker-item {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.picker-item:hover {
+  background: var(--fr-bg-muted);
+}
+.picker-item .thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #eef2f6;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.picker-item .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.picker-item .meta {
+  flex: 1;
+  min-width: 0;
+}
+.picker-item .meta .t {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-item .meta .s {
+  font-size: 12px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-empty {
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--fr-ink-3);
+}
 </style>

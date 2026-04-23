@@ -106,23 +106,40 @@ describe('ProfilePage.vue', () => {
     expect(pins[2].classes()).toContain('MINT');
   });
 
-  it('local tab clicks route to /stampbook or /saved', async () => {
+  it('photos / stampbook tabs stay in-place; "저장" tab pushes /saved (reverted in task #20)', async () => {
     const { wrapper } = mountProfile();
     await flushPromises();
 
     const tabs = wrapper.findAll('.local-tabs .tab-i');
-    // Order: 인증샷 / 스탬프북 / 저장.
-    expect(tabs.length).toBe(3);
     expect(tabs.map((t) => t.text())).toEqual(['인증샷', '스탬프북', '저장']);
 
+    // Default: 인증샷 grid is visible, no push.
+    expect(wrapper.find('[data-testid="tab-photos"]').exists()).toBe(true);
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    // 스탬프북 탭: still in-place.
     await tabs[1].trigger('click');
     await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith('/stampbook');
+    expect(wrapper.find('[data-testid="tab-stampbook"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tab-photos"]').exists()).toBe(false);
+    expect(pushSpy).not.toHaveBeenCalled();
 
-    pushSpy.mockClear();
+    // 저장 탭: navigates to the dedicated SavedPage.
     await tabs[2].trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/saved');
+  });
+
+  it('stampbook tab "자세히 보기" button pushes /stampbook', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    await wrapper.findAll('.local-tabs .tab-i')[1].trigger('click');
+    await flushPromises();
+
+    pushSpy.mockClear();
+    await wrapper.find('[data-testid="stampbook-detail-btn"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/stampbook');
   });
 
   it('"지도로 보기" overlay link pushes /map', async () => {

@@ -139,10 +139,17 @@ describe('CameraPage.vue', () => {
     expect(backSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('redirects to /home when no targetPlace is set', async () => {
-    mountCamera({ ...baseUploadState, targetPlace: null });
+  it('bottom-nav entry (no targetPlace) keeps the camera open instead of bouncing to /home', async () => {
+    const { wrapper } = mountCamera({ ...baseUploadState, targetPlace: null });
     await flushPromises();
 
-    expect(replaceSpy).toHaveBeenCalledWith('/home');
+    // No /home bounce — the user stays on the camera to shoot first.
+    expect(replaceSpy).not.toHaveBeenCalledWith('/home');
+    // Overlay + guide + spot-badge all key off targetPlace, so they're hidden.
+    expect(wrapper.find('.scene-overlay').exists()).toBe(false);
+    expect(wrapper.find('.guide-card').exists()).toBe(false);
+    expect(wrapper.find('.spot-badge').exists()).toBe(false);
+    // Shutter button is still present — that's the whole point of this flow.
+    expect(wrapper.find('.shutter').exists()).toBe(true);
   });
 });

@@ -122,6 +122,14 @@ export const useUploadStore = defineStore('upload', {
       this.error = null;
       this.lastResult = null;
     },
+    // Attach / switch the place for an in-progress capture. Unlike
+    // beginCapture, this keeps already-shot photos and form state so the user
+    // can enter the flow via the bottom-nav camera CTA (no place selected
+    // yet), shoot first, and pick the place during the upload step.
+    setTargetPlace(target: CaptureTarget): void {
+      this.targetPlace = target;
+      this.error = null;
+    },
     addPhoto(dataUrl: string): void {
       this.photos.push(dataUrl);
       this.selectedIndex = this.photos.length - 1;

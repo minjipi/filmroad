@@ -129,16 +129,7 @@ describe('placeDetail store', () => {
     expect(store.isLiked(10)).toBe(false);
   });
 
-  it('toggleSaveLocal flips savedIds membership and isSaved getter', () => {
-    const store = usePlaceDetailStore();
-    expect(store.isSaved(10)).toBe(false);
-
-    store.toggleSaveLocal(10);
-    expect(store.savedIds).toContain(10);
-    expect(store.isSaved(10)).toBe(true);
-
-    store.toggleSaveLocal(10);
-    expect(store.savedIds).not.toContain(10);
-    expect(store.isSaved(10)).toBe(false);
-  });
+  // Saved state moved to useSavedStore (task #19) — placeDetail store no
+  // longer carries its own savedIds/toggleSaveLocal. See saved.spec.ts for
+  // the unified coverage.
 });

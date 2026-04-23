@@ -258,10 +258,11 @@ function onClose(): void {
 }
 
 onMounted(async () => {
-  if (!targetPlace.value) {
-    await router.replace('/home');
-    return;
-  }
+  // The camera can be entered two ways: via PlaceDetail → "인증하러 가기"
+  // (targetPlace pre-seeded) or via the bottom-nav camera CTA (no place yet;
+  // user picks it on the upload screen). Either way we start the stream —
+  // overlay / guide / spot-badge UI is already conditional on targetPlace
+  // so the "no target" mode gracefully degrades to a plain camera.
   await startStream();
 });
 

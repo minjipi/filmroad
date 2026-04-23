@@ -85,8 +85,11 @@
                 <ion-icon :icon="paperPlaneOutline" class="ic-22" />
               </span>
               <span class="spacer" />
-              <span class="a" @click="onToggleSave(p)">
-                <ion-icon :icon="p.saved ? bookmark : bookmarkOutline" class="ic-22" />
+              <span class="a" data-testid="feed-save" @click="onToggleSave(p)">
+                <ion-icon
+                  :icon="isSaved(p.place.id) ? bookmark : bookmarkOutline"
+                  class="ic-22"
+                />
               </span>
             </div>
 
@@ -179,15 +182,21 @@ import {
   bookmarkOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useFeedStore, type FeedPost, type FeedTab, type FeedUser } from '@/stores/feed';
+import { useSavedStore } from '@/stores/saved';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime, formatVisitDate } from '@/utils/formatRelativeTime';
 
 const feedStore = useFeedStore();
+const savedStore = useSavedStore();
+const router = useRouter();
 const { posts, recommendedUsers, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
+
+const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 const activeCommentPhotoId = ref<number | null>(null);
 
@@ -219,8 +228,9 @@ async function onToggleLike(p: FeedPost): Promise<void> {
   if (error.value) await showError(error.value);
 }
 
-function onToggleSave(p: FeedPost): void {
-  p.saved = !p.saved;
+async function onToggleSave(p: FeedPost): Promise<void> {
+  await savedStore.toggleSave(p.place.id);
+  if (savedStore.error) await showError(savedStore.error);
 }
 
 function onComment(p: FeedPost): void {
@@ -251,7 +261,7 @@ async function onMessages(): Promise<void> {
 }
 
 async function onSearch(): Promise<void> {
-  await showInfo('검색은 곧 공개됩니다');
+  await router.push('/search');
 }
 
 async function onFollow(u: FeedUser): Promise<void> {

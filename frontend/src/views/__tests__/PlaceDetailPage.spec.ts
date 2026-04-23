@@ -28,6 +28,7 @@ import {
   usePlaceDetailStore,
   type PlaceDetailResponse,
 } from '@/stores/placeDetail';
+import { useSavedStore } from '@/stores/saved';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: PlaceDetailResponse = {
@@ -88,7 +89,6 @@ function mountPlaceDetailPage() {
         loading: false,
         error: null,
         likedIds: [],
-        savedIds: [],
       },
       // map store is referenced by onCapture but not exercised in render.
       map: {
@@ -101,7 +101,6 @@ function mountPlaceDetailPage() {
         q: '',
         center: { lat: 37.5, lng: 127.0 },
         visitedIds: [],
-        savedIds: [],
       },
     },
     stubs: {
@@ -159,12 +158,12 @@ describe('PlaceDetailPage.vue', () => {
     expect(cards[0].find('.t').text()).toBe(fixture.related[0].name);
   });
 
-  it('like / bookmark buttons invoke the corresponding toggle action', async () => {
+  it('like / bookmark buttons invoke the corresponding toggle action (save via unified savedStore)', async () => {
     const { wrapper, store } = mountPlaceDetailPage();
     await flushPromises();
 
     const likeSpy = vi.spyOn(store, 'toggleLike').mockResolvedValue();
-    const saveSpy = vi.spyOn(store, 'toggleSaveLocal');
+    const saveSpy = vi.spyOn(useSavedStore(), 'toggleSave').mockResolvedValue();
 
     await wrapper.find('.act.like').trigger('click');
     expect(likeSpy).toHaveBeenCalledTimes(1);
