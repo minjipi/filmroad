@@ -187,9 +187,7 @@ function onBack(): void {
 }
 
 async function onOpenWork(w: SearchWorkResult): Promise<void> {
-  // Surface the work as a map filter — that's where users see "어디서
-  // 촬영했나" most naturally. Feed-by-work is a follow-up destination.
-  await router.push({ path: '/map', query: { workId: String(w.id) } });
+  await router.push(`/work/${w.id}`);
 }
 
 async function onOpenPlace(p: SearchPlaceResult): Promise<void> {

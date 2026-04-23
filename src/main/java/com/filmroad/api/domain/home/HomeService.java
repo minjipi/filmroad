@@ -9,8 +9,10 @@ import com.filmroad.api.domain.home.dto.WorkSummaryDto;
 import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.place.Place;
 import com.filmroad.api.domain.place.PlaceRepository;
+import com.filmroad.api.domain.work.Work;
 import com.filmroad.api.domain.work.WorkRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,8 @@ import java.util.Set;
 public class HomeService {
 
     private static final int PLACE_LIMIT = 20;
+    // 홈 "인기 작품" 섹션 상한. 설계상 가로 스크롤 카드 5~8장 전후.
+    private static final int POPULAR_WORK_LIMIT = 8;
 
     // Fallback center used when scope=NEAR is requested without a user location.
     // Keeping it explicit (and constant) avoids the prior silent-to-TRENDING quirk
@@ -74,13 +78,28 @@ public class HomeService {
                 .map(WorkSummaryDto::from)
                 .toList();
 
+        List<WorkSummaryDto> popularWorks = buildPopularWorks();
+
         HeroDto hero = buildHero(places);
 
         return HomeResponse.builder()
                 .hero(hero)
                 .works(workDtos)
+                .popularWorks(popularWorks)
                 .places(placeDtos)
                 .build();
+    }
+
+    private List<WorkSummaryDto> buildPopularWorks() {
+        // trendingScore 합 DESC / placeCount DESC / title ASC 로 정렬된 튜플을 받아 DTO 로 매핑.
+        return workRepository.findPopular(PageRequest.of(0, POPULAR_WORK_LIMIT)).stream()
+                .map(row -> {
+                    Work w = (Work) row[0];
+                    int placeCount = ((Number) row[1]).intValue();
+                    int trendingScore = ((Number) row[2]).intValue();
+                    return WorkSummaryDto.popular(w, placeCount, trendingScore);
+                })
+                .toList();
     }
 
     private HeroDto buildHero(List<Place> places) {

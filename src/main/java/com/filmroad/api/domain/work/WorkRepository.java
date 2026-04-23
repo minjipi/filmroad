@@ -18,4 +18,19 @@ public interface WorkRepository extends JpaRepository<Work, Long> {
             ORDER BY w.title ASC, w.id ASC
             """)
     List<Work> searchByTitle(@Param("q") String q, Pageable pageable);
+
+    /**
+     * 홈 "인기 작품" 섹션용 집계 쿼리. 작품별로 묶인 Place 의 trendingScore 합을 기준으로 정렬,
+     * 동점은 placeCount DESC → title ASC 로 tie-break. Place 가 전혀 없는 Work 는 결과에서 제외됨
+     * (홈 표면에 띄울 콘텐츠가 없으므로 의도된 동작).
+     *
+     * 반환: `[[Work w, Long placeCount, Long trendingScoreSum], ...]`.
+     */
+    @Query("""
+            SELECT w, COUNT(p), SUM(p.trendingScore)
+            FROM Place p JOIN p.work w
+            GROUP BY w
+            ORDER BY SUM(p.trendingScore) DESC, COUNT(p) DESC, w.title ASC
+            """)
+    List<Object[]> findPopular(Pageable pageable);
 }

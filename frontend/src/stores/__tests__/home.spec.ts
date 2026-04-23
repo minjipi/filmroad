@@ -109,6 +109,61 @@ describe('home store', () => {
     expect(store.scope).toBe('TRENDING');
   });
 
+  it('fetchHome hydrates popularWorks from the response payload (task #24)', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      data: {
+        ...fixture,
+        popularWorks: [
+          { id: 1, title: '도깨비', posterUrl: 'https://img/p1.jpg', placeCount: 12 },
+          { id: 2, title: '이태원 클라쓰', posterUrl: null, placeCount: 6 },
+        ],
+      },
+    });
+
+    const store = useHomeStore();
+    await store.fetchHome();
+
+    expect(store.popularWorks).toHaveLength(2);
+    expect(store.popularWorks[0]).toMatchObject({ id: 1, title: '도깨비', placeCount: 12 });
+    expect(store.popularWorks[1].posterUrl).toBeNull();
+  });
+
+  it('popularWorks falls back to an empty array when the server omits the field (older API)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome();
+
+    expect(store.popularWorks).toEqual([]);
+  });
+
+  it("setScope('POPULAR_WORKS') is a view-only toggle — no /api/home refetch", async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome();
+    mockApi.get.mockClear();
+
+    await store.setScope('POPULAR_WORKS');
+    expect(store.scope).toBe('POPULAR_WORKS');
+    expect(mockApi.get).not.toHaveBeenCalled();
+  });
+
+  it("setScope back to 'TRENDING' from POPULAR_WORKS refetches (server resorts places)", async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome();
+    mockApi.get.mockClear();
+
+    await store.setScope('POPULAR_WORKS');
+    expect(mockApi.get).not.toHaveBeenCalled();
+
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    await store.setScope('TRENDING');
+    expect(store.scope).toBe('TRENDING');
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ scope: 'TRENDING' });
+  });
+
   it('toggleLike(placeId) posts to /api/places/:id/like and updates liked/likeCount from response', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
 

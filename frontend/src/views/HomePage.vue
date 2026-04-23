@@ -47,7 +47,7 @@
           </div>
         </nav>
 
-        <div class="home-segmented">
+        <div class="home-segmented" data-testid="home-segmented">
           <span
             :class="['seg', scope === 'NEAR' ? 'active' : '']"
             @click="onSelectScope('NEAR')"
@@ -56,9 +56,45 @@
             :class="['seg', scope === 'TRENDING' ? 'active' : '']"
             @click="onSelectScope('TRENDING')"
           >전국 트렌드</span>
+          <span
+            :class="['seg', scope === 'POPULAR_WORKS' ? 'active' : '']"
+            data-testid="seg-popular-works"
+            @click="onSelectScope('POPULAR_WORKS')"
+          >인기 작품</span>
         </div>
 
-        <div class="home-grid">
+        <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_WORKS 가 아닌 scope 는
+             기존 place grid 그대로. -->
+        <div
+          v-if="scope === 'POPULAR_WORKS'"
+          class="home-grid works-grid"
+          data-testid="works-grid"
+        >
+          <div
+            v-for="w in popularWorks"
+            :key="w.id"
+            class="photo-card work-card"
+            data-testid="work-card"
+            @click="onOpenPopularWork(w.id)"
+          >
+            <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
+            <div v-else class="work-initial-bg">
+              <span class="work-initial">{{ posterInitial(w.title) }}</span>
+            </div>
+            <div class="grad" />
+            <div class="cap">
+              <div class="t">{{ w.title }}</div>
+              <div class="loc">
+                <ion-icon :icon="locationOutline" class="ic-16" />성지 {{ w.placeCount }}곳
+              </div>
+            </div>
+          </div>
+          <p v-if="popularWorks.length === 0" class="empty-note">
+            인기 작품 데이터가 없어요
+          </p>
+        </div>
+
+        <div v-else class="home-grid">
           <div
             v-for="p in places"
             :key="p.id"
@@ -109,7 +145,8 @@ import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
 
 const homeStore = useHomeStore();
-const { hero, works, places, loading, error, selectedWorkId, scope } = storeToRefs(homeStore);
+const { hero, works, places, popularWorks, loading, error, selectedWorkId, scope } =
+  storeToRefs(homeStore);
 const { showError } = useToast();
 const router = useRouter();
 
@@ -134,6 +171,20 @@ async function onOpenDetail(id: number): Promise<void> {
 
 async function onSearch(): Promise<void> {
   await router.push('/search');
+}
+
+async function onOpenPopularWork(id: number): Promise<void> {
+  // 인기 작품 카드 → 작품 상세 페이지로 이동. 이전 버전은 scope/filter 를
+  // 자동 전환해 place grid 를 보여줬지만, UX 피드백에 따라 작품 상세
+  // (포스터 + 성지 리스트 + 진행도) 로 직접 유도하는 쪽이 명확해서 전환.
+  await router.push(`/work/${id}`);
+}
+
+function posterInitial(title: string): string {
+  // First Korean syllable / word char. Used when a work ships without a
+  // poster image.
+  const c = title.trim().charAt(0);
+  return c || '?';
 }
 
 onMounted(async () => {
@@ -251,6 +302,32 @@ ion-content {
   cursor: pointer;
 }
 .seg.active { color: var(--fr-ink); }
+
+/* ---------- 인기 작품 grid (task #24 refactor — POPULAR_WORKS scope) ---------- */
+/* .home-grid.works-grid reuses the 2-column grid + .photo-card envelope
+   so the work cards match the existing place cards' shape. Only the
+   empty-poster fallback needs its own visual. */
+.work-initial-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #eef2f6, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.work-initial {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.02em;
+}
+.works-grid .empty-note {
+  grid-column: 1 / -1;
+  padding: 32px 8px;
+  text-align: center;
+  color: var(--fr-ink-3);
+  font-size: 13px;
+}
 
 .home-grid {
   padding: 0 20px;
