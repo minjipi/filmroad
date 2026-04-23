@@ -5,17 +5,24 @@ vi.mock('@/services/api', () => ({
   default: { get: vi.fn().mockResolvedValue({ data: null }) },
 }));
 
-const { pushSpy, backSpy } = vi.hoisted(() => ({
+const { pushSpy, backSpy, routeRef } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
+  routeRef: { current: { query: {} as Record<string, string | string[] | undefined> } },
 }));
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
+  useRoute: () => routeRef.current,
   useRouter: () => ({ push: pushSpy, back: backSpy }),
 }));
 
 import MapPage from '@/views/MapPage.vue';
-import { useMapStore, type MapResponse } from '@/stores/map';
+import {
+  useMapStore,
+  type MapResponse,
+  KOREA_CENTER,
+  COUNTRY_ZOOM,
+  DETAIL_ZOOM,
+} from '@/stores/map';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: MapResponse = {
@@ -76,21 +83,44 @@ const KakaoMapStub = {
     '<div class="kakao-map-stub" :data-markers="markers?.length ?? 0" :data-selected="selectedId ?? \'\'" :data-visited="(visitedIds ?? []).join(\',\')" @click="$emit(\'markerClick\', markers?.[1]?.id)"></div>',
 };
 
-function mountMapPage() {
+type SheetMode = 'closed' | 'peek' | 'full';
+
+function mountMapPage(opts: { firstEntry?: boolean; sheetMode?: SheetMode } = {}) {
+  const firstEntry = opts.firstEntry ?? false;
+  const sheetMode: SheetMode = opts.sheetMode ?? 'peek';
   const { wrapper } = mountWithStubs(MapPage, {
     initialState: {
-      map: {
-        markers: [...fixture.markers],
-        selected: { ...fixture.selected! },
-        loading: false,
-        error: null,
-        filter: 'SPOTS',
-        workId: null,
-        q: '',
-        center: { lat: 37.8928, lng: 128.8347 },
-        visitedIds: [10],
-        savedIds: [],
-      },
+      map: firstEntry
+        ? {
+            markers: [],
+            selected: null,
+            loading: false,
+            error: null,
+            filter: 'SPOTS',
+            workId: null,
+            q: '',
+            center: { ...KOREA_CENTER },
+            zoom: COUNTRY_ZOOM,
+            hasBeenViewed: false,
+            sheetMode,
+            visitedIds: [10],
+            savedIds: [],
+          }
+        : {
+            markers: [...fixture.markers],
+            selected: { ...fixture.selected! },
+            loading: false,
+            error: null,
+            filter: 'SPOTS',
+            workId: null,
+            q: '',
+            center: { lat: 37.8928, lng: 128.8347 },
+            zoom: DETAIL_ZOOM,
+            hasBeenViewed: true,
+            sheetMode,
+            visitedIds: [10],
+            savedIds: [],
+          },
     },
     stubs: {
       KakaoMap: KakaoMapStub,
@@ -105,6 +135,7 @@ describe('MapPage.vue', () => {
     vi.clearAllMocks();
     pushSpy.mockClear();
     backSpy.mockClear();
+    routeRef.current = { query: {} };
   });
 
   it('passes visibleMarkers to the KakaoMap component', async () => {
@@ -154,6 +185,89 @@ describe('MapPage.vue', () => {
     await flushPromises();
 
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.selected!.id}`);
+  });
+
+  it('first entry (no selected, hasBeenViewed=false) forces KOREA_CENTER + COUNTRY_ZOOM before fetch', async () => {
+    const { store } = mountMapPage({ firstEntry: true });
+    await flushPromises();
+
+    expect(store.center).toEqual(KOREA_CENTER);
+    expect(store.zoom).toBe(COUNTRY_ZOOM);
+    // Selected stays null since the mocked api returns {data:null}.
+    expect(store.selected).toBeNull();
+  });
+
+  it('re-entry (selected present, hasBeenViewed=true) preserves center + DETAIL_ZOOM', async () => {
+    const { store } = mountMapPage();
+    await flushPromises();
+
+    expect(store.center).toEqual({ lat: 37.8928, lng: 128.8347 });
+    expect(store.zoom).toBe(DETAIL_ZOOM);
+    expect(store.selected?.id).toBe(fixture.selected!.id);
+  });
+
+  it('close button hides the sheet and reveals the reopen CTA', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+
+    expect(wrapper.find('.sheet').exists()).toBe(true);
+    expect(wrapper.find('.reopen').exists()).toBe(false);
+
+    await wrapper.find('.close-btn').trigger('click');
+    expect(store.sheetMode).toBe('closed');
+    expect(wrapper.find('.sheet').exists()).toBe(false);
+    expect(wrapper.find('.reopen').exists()).toBe(true);
+  });
+
+  it('reopen button flips sheetMode back to peek', async () => {
+    const { wrapper, store } = mountMapPage({ sheetMode: 'closed' });
+    await flushPromises();
+
+    const reopen = wrapper.find('.reopen');
+    expect(reopen.exists()).toBe(true);
+
+    await reopen.trigger('click');
+    expect(store.sheetMode).toBe('peek');
+    expect(wrapper.find('.sheet').exists()).toBe(true);
+  });
+
+  it('kakao section rendered inside sheet body (full-state content)', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+
+    const section = wrapper.find('.kakao-section');
+    expect(section.exists()).toBe(true);
+    // Mock content from design doc surfaces for the demo:
+    expect(section.text()).toContain('강원 강릉시 주문진읍 교항리 산51-2');
+    expect(section.text()).toContain('033-662-3639');
+    expect(wrapper.findAll('.k-rev-item').length).toBe(2);
+    expect(wrapper.findAll('.k-nearby-card').length).toBe(3);
+  });
+
+  it('deep-link entry (?lat=&lng=) resets sheetMode to peek even if the session left it at full', async () => {
+    routeRef.current = { query: { lat: '37.5', lng: '127.0' } };
+    // Start from a stored state where the sheet was carried-over FULL.
+    const { store } = mountMapPage({ sheetMode: 'full' });
+    await flushPromises();
+    expect(store.sheetMode).toBe('peek');
+  });
+
+  it('sheet height style reflects the stored sheet mode (with dynamic full cap)', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+
+    // Default peek → 240px.
+    expect(wrapper.find('.sheet').attributes('style')).toContain('height: 240px');
+
+    store.setSheetMode('full');
+    await flushPromises();
+    // FULL is clamped by the viewport: min(680, innerHeight - 160 - 84).
+    // In jsdom (default innerHeight 768) that's 524, not the 680 max.
+    const innerH = window.innerHeight;
+    const expectedFull = Math.min(680, Math.max(320, innerH - 160 - 84));
+    expect(wrapper.find('.sheet').attributes('style')).toContain(
+      `height: ${expectedFull}px`,
+    );
   });
 
   it('filter chip VISITED switches the store filter', async () => {

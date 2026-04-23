@@ -167,6 +167,7 @@ import { storeToRefs } from 'pinia';
 import FrChip from '@/components/ui/FrChip.vue';
 import { usePlaceDetailStore, type PlacePhoto } from '@/stores/placeDetail';
 import { useUploadStore } from '@/stores/upload';
+import { useMapStore } from '@/stores/map';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ id: string | number }>();
@@ -174,6 +175,7 @@ const props = defineProps<{ id: string | number }>();
 const router = useRouter();
 const detailStore = usePlaceDetailStore();
 const uploadStore = useUploadStore();
+const mapStore = useMapStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError } = useToast();
 
@@ -285,7 +287,30 @@ async function onOpenRelated(id: number): Promise<void> {
 
 async function load(id: number): Promise<void> {
   await detailStore.fetch(id);
-  if (error.value) await showError(error.value);
+  if (error.value) {
+    await showError(error.value);
+    return;
+  }
+  // Mirror the viewed place into the map store so switching back to the /map
+  // tab restores this location instead of bouncing to the country overview.
+  const p = place.value;
+  if (p) {
+    mapStore.markLastViewed({
+      id: p.id,
+      name: p.name,
+      regionLabel: p.regionLabel,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      workId: p.workId,
+      workTitle: p.workTitle,
+      workEpisode: p.workEpisode,
+      coverImageUrl: p.coverImageUrl,
+      photoCount: p.photoCount,
+      likeCount: p.likeCount,
+      rating: p.rating,
+      distanceKm: p.distanceKm,
+    });
+  }
 }
 
 onMounted(() => load(placeId.value));

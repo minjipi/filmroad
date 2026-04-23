@@ -2,6 +2,14 @@
 
 /* Filmroad design tokens — ported from /design/pages/shared.css */
 :root {
+  /* Safe-area insets exposed as CSS custom properties so JS composables
+     (useDraggableSheet) can read them via getComputedStyle and factor them
+     into viewport calculations. Fall back to 0 on devices without notches. */
+  --fr-sat: env(safe-area-inset-top, 0px);
+  --fr-sab: env(safe-area-inset-bottom, 0px);
+  --fr-sal: env(safe-area-inset-left, 0px);
+  --fr-sar: env(safe-area-inset-right, 0px);
+
   --fr-primary: #14BCED;
   --fr-primary-soft: #e6f8fd;
   --fr-ink: #0f172a;

@@ -37,6 +37,12 @@ export interface MapResponse {
 
 export type MapFilter = 'SPOTS' | 'VISITED' | 'SAVED';
 
+// Bottom-sheet snap mode. Mirrors useDraggableSheet's SHEET_CLOSED/PEEK/FULL.
+// Stored here (not local to MapPage) so the sheet's open/closed state survives
+// cross-page hops, and so other actions (selectMarker, markLastViewed, close
+// button) can drive it from a single source of truth.
+export type SheetMode = 'closed' | 'peek' | 'full';
+
 interface FetchOptions {
   lat?: number;
   lng?: number;
@@ -51,13 +57,28 @@ interface State {
   workId: number | null;
   q: string;
   center: { lat: number; lng: number };
+  zoom: number;
+  // First-entry (country view) vs re-entry (restore last viewed) switch — flips
+  // true the moment the user picks a marker or opens a PlaceDetail that mirrors
+  // itself back into this store via markLastViewed.
+  hasBeenViewed: boolean;
+  sheetMode: SheetMode;
   // Client-side mock: a real app would persist these per-user on the server.
   visitedIds: number[];
   savedIds: number[];
 }
 
-// Gangneung / Jumunjin area — matches the design's "me" marker.
-const DEFAULT_CENTER = { lat: 37.8928, lng: 128.8347 };
+// Approximate geographic centre of South Korea (between 충북 and 경북) — picked
+// so the first-entry map frames Seoul, 제주, and the east/west coasts at the
+// country zoom below.
+export const KOREA_CENTER = { lat: 36.0, lng: 127.8 };
+// Kakao Map "level" — higher = zoomed out. Level 13 shows the full peninsula
+// plus 제주 on a typical 390×844 mobile viewport; 5 is the regional detail zoom
+// the old default used when the sheet showed a selected place.
+export const COUNTRY_ZOOM = 13;
+export const DETAIL_ZOOM = 5;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 14;
 
 export const useMapStore = defineStore('map', {
   state: (): State => ({
@@ -68,7 +89,10 @@ export const useMapStore = defineStore('map', {
     filter: 'SPOTS',
     workId: null,
     q: '',
-    center: { ...DEFAULT_CENTER },
+    center: { ...KOREA_CENTER },
+    zoom: COUNTRY_ZOOM,
+    hasBeenViewed: false,
+    sheetMode: 'peek',
     visitedIds: [10],
     savedIds: [],
   }),
@@ -101,6 +125,7 @@ export const useMapStore = defineStore('map', {
         const { data } = await api.get<MapResponse>('/api/map/places', { params });
         this.markers = data.markers;
         this.selected = data.selected;
+        if (data.selected) this.hasBeenViewed = true;
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to load map';
       } finally {
@@ -128,6 +153,15 @@ export const useMapStore = defineStore('map', {
           rating: prev?.rating ?? 0,
           distanceKm: hit.distanceKm,
         };
+        // Zoom into the picked place and remember we've left the country view.
+        this.center = { lat: hit.latitude, lng: hit.longitude };
+        this.zoom = DETAIL_ZOOM;
+        this.hasBeenViewed = true;
+        // Any *new* selection resets the sheet to peek so the user sees the
+        // summary card regardless of prior height (closed, or carried-over
+        // FULL from a previous place). Same-state re-entry (no new selection)
+        // doesn't go through here, so FULL persists on simple tab swaps.
+        this.sheetMode = 'peek';
       }
       await this.fetchMap();
     },
@@ -149,6 +183,32 @@ export const useMapStore = defineStore('map', {
     async setCenter(lat: number, lng: number): Promise<void> {
       this.center = { lat, lng };
       await this.fetchMap();
+    },
+    setZoom(z: number): void {
+      this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(z)));
+    },
+    // Called by PlaceDetailPage so the map tab, when revisited, opens on the
+    // place the user was just looking at. Stays local — no network call.
+    markLastViewed(place: PlaceDetail): void {
+      this.selected = { ...place };
+      this.center = { lat: place.latitude, lng: place.longitude };
+      this.zoom = DETAIL_ZOOM;
+      this.hasBeenViewed = true;
+      // PlaceDetail just mirrored a new place in — always surface it at peek.
+      // "Same state re-entry" (tab swap without visiting PlaceDetail) never
+      // hits this code path, so a FULL sheet stays FULL in that scenario.
+      this.sheetMode = 'peek';
+    },
+    setSheetMode(mode: SheetMode): void {
+      this.sheetMode = mode;
+    },
+    // Return the store to "first entry" appearance. Unused today but exposed
+    // so a future "전국 보기" reset button has a single entry point.
+    resetToCountryView(): void {
+      this.selected = null;
+      this.center = { ...KOREA_CENTER };
+      this.zoom = COUNTRY_ZOOM;
+      this.hasBeenViewed = false;
     },
     reconcileSelected(): void {
       if (!this.selected) return;

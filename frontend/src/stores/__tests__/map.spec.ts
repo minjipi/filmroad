@@ -8,7 +8,13 @@ vi.mock('@/services/api', () => ({
 }));
 
 import api from '@/services/api';
-import { useMapStore, type MapResponse } from '@/stores/map';
+import {
+  useMapStore,
+  type MapResponse,
+  KOREA_CENTER,
+  COUNTRY_ZOOM,
+  DETAIL_ZOOM,
+} from '@/stores/map';
 import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
@@ -164,6 +170,143 @@ describe('map store', () => {
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
     expect(opts?.params).toMatchObject({ lat: 37.5, lng: 127.0 });
+  });
+
+  it('initial state: country-level center + zoom, hasBeenViewed=false, selected=null', () => {
+    const store = useMapStore();
+    expect(store.center).toEqual(KOREA_CENTER);
+    expect(store.zoom).toBe(COUNTRY_ZOOM);
+    expect(store.hasBeenViewed).toBe(false);
+    expect(store.selected).toBeNull();
+  });
+
+  it('selectMarker flips hasBeenViewed=true and switches to DETAIL_ZOOM centered on the picked place', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+    // The fixture's `selected` already primed hasBeenViewed; reset to simulate
+    // a country-view fetch that returned markers but no selected place.
+    store.selected = null;
+    store.hasBeenViewed = false;
+    store.center = { ...KOREA_CENTER };
+    store.zoom = COUNTRY_ZOOM;
+
+    mockApi.get.mockResolvedValueOnce({ data: { ...fixture, selected: fixture.selected } });
+    await store.selectMarker(13);
+
+    expect(store.hasBeenViewed).toBe(true);
+    expect(store.zoom).toBe(DETAIL_ZOOM);
+    expect(store.center).toEqual({ lat: 37.5347, lng: 126.9947 });
+  });
+
+  it('markLastViewed mirrors a PlaceDetail into selected + center + zoom without a network call', () => {
+    const store = useMapStore();
+    const before = mockApi.get.mock.calls.length;
+    store.markLastViewed({
+      id: 42,
+      name: '테스트 장소',
+      regionLabel: '서울',
+      latitude: 37.5,
+      longitude: 127.0,
+      workId: 9,
+      workTitle: '테스트 드라마',
+      workEpisode: '1회',
+      coverImageUrl: '',
+      photoCount: 0,
+      likeCount: 0,
+      rating: 4.2,
+      distanceKm: null,
+    });
+
+    expect(store.selected?.id).toBe(42);
+    expect(store.center).toEqual({ lat: 37.5, lng: 127.0 });
+    expect(store.zoom).toBe(DETAIL_ZOOM);
+    expect(store.hasBeenViewed).toBe(true);
+    expect(mockApi.get.mock.calls.length).toBe(before);
+  });
+
+  it('resetToCountryView wipes selected, restores KOREA_CENTER/COUNTRY_ZOOM, clears hasBeenViewed', () => {
+    const store = useMapStore();
+    store.markLastViewed({
+      id: 1, name: 'x', regionLabel: '', latitude: 1, longitude: 2,
+      workId: 0, workTitle: '', workEpisode: null, coverImageUrl: '',
+      photoCount: 0, likeCount: 0, rating: 0, distanceKm: null,
+    });
+    expect(store.hasBeenViewed).toBe(true);
+
+    store.resetToCountryView();
+
+    expect(store.selected).toBeNull();
+    expect(store.center).toEqual(KOREA_CENTER);
+    expect(store.zoom).toBe(COUNTRY_ZOOM);
+    expect(store.hasBeenViewed).toBe(false);
+  });
+
+  it('sheetMode defaults to "peek"; setSheetMode updates it', () => {
+    const store = useMapStore();
+    expect(store.sheetMode).toBe('peek');
+
+    store.setSheetMode('closed');
+    expect(store.sheetMode).toBe('closed');
+
+    store.setSheetMode('full');
+    expect(store.sheetMode).toBe('full');
+  });
+
+  it('selectMarker always resets sheetMode to peek (even from full)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    // Any prior state — closed, full — gets reset when a new marker is picked,
+    // so the user consistently sees the peek summary first.
+    store.setSheetMode('full');
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    await store.selectMarker(13);
+    expect(store.sheetMode).toBe('peek');
+
+    store.setSheetMode('closed');
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    await store.selectMarker(10);
+    expect(store.sheetMode).toBe('peek');
+  });
+
+  it('markLastViewed always resets sheetMode to peek (new place = peek)', () => {
+    const place = {
+      id: 42,
+      name: '테스트',
+      regionLabel: '서울',
+      latitude: 37.5,
+      longitude: 127.0,
+      workId: 1,
+      workTitle: '도깨비',
+      workEpisode: null,
+      coverImageUrl: '',
+      photoCount: 0,
+      likeCount: 0,
+      rating: 4.0,
+      distanceKm: null,
+    };
+
+    const store = useMapStore();
+
+    store.setSheetMode('closed');
+    store.markLastViewed(place);
+    expect(store.sheetMode).toBe('peek');
+
+    store.setSheetMode('full');
+    store.markLastViewed({ ...place, id: 43 });
+    expect(store.sheetMode).toBe('peek');
+  });
+
+  it('setZoom clamps into [1, 14] and rounds non-integers', () => {
+    const store = useMapStore();
+    store.setZoom(0);
+    expect(store.zoom).toBe(1);
+    store.setZoom(99);
+    expect(store.zoom).toBe(14);
+    store.setZoom(6.7);
+    expect(store.zoom).toBe(7);
   });
 
   it('setFilter reassigns selected when it is no longer visible', async () => {
