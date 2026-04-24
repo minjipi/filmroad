@@ -310,6 +310,54 @@ describe('FeedPage.vue', () => {
     expect(scroll.find('.tail').exists()).toBe(true);
   });
 
+  it('tapping anywhere on a post card pushes /shot/:id (task #38)', async () => {
+    const { wrapper } = mountFeed({
+      posts: [makePost(1), makePost(2)],
+    });
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const cards = wrapper.findAll('[data-testid="feed-post"]');
+    expect(cards.length).toBe(2);
+    await cards[1].trigger('click');
+    // makePost(id) yields post.id = id, so the second card pushes /shot/2.
+    expect(pushSpy).toHaveBeenCalledWith('/shot/2');
+  });
+
+  it('tapping the save/like/comment/share action does NOT bubble to /shot/:id (task #38)', async () => {
+    const { wrapper } = mountFeed({
+      posts: [makePost(1)],
+    });
+    await flushPromises();
+    const saved = (await import('@/stores/saved')).useSavedStore();
+    saved.savedPlaceIds = [10]; // take the direct-unsave path, not the picker
+    await flushPromises();
+    vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const feed = (await import('@/stores/feed')).useFeedStore();
+    vi.spyOn(feed, 'toggleLikePost').mockResolvedValue();
+    pushSpy.mockClear();
+
+    // Save icon.
+    await wrapper.find('[data-testid="feed-save"]').trigger('click');
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    // Like icon.
+    await wrapper.find('[data-testid="feed-like"]').trigger('click');
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    // Comment icon — opens CommentSheet rather than navigating.
+    await wrapper.find('[data-testid="feed-comment"]').trigger('click');
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    // Share icon (placeholder toast path).
+    await wrapper.find('[data-testid="feed-share-action"]').trigger('click');
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    // More menu (header overflow) also stops propagation.
+    await wrapper.find('button.more').trigger('click');
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
   it('clicking the comment icon opens the CommentSheet with that photoId', async () => {
     const { wrapper } = mountFeed();
     await flushPromises();
