@@ -32,15 +32,15 @@
         {{ error }}
       </div>
 
-      <div v-else-if="user && stats" class="up-scroll no-scrollbar" data-testid="up-loaded">
-        <!-- Cover — backend may return coverUrl; fall back to a blurred
-             avatar as a backdrop so the page doesn't render a bare black
-             rectangle for users without a cover image. -->
+      <div v-else-if="user" class="up-scroll no-scrollbar" data-testid="up-loaded">
+        <!-- Cover — backend doesn't expose a dedicated field; use the
+             avatar as a blurred backdrop so the page doesn't render a
+             bare black rectangle. -->
         <div class="cover">
           <img
-            v-if="user.coverUrl || user.avatarUrl"
-            :src="user.coverUrl ?? user.avatarUrl ?? ''"
-            :class="{ blur: !user.coverUrl }"
+            v-if="user.avatarUrl"
+            :src="user.avatarUrl"
+            class="blur"
             :alt="user.nickname"
           />
         </div>
@@ -67,24 +67,24 @@
 
         <section class="up-stats">
           <div class="up-stat">
-            <div class="n">{{ formatCount(stats.photoCount) }}</div>
+            <div class="n">{{ formatCount(user.stats.photoCount) }}</div>
             <div class="l">인증샷</div>
           </div>
           <div class="up-stat">
-            <div class="n">{{ formatCount(stats.followersCount) }}</div>
+            <div class="n">{{ formatCount(user.stats.followersCount) }}</div>
             <div class="l">팔로워</div>
           </div>
           <div class="up-stat">
-            <div class="n">{{ formatCount(stats.followingCount) }}</div>
+            <div class="n">{{ formatCount(user.stats.followingCount) }}</div>
             <div class="l">팔로잉</div>
           </div>
           <div class="up-stat">
-            <div class="n">{{ formatCount(stats.badgeCount) }}</div>
-            <div class="l">뱃지</div>
+            <div class="n">{{ formatCount(user.stats.collectedWorksCount) }}</div>
+            <div class="l">작품</div>
           </div>
 
           <button
-            v-if="isMe"
+            v-if="user.isMe"
             type="button"
             class="btn-follow-inline"
             data-testid="up-edit-btn"
@@ -95,43 +95,42 @@
           <button
             v-else
             type="button"
-            :class="['btn-follow-inline', following ? 'on' : '']"
+            :class="['btn-follow-inline', user.following ? 'on' : '']"
             :disabled="followPending"
             data-testid="up-follow-btn"
             @click="onToggleFollow"
           >
             <ion-icon
-              :icon="following ? checkmarkOutline : personAddOutline"
+              :icon="user.following ? checkmarkOutline : personAddOutline"
               class="ic-16"
             />
-            {{ following ? '팔로잉' : '팔로우' }}
+            {{ user.following ? '팔로잉' : '팔로우' }}
           </button>
         </section>
 
-        <!-- Highlights — 17-design "스탬프 북" horizontal row of collected
-             works. Backend only exposes `count` (no totalCount), so we
-             show the raw stamp tally instead of a "x/y" fraction. -->
+        <!-- Highlights — 17-design "스탬프 북" horizontal row of
+             collected works. Backend gives collectedCount + totalCount. -->
         <section
-          v-if="stampHighlights.length > 0"
+          v-if="user.recentCollectedWorks.length > 0"
           class="highlights"
           data-testid="up-highlights"
         >
           <div class="hl-label">스탬프 북</div>
           <div class="hl-row no-scrollbar">
             <div
-              v-for="w in stampHighlights"
-              :key="w.workId"
+              v-for="w in user.recentCollectedWorks"
+              :key="w.id"
               class="hl"
               data-testid="up-highlight"
-              @click="onOpenWork(w.workId)"
+              @click="onOpenWork(w.id)"
             >
               <div class="ring">
                 <div class="inner">
-                  <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.workTitle" />
+                  <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
                 </div>
               </div>
-              <div class="nm">{{ w.workTitle }}</div>
-              <div class="c">{{ w.count }}곳</div>
+              <div class="nm">{{ w.title }}</div>
+              <div class="c">{{ w.collectedCount }}/{{ w.totalCount }}</div>
             </div>
           </div>
         </section>
@@ -150,24 +149,21 @@
           </div>
         </nav>
 
-        <!-- PHOTOS grid — backend `photos` payload. Work-title overlay +
-             heart count per cell + compare stripe for sceneCompare shots. -->
+        <!-- PHOTOS grid — backend `topPhotos` payload. Work-title overlay
+             only; no per-photo like/compare flag in this payload. -->
         <div v-if="activeTab === 'photos'" class="grid" data-testid="up-grid">
           <div
-            v-for="p in photos"
+            v-for="p in user.topPhotos"
             :key="p.id"
-            :class="['cell', p.sceneCompare ? 'compare' : '']"
+            class="cell"
             data-testid="up-cell"
             @click="onOpenShot(p.id)"
           >
-            <img :src="p.imageUrl" :alt="p.workTitle" />
+            <img :src="p.imageUrl" :alt="p.placeName" />
             <span v-if="p.workTitle" class="ov">{{ p.workTitle }}</span>
-            <span class="stat">
-              <ion-icon :icon="heart" class="ic-16" />{{ formatCount(p.likeCount) }}
-            </span>
           </div>
           <p
-            v-if="photos.length === 0"
+            v-if="user.topPhotos.length === 0"
             class="up-empty"
             data-testid="up-photos-empty"
           >
@@ -200,7 +196,6 @@ import {
   gridOutline,
   bookmarkOutline,
   locationOutline,
-  heart,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -213,17 +208,7 @@ const props = defineProps<{ id: string | number }>();
 const router = useRouter();
 const userStore = useUserProfileStore();
 const authStore = useAuthStore();
-const {
-  user,
-  stats,
-  following,
-  isMe,
-  stampHighlights,
-  photos,
-  loading,
-  error,
-  followPending,
-} = storeToRefs(userStore);
+const { user, loading, error, followPending } = storeToRefs(userStore);
 const { showInfo } = useToast();
 
 type UpTab = 'photos' | 'collections' | 'map';
@@ -613,48 +598,9 @@ ion-content.up-content {
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
 }
-.grid .cell .stat {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 10px;
-  font-weight: 800;
-  color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  z-index: 2;
-}
-/* Compare-mode post gets a white vertical stripe + "비교" chip center. */
-.grid .cell.compare::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to right,
-    transparent 49.5%,
-    #ffffff 49.5%,
-    #ffffff 50.5%,
-    transparent 50.5%
-  );
-  z-index: 1;
-}
-.grid .cell.compare::after {
-  content: '비교';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 9px;
-  font-weight: 900;
-  color: #ffffff;
-  background: rgba(20, 188, 237, 0.9);
-  padding: 2px 6px;
-  border-radius: 999px;
-  z-index: 2;
-  letter-spacing: -0.01em;
-}
+/* Backend topPhotos shape (task #42 final) doesn't carry likeCount or
+   sceneCompare — the compare stripe + heart overlay from the 17-design
+   are deferred until the endpoint exposes those fields. */
 
 .up-placeholder {
   padding: 80px 24px;

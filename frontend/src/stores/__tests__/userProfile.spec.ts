@@ -15,32 +15,32 @@ const mockApi = api as unknown as {
 };
 
 const fixture: UserProfile = {
-  user: {
-    id: 42,
-    nickname: '김소연',
-    handle: 'soyeon_film',
-    avatarUrl: 'https://img/soyeon.jpg',
-    coverUrl: null,
-    bio: '드라마 성지 순례 4년차.',
-    level: 12,
-    levelName: '성지지기',
-    verified: true,
-  },
+  id: 42,
+  nickname: '김소연',
+  handle: 'soyeon_film',
+  avatarUrl: 'https://img/soyeon.jpg',
+  bio: '드라마 성지 순례 4년차.',
+  verified: true,
+  level: 12,
+  levelName: '성지지기',
+  points: 1800,
+  streakDays: 14,
   stats: {
+    visitedCount: 214,
     photoCount: 214,
     followersCount: 1200,
     followingCount: 186,
-    badgeCount: 47,
+    collectedWorksCount: 47,
   },
-  following: false,
   isMe: false,
-  stampHighlights: [
-    { workId: 1, workTitle: '도깨비', posterUrl: 'https://img/w1.jpg', count: 24 },
-    { workId: 2, workTitle: '갯마을차차차', posterUrl: 'https://img/w2.jpg', count: 18 },
+  following: false,
+  topPhotos: [
+    { id: 1, imageUrl: 'https://cdn/p/1.jpg', workTitle: '도깨비', placeName: '주문진' },
+    { id: 2, imageUrl: 'https://cdn/p/2.jpg', workTitle: '갯마을차차차', placeName: '청하' },
   ],
-  photos: [
-    { id: 1, imageUrl: 'https://cdn/p/1.jpg', placeId: 10, workTitle: '도깨비', likeCount: 1248, sceneCompare: true },
-    { id: 2, imageUrl: 'https://cdn/p/2.jpg', placeId: 11, workTitle: '갯마을차차차', likeCount: 842, sceneCompare: false },
+  recentCollectedWorks: [
+    { id: 1, title: '도깨비', posterUrl: 'https://img/w1.jpg', collectedCount: 24, totalCount: 24 },
+    { id: 2, title: '갯마을차차차', posterUrl: 'https://img/w2.jpg', collectedCount: 18, totalCount: 26 },
   ],
 };
 
@@ -52,30 +52,20 @@ describe('userProfile store', () => {
     mockApi.post.mockReset();
   });
 
-  it('initial state: user=null, flat fields cleared, not loading, no error', () => {
+  it('initial state: user=null, not loading, no error', () => {
     const store = useUserProfileStore();
     expect(store.user).toBeNull();
-    expect(store.stats).toBeNull();
-    expect(store.following).toBe(false);
-    expect(store.isMe).toBe(false);
-    expect(store.stampHighlights).toEqual([]);
-    expect(store.photos).toEqual([]);
     expect(store.loading).toBe(false);
     expect(store.error).toBeNull();
     expect(store.followPending).toBe(false);
   });
 
-  it('fetchUser happy path populates all top-level fields and calls GET /api/users/:id', async () => {
+  it('fetchUser happy path populates user and calls GET /api/users/:id', async () => {
     mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
     const store = useUserProfileStore();
     await store.fetchUser(42);
 
-    expect(store.user).toEqual(fixture.user);
-    expect(store.stats).toEqual(fixture.stats);
-    expect(store.following).toBe(false);
-    expect(store.isMe).toBe(false);
-    expect(store.stampHighlights).toHaveLength(2);
-    expect(store.photos).toHaveLength(2);
+    expect(store.user).toEqual(fixture);
     expect(store.loading).toBe(false);
     expect(store.error).toBeNull();
     const [url] = mockApi.get.mock.calls[0];
@@ -104,15 +94,15 @@ describe('userProfile store', () => {
 
     const [url] = mockApi.post.mock.calls[0];
     expect(url).toBe('/api/users/42/follow');
-    expect(store.following).toBe(true);
-    expect(store.stats?.followersCount).toBe(1201);
+    expect(store.user?.following).toBe(true);
+    expect(store.user?.stats.followersCount).toBe(1201);
   });
 
   it('toggleFollow flips optimistically before the POST resolves (task #42)', async () => {
     mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
     const store = useUserProfileStore();
     await store.fetchUser(42);
-    expect(store.following).toBe(false);
+    expect(store.user?.following).toBe(false);
 
     let resolvePost: (v: {
       data: { following: boolean; followersCount: number; followingCount: number };
@@ -123,8 +113,8 @@ describe('userProfile store', () => {
 
     const p = store.toggleFollow();
     await Promise.resolve();
-    expect(store.following).toBe(true);
-    expect(store.stats?.followersCount).toBe(1201);
+    expect(store.user?.following).toBe(true);
+    expect(store.user?.stats.followersCount).toBe(1201);
     expect(store.followPending).toBe(true);
 
     resolvePost({ data: { following: true, followersCount: 1201, followingCount: 186 } });
@@ -140,8 +130,8 @@ describe('userProfile store', () => {
     mockApi.post.mockRejectedValueOnce(new Error('server down'));
     await store.toggleFollow();
 
-    expect(store.following).toBe(false);
-    expect(store.stats?.followersCount).toBe(1200);
+    expect(store.user?.following).toBe(false);
+    expect(store.user?.stats.followersCount).toBe(1200);
     expect(store.error).toBe('server down');
     expect(store.followPending).toBe(false);
   });
@@ -156,7 +146,7 @@ describe('userProfile store', () => {
     expect(mockApi.post).not.toHaveBeenCalled();
   });
 
-  it('reset clears all fields so the next page entry starts fresh', async () => {
+  it('reset clears user/error/loading/followPending so the next page entry starts fresh', async () => {
     mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
     const store = useUserProfileStore();
     await store.fetchUser(42);
@@ -166,10 +156,6 @@ describe('userProfile store', () => {
     store.followPending = true;
     store.reset();
     expect(store.user).toBeNull();
-    expect(store.stats).toBeNull();
-    expect(store.following).toBe(false);
-    expect(store.photos).toEqual([]);
-    expect(store.stampHighlights).toEqual([]);
     expect(store.error).toBeNull();
     expect(store.loading).toBe(false);
     expect(store.followPending).toBe(false);

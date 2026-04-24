@@ -35,32 +35,32 @@ import type { UserProfile } from '@/stores/userProfile';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: UserProfile = {
-  user: {
-    id: 42,
-    nickname: '김소연',
-    handle: 'soyeon_film',
-    avatarUrl: 'https://img/soyeon.jpg',
-    coverUrl: null,
-    bio: '드라마 성지 순례 4년차.',
-    level: 12,
-    levelName: '성지지기',
-    verified: true,
-  },
+  id: 42,
+  nickname: '김소연',
+  handle: 'soyeon_film',
+  avatarUrl: 'https://img/soyeon.jpg',
+  bio: '드라마 성지 순례 4년차.',
+  verified: true,
+  level: 12,
+  levelName: '성지지기',
+  points: 1800,
+  streakDays: 14,
   stats: {
+    visitedCount: 214,
     photoCount: 214,
     followersCount: 1200,
     followingCount: 186,
-    badgeCount: 47,
+    collectedWorksCount: 47,
   },
-  following: false,
   isMe: false,
-  stampHighlights: [
-    { workId: 1, workTitle: '도깨비', posterUrl: 'https://img/w1.jpg', count: 24 },
-    { workId: 2, workTitle: '갯마을차차차', posterUrl: 'https://img/w2.jpg', count: 18 },
+  following: false,
+  topPhotos: [
+    { id: 1, imageUrl: 'https://cdn/p/1.jpg', workTitle: '도깨비', placeName: '주문진' },
+    { id: 2, imageUrl: 'https://cdn/p/2.jpg', workTitle: '갯마을차차차', placeName: '청하' },
   ],
-  photos: [
-    { id: 1, imageUrl: 'https://cdn/p/1.jpg', placeId: 10, workTitle: '도깨비', likeCount: 1248, sceneCompare: true },
-    { id: 2, imageUrl: 'https://cdn/p/2.jpg', placeId: 11, workTitle: '갯마을차차차', likeCount: 842, sceneCompare: false },
+  recentCollectedWorks: [
+    { id: 1, title: '도깨비', posterUrl: 'https://img/w1.jpg', collectedCount: 24, totalCount: 24 },
+    { id: 2, title: '갯마을차차차', posterUrl: 'https://img/w2.jpg', collectedCount: 18, totalCount: 26 },
   ],
 };
 
@@ -76,12 +76,7 @@ function mountPage(id: string | number = '42', overrides: Partial<UserProfile> =
     props: { id },
     initialState: {
       userProfile: {
-        user: merged.user,
-        stats: merged.stats,
-        following: merged.following,
-        isMe: merged.isMe,
-        stampHighlights: merged.stampHighlights,
-        photos: merged.photos,
+        user: merged,
         loading: false,
         error: null,
         followPending: false,
@@ -125,14 +120,14 @@ describe('UserProfilePage.vue (task #42)', () => {
     expect(head.find('.up-bio').text()).toContain('성지 순례');
   });
 
-  it('stats row shows the four counts from backend (photos/followers/following/badges)', async () => {
+  it('stats row shows the four counts from backend (photos/followers/following/works)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
     const stats = wrapper.findAll('.up-stat');
     expect(stats.length).toBe(4);
     const labels = stats.map((s) => s.find('.l').text());
-    expect(labels).toEqual(['인증샷', '팔로워', '팔로잉', '뱃지']);
+    expect(labels).toEqual(['인증샷', '팔로워', '팔로잉', '작품']);
     const nums = stats.map((s) => s.find('.n').text());
     // 214 / 1200 → 1.2k / 186 / 47.
     expect(nums).toEqual(['214', '1.2k', '186', '47']);
@@ -158,8 +153,6 @@ describe('UserProfilePage.vue (task #42)', () => {
   });
 
   it('isMe=true (without a viewer-id match) swaps follow button for 프로필 편집', async () => {
-    // isMe true on the payload but viewer auth is a different id, so the
-    // page renders instead of redirecting. Edit button replaces follow.
     const { wrapper } = mountPage('42', { isMe: true });
     await flushPromises();
     expect(wrapper.find('[data-testid="up-edit-btn"]').exists()).toBe(true);
@@ -179,16 +172,16 @@ describe('UserProfilePage.vue (task #42)', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('highlights row renders one ring per stampHighlights entry', async () => {
+  it('highlights row renders one ring per recentCollectedWorks entry', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
     const hls = wrapper.findAll('[data-testid="up-highlight"]');
     expect(hls.length).toBe(2);
     expect(hls[0].find('.nm').text()).toBe('도깨비');
-    expect(hls[0].find('.c').text()).toContain('24');
+    expect(hls[0].find('.c').text()).toBe('24/24');
     expect(hls[1].find('.nm').text()).toBe('갯마을차차차');
-    expect(hls[1].find('.c').text()).toContain('18');
+    expect(hls[1].find('.c').text()).toBe('18/26');
   });
 
   it('tapping a highlight routes to /work/:id', async () => {
@@ -200,30 +193,19 @@ describe('UserProfilePage.vue (task #42)', () => {
     expect(pushSpy).toHaveBeenCalledWith('/work/1');
   });
 
-  it('photo grid renders one cell per photos entry with compare stripe when applicable', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
-
-    const cells = wrapper.findAll('[data-testid="up-cell"]');
-    expect(cells.length).toBe(2);
-    // photos[0].sceneCompare = true → .compare class.
-    expect(cells[0].classes()).toContain('compare');
-    expect(cells[1].classes()).not.toContain('compare');
-    // Like count rendered in the stat overlay.
-    expect(cells[0].find('.stat').text()).toContain('1.2k');
-  });
-
-  it('tapping a photo cell routes to /shot/:id', async () => {
+  it('photo grid renders one cell per topPhotos; tap routes to /shot/:id', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
     pushSpy.mockClear();
 
-    await wrapper.findAll('[data-testid="up-cell"]')[1].trigger('click');
+    const cells = wrapper.findAll('[data-testid="up-cell"]');
+    expect(cells.length).toBe(2);
+    await cells[1].trigger('click');
     expect(pushSpy).toHaveBeenCalledWith('/shot/2');
   });
 
-  it('empty photos renders the up-photos-empty placeholder', async () => {
-    const { wrapper } = mountPage('42', { photos: [] });
+  it('empty topPhotos renders the up-photos-empty placeholder', async () => {
+    const { wrapper } = mountPage('42', { topPhotos: [] });
     await flushPromises();
     expect(wrapper.find('[data-testid="up-photos-empty"]').exists()).toBe(true);
   });
@@ -255,17 +237,7 @@ describe('UserProfilePage.vue (task #42)', () => {
     mountWithStubs(UserProfilePage, {
       props: { id: '999' },
       initialState: {
-        userProfile: {
-          user: null,
-          stats: null,
-          following: false,
-          isMe: false,
-          stampHighlights: [],
-          photos: [],
-          loading: false,
-          error: null,
-          followPending: false,
-        },
+        userProfile: { user: null, loading: false, error: null, followPending: false },
         auth: { user: { id: 999, nickname: 'me', handle: 'me', avatarUrl: null } },
       },
     });
