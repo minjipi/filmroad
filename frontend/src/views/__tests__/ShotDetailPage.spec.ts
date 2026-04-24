@@ -66,6 +66,7 @@ const fixture: ShotDetail = {
     episode: '1회',
     sceneTimestamp: '00:15:24',
   },
+  groupPhotos: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 }],
   topComments: [
     {
       id: 1,
@@ -201,6 +202,34 @@ describe('ShotDetailPage.vue', () => {
     expect(imgs.length).toBe(2);
     expect(imgs[0].attributes('src')).toBe('https://cdn/scene/77.jpg');
     expect(imgs[1].attributes('src')).toBe('https://cdn/p/77.jpg');
+  });
+
+  it('renders the multi-image carousel when groupPhotos.length > 1 (task #44)', async () => {
+    const multi = {
+      ...fixture,
+      groupPhotos: [
+        { id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 },
+        { id: 78, imageUrl: 'https://cdn/p/78.jpg', orderIndex: 1 },
+        { id: 79, imageUrl: 'https://cdn/p/79.jpg', orderIndex: 2 },
+      ],
+    };
+    mockApi.get.mockResolvedValueOnce({ data: multi });
+
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    // Carousel track + three slides + three dots.
+    expect(wrapper.find('[data-testid="sd-carousel"]').exists()).toBe(true);
+    expect(wrapper.findAll('[data-testid="sd-slide"]').length).toBe(3);
+    expect(wrapper.findAll('[data-testid="sd-dots"] .dot').length).toBe(3);
+    expect(wrapper.find('[data-testid="sd-count"]').text()).toContain('1 / 3');
+  });
+
+  it('renders the plain compare hero when groupPhotos.length === 1 (single-image post)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="sd-carousel"]').exists()).toBe(false);
+    expect(wrapper.find('section.compare').exists()).toBe(true);
   });
 
   it('user meta row shows author nickname + place + verified badge', async () => {

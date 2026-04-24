@@ -4,10 +4,15 @@ import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 import { compressDataUrl, dataUrlByteSize } from '@/utils/imageCompress';
 
-// Server-side multipart cap is 10MB; we enforce a stricter 5MB cap after
-// compression so even a failed compression round-trip stays well under the
-// server limit with headroom for meta + boundaries.
+// Server-side multipart cap is 10MB/file; we enforce a stricter 5MB cap per
+// file after compression so even a failed compression round-trip stays well
+// under the server limit with headroom for meta + boundaries.
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+// Per-batch cap so a 5-file upload can't exceed the backend's 30MB request
+// ceiling. Leaves 5MB for meta + multipart boundaries.
+const MAX_BATCH_UPLOAD_BYTES = 25 * 1024 * 1024;
+// Mirror of the backend's per-batch file count limit (task #44).
+export const MAX_PHOTOS_PER_POST = 5;
 
 export type Visibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
 
@@ -50,6 +55,15 @@ export interface RewardDelta {
   newBadges: RewardBadge[];
 }
 
+// A single image inside a multi-image upload group (task #44). The primary
+// photo's fields live at the top level of PhotoResponse; `groupPhotos` lists
+// the whole batch (length >= 1) in upload/orderIndex order.
+export interface PhotoSummary {
+  id: number;
+  imageUrl: string;
+  orderIndex: number;
+}
+
 export interface PhotoResponse {
   id: number;
   imageUrl: string;
@@ -61,6 +75,8 @@ export interface PhotoResponse {
   tags: string[];
   visibility: Visibility;
   createdAt: string;
+  /** All photos uploaded in this batch — length 1 for a single-image post. */
+  groupPhotos: PhotoSummary[];
   stamp?: StampProgress;
   reward?: RewardDelta;
 }
@@ -138,9 +154,14 @@ export const useUploadStore = defineStore('upload', {
       this.targetPlace = target;
       this.error = null;
     },
-    addPhoto(dataUrl: string): void {
+    addPhoto(dataUrl: string): boolean {
+      if (this.photos.length >= MAX_PHOTOS_PER_POST) {
+        this.error = `최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`;
+        return false;
+      }
       this.photos.push(dataUrl);
       this.selectedIndex = this.photos.length - 1;
+      return true;
     },
     selectPhoto(idx: number): void {
       if (idx < 0 || idx >= this.photos.length) return;
@@ -185,25 +206,38 @@ export const useUploadStore = defineStore('upload', {
         this.error = '인터넷에 연결되어 있지 않아요. 연결 후 다시 시도해 주세요.';
         return null;
       }
+      if (this.photos.length > MAX_PHOTOS_PER_POST) {
+        this.error = `한 번에 최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`;
+        return null;
+      }
       this.loading = true;
       this.uploadProgress = 0;
       this.error = null;
       try {
-        const rawDataUrl = this.photos[this.selectedIndex] ?? this.photos[0];
+        // Compress each photo in order (matches backend orderIndex asc).
         // Mobile capture can be 5–12 MB; cap longest side at 1600px / JPEG 0.85
         // so typical uploads land under ~500 KB without visible quality loss.
         // EXIF rotation is applied inside compressDataUrl via createImageBitmap.
-        const dataUrl = await compressDataUrl(rawDataUrl, { maxPx: 1600, quality: 0.85 });
-        // Final size gate — even after compression, bail if we're over 5MB
-        // so the user gets a specific error instead of a generic 413.
-        const bytes = dataUrlByteSize(dataUrl);
-        if (bytes > MAX_UPLOAD_BYTES) {
-          const mb = (bytes / (1024 * 1024)).toFixed(1);
-          this.error = `이미지가 너무 커요 (${mb}MB). 5MB 이하만 업로드할 수 있어요.`;
-          return null;
+        const form = new FormData();
+        let totalBytes = 0;
+        for (let i = 0; i < this.photos.length; i += 1) {
+          const dataUrl = await compressDataUrl(this.photos[i], { maxPx: 1600, quality: 0.85 });
+          const bytes = dataUrlByteSize(dataUrl);
+          if (bytes > MAX_UPLOAD_BYTES) {
+            const mb = (bytes / (1024 * 1024)).toFixed(1);
+            this.error = `${i + 1}번째 사진이 너무 커요 (${mb}MB). 각 사진은 5MB 이하여야 해요.`;
+            return null;
+          }
+          totalBytes += bytes;
+          if (totalBytes > MAX_BATCH_UPLOAD_BYTES) {
+            const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+            this.error = `사진 총 크기가 너무 커요 (${mb}MB). 합계 25MB 이하만 업로드할 수 있어요.`;
+            return null;
+          }
+          const blob = dataUrlToBlob(dataUrl);
+          const ext = extForMime(blob.type);
+          form.append('files', blob, `capture-${i}.${ext}`);
         }
-        const blob = dataUrlToBlob(dataUrl);
-        const ext = extForMime(blob.type);
         const meta = {
           placeId: this.targetPlace.placeId,
           caption: this.caption.trim() || undefined,
@@ -211,8 +245,6 @@ export const useUploadStore = defineStore('upload', {
           visibility: this.visibility,
           addToStampbook: this.addToStampbook,
         };
-        const form = new FormData();
-        form.append('file', blob, `capture.${ext}`);
         form.append('meta', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
         const { data } = await api.post<PhotoResponse>('/api/photos', form, {
           onUploadProgress: (ev) => {

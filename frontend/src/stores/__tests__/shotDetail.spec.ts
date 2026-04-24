@@ -49,6 +49,7 @@ const fixture: ShotDetail = {
     episode: '1회',
     sceneTimestamp: '00:15:24',
   },
+  groupPhotos: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 }],
   topComments: [
     {
       id: 1,

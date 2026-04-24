@@ -48,6 +48,7 @@ const rewardedResponse: PhotoResponse = {
   tags: [],
   visibility: 'PUBLIC',
   createdAt: '2026-04-22T00:00:00Z',
+  groupPhotos: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', orderIndex: 0 }],
   stamp: {
     placeName: '주문진 영진해변 방파제',
     workId: 1,

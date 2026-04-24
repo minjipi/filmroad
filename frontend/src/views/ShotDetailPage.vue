@@ -33,7 +33,69 @@
       </div>
 
       <div v-else-if="shot" class="sd-scroll no-scrollbar" data-testid="sd-loaded">
-        <section class="compare">
+        <!-- Multi-image post (task #44): horizontal carousel of all photos
+             in the upload group. Scene-compare overlay lives only on the
+             first slide; follow-up photos render as plain images. -->
+        <section
+          v-if="groupPhotos.length > 1"
+          class="sd-carousel"
+          data-testid="sd-carousel"
+        >
+          <div
+            ref="carouselEl"
+            class="carousel-track no-scrollbar"
+            @scroll="onCarouselScroll"
+          >
+            <div class="carousel-slide" data-testid="sd-slide">
+              <div class="compare">
+                <img
+                  v-if="shot.sceneImageUrl"
+                  :src="shot.sceneImageUrl"
+                  alt="드라마 원본"
+                />
+                <img :src="groupPhotos[0].imageUrl" class="top-img" :alt="shot.place.name" />
+                <div class="divider">
+                  <span class="divider-handle">
+                    <ion-icon :icon="swapHorizontal" class="ic-16" />
+                  </span>
+                </div>
+                <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
+                <span class="lbl-chip r">
+                  <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
+                </span>
+                <div class="scene-meta">
+                  <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
+                  <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
+                  <template v-if="shot.work.sceneTimestamp">
+                    <span class="sep" />
+                    <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
+                  </template>
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="p in groupPhotos.slice(1)"
+              :key="p.id"
+              class="carousel-slide"
+              data-testid="sd-slide"
+            >
+              <img :src="p.imageUrl" :alt="shot.place.name" />
+            </div>
+          </div>
+          <div class="carousel-dots" data-testid="sd-dots">
+            <span
+              v-for="(_, i) in groupPhotos"
+              :key="i"
+              :class="['dot', i === currentSlide ? 'active' : '']"
+            />
+          </div>
+          <span class="carousel-count" data-testid="sd-count">
+            {{ currentSlide + 1 }} / {{ groupPhotos.length }}
+          </span>
+        </section>
+
+        <!-- Single-image post (existing behavior). -->
+        <section v-else class="compare">
           <img
             v-if="shot.sceneImageUrl"
             :src="shot.sceneImageUrl"
@@ -271,6 +333,27 @@ const authStore = useAuthStore();
 const { shot, loading, error } = storeToRefs(shotStore);
 
 const commentsRef = ref<HTMLElement | null>(null);
+const carouselEl = ref<HTMLElement | null>(null);
+const currentSlide = ref(0);
+
+// Group photos always fall back to the primary photo (length-1 list) so the
+// template can treat `groupPhotos` as non-empty regardless of how old the
+// backend response is. Pre-task-#44 responses that lack `groupPhotos` still
+// render as a single-image post.
+const groupPhotos = computed(() => {
+  if (!shot.value) return [] as { id: number; imageUrl: string; orderIndex: number }[];
+  if (shot.value.groupPhotos && shot.value.groupPhotos.length > 0) {
+    return shot.value.groupPhotos;
+  }
+  return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, orderIndex: 0 }];
+});
+
+function onCarouselScroll(e: Event): void {
+  const el = e.target as HTMLElement;
+  if (el.clientWidth === 0) return;
+  const idx = Math.round(el.scrollLeft / el.clientWidth);
+  if (idx !== currentSlide.value) currentSlide.value = idx;
+}
 
 // Place-level save reuses the global savedStore contract so the bookmark
 // state stays in sync with every other bookmark site (Feed / Place detail /
@@ -366,6 +449,16 @@ watch(
     if (newId !== oldId) void loadDetail();
   },
 );
+
+// Reset the carousel to the first slide whenever a new shot lands, so
+// navigating between posts doesn't keep the old index.
+watch(
+  () => shot.value?.id,
+  () => {
+    currentSlide.value = 0;
+    if (carouselEl.value) carouselEl.value.scrollLeft = 0;
+  },
+);
 </script>
 
 <style scoped>
@@ -404,6 +497,68 @@ ion-content.sd-content {
   cursor: pointer;
 }
 .sd-top .right { display: flex; gap: 8px; }
+
+/* Multi-image carousel hero */
+.sd-carousel {
+  position: relative;
+  width: 100%;
+}
+.sd-carousel .carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.sd-carousel .carousel-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  aspect-ratio: 4 / 5;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+.sd-carousel .carousel-slide > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sd-carousel .carousel-slide .compare {
+  width: 100%;
+  height: 100%;
+}
+.sd-carousel .carousel-dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+.sd-carousel .carousel-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+}
+.sd-carousel .carousel-dots .dot.active {
+  background: #ffffff;
+  width: 18px;
+  border-radius: 3px;
+}
+.sd-carousel .carousel-count {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  pointer-events: none;
+}
 
 /* Compare hero */
 .compare {
