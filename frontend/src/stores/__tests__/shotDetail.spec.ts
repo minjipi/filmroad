@@ -17,7 +17,7 @@ const mockApi = api as unknown as {
 const fixture: ShotDetail = {
   id: 77,
   imageUrl: 'https://cdn/p/77.jpg',
-  dramaSceneImageUrl: 'https://cdn/scene/77.jpg',
+  sceneImageUrl: 'https://cdn/scene/77.jpg',
   caption: '첫 방문',
   tags: ['도깨비', '주문진'],
   createdAt: '2026-04-20T10:00:00Z',
@@ -38,28 +38,32 @@ const fixture: ShotDetail = {
     id: 10,
     name: '주문진 영진해변 방파제',
     regionLabel: '강원 강릉시 주문진읍',
+    address: '강원 강릉시 주문진읍 교항리 산51-2',
     latitude: 37.89,
     longitude: 128.83,
   },
   work: {
     id: 1,
     title: '도깨비',
-    type: 'DRAMA',
+    network: 'tvN',
     episode: '1회',
     sceneTimestamp: '00:15:24',
-    posterUrl: 'https://img/w1.jpg',
-    network: 'tvN',
   },
-  topComments: [
+  comments: [
     {
       id: 1,
-      authorHandle: 'trip_hj',
-      authorAvatarUrl: 'https://img/ava2.jpg',
       content: '와 이 구도 대박…',
+      author: {
+        id: 2,
+        nickname: '여행지현',
+        handle: 'trip_hj',
+        avatarUrl: 'https://img/ava2.jpg',
+        verified: false,
+      },
       createdAt: '2026-04-20T11:00:00Z',
       likeCount: 24,
       liked: true,
-      isReply: false,
+      parentId: null,
     },
   ],
   moreCommentsCount: 85,
@@ -104,7 +108,9 @@ describe('shotDetail store', () => {
   });
 
   it('toggleLike POSTs /api/photos/:id/like and updates shot.liked + likeCount', async () => {
-    mockApi.get.mockResolvedValueOnce({ data: { ...fixture, liked: false, likeCount: 1247 } });
+    mockApi.get.mockResolvedValueOnce({
+      data: { ...fixture, liked: false, likeCount: 1247 },
+    });
     const store = useShotDetailStore();
     await store.fetchShot(77);
 
