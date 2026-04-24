@@ -243,4 +243,93 @@ describe('upload store', () => {
     expect(store.error).toBe('사진을 먼저 선택해주세요');
     expect(mockApi.post).not.toHaveBeenCalled();
   });
+
+  it('submit short-circuits when navigator.onLine is false (offline guard, task #31)', async () => {
+    // Temporarily override the readonly onLine property for this test only.
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      'onLine',
+    );
+    Object.defineProperty(window.navigator, 'onLine', {
+      configurable: true,
+      get: () => false,
+    });
+
+    try {
+      const store = useUploadStore();
+      store.beginCapture(target);
+      store.addPhoto(JPEG_DATA_URL);
+
+      const result = await store.submit();
+      expect(result).toBeNull();
+      expect(store.error).toContain('인터넷에 연결');
+      expect(mockApi.post).not.toHaveBeenCalled();
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window.navigator, 'onLine', originalDescriptor);
+      } else {
+        // jsdom normally has onLine; deleting restores the default getter.
+        delete (window.navigator as unknown as { onLine?: boolean }).onLine;
+      }
+    }
+  });
+
+  it('submit wires axios onUploadProgress → uploadProgress state (task #31)', async () => {
+    type ProgressEv = { loaded: number; total: number };
+    type PostOpts = { onUploadProgress?: (ev: ProgressEv) => void };
+    let onProgress: ((ev: ProgressEv) => void) | undefined;
+    // Hold the POST promise open so we can fire progress events *before*
+    // submit() unwinds and snaps the bar to 100%.
+    let resolvePost: (value: { data: typeof fakeResponse }) => void = () => {};
+    mockApi.post.mockImplementationOnce(
+      (_url: string, _form: FormData, opts: PostOpts) => {
+        onProgress = opts.onUploadProgress;
+        return new Promise((r) => {
+          resolvePost = r;
+        });
+      },
+    );
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+
+    const submitP = store.submit();
+    // Let submit() reach api.post() so the interceptor captures our callback.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(typeof onProgress).toBe('function');
+
+    // Simulate two in-flight progress events — state should tick forward.
+    onProgress!({ loaded: 30, total: 100 });
+    expect(store.uploadProgress).toBe(30);
+    onProgress!({ loaded: 90, total: 100 });
+    expect(store.uploadProgress).toBe(90);
+
+    // Resolve the upload; submit() snaps to 100% after the POST settles.
+    resolvePost({ data: fakeResponse });
+    await submitP;
+    expect(store.uploadProgress).toBe(100);
+  });
+
+  it('retry() is a named alias for submit() — re-uses current state and POSTs again', async () => {
+    // First attempt fails — simulate a transient network error.
+    mockApi.post.mockRejectedValueOnce(new Error('network down'));
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+    store.setCaption('retry-me');
+
+    const first = await store.submit();
+    expect(first).toBeNull();
+    expect(store.error).toBe('network down');
+
+    // Second attempt succeeds. Same photos/caption survive — no beginCapture.
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+    const second = await store.retry();
+    expect(second).toEqual(fakeResponse);
+    expect(store.error).toBeNull();
+    // Both POSTs landed on /api/photos with the same caption in meta.
+    expect(mockApi.post).toHaveBeenCalledTimes(2);
+  });
 });

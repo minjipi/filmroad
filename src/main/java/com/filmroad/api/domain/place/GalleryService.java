@@ -1,5 +1,6 @@
 package com.filmroad.api.domain.place;
 
+import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.domain.place.dto.GalleryPhotoDto;
@@ -20,6 +21,7 @@ public class GalleryService {
 
     private final PlacePhotoRepository placePhotoRepository;
     private final PlaceRepository placeRepository;
+    private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
     public PlacePhotoPageResponse getPhotos(Long placeId, String sort, int page, int size) {
@@ -30,10 +32,14 @@ public class GalleryService {
         int safePage = Math.max(0, page);
         String normalizedSort = normalizeSort(sort);
         Pageable pageable = PageRequest.of(safePage, safeSize);
+        Long viewerId = currentUser.currentUserId();
 
+        // PRIVATE/FOLLOWERS 필터를 DB 레벨에서 적용해 pagination 정합성을 유지 (in-memory 필터는 페이지 size 가 깨짐).
         Page<PlacePhoto> photoPage = switch (normalizedSort) {
-            case "POPULAR" -> placePhotoRepository.findByPlaceIdOrderByOrderIndexDescIdDesc(placeId, pageable);
-            default -> placePhotoRepository.findByPlaceIdOrderByCreatedAtDesc(placeId, pageable);
+            case "POPULAR" -> placePhotoRepository
+                    .findByPlaceIdOrderByOrderIndexDescIdDesc(placeId, viewerId, pageable);
+            default -> placePhotoRepository
+                    .findByPlaceIdOrderByCreatedAtDesc(placeId, viewerId, pageable);
         };
 
         GalleryPlaceHeaderDto header = GalleryPlaceHeaderDto.builder()

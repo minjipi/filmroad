@@ -152,4 +152,107 @@ describe('CameraPage.vue', () => {
     // Shutter button is still present — that's the whole point of this flow.
     expect(wrapper.find('.shutter').exists()).toBe(true);
   });
+
+  it('permission-denied getUserMedia surfaces a Korean error toast and keeps the fallback UI (task #31)', async () => {
+    // Install a mediaDevices that rejects with a NotAllowedError.
+    const getUserMedia = vi.fn().mockRejectedValue(
+      Object.assign(new Error('denied'), { name: 'NotAllowedError' }),
+    );
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    try {
+      mountCamera();
+      await flushPromises();
+
+      expect(getUserMedia).toHaveBeenCalled();
+      // Error toast with specific permission-denied copy fired.
+      const calls = toastCreateSpy.mock.calls;
+      const hasPermissionMsg = calls.some((c) => {
+        const msg = (c[0] as { message?: string } | undefined)?.message ?? '';
+        return msg.includes('권한');
+      });
+      expect(hasPermissionMsg).toBe(true);
+    } finally {
+      // Restore the test default.
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: undefined,
+      });
+    }
+  });
+
+  it('gallery thumb button triggers the hidden file input click (task #31)', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+
+    const input = wrapper.find('[data-testid="camera-file-input"]')
+      .element as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+
+    await wrapper.find('[data-testid="camera-gallery-pick"]').trigger('click');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('gallery file pick calls addPhoto + replace(/upload) for valid jpeg (task #31)', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    const store = useUploadStore();
+    const addSpy = vi.spyOn(store, 'addPhoto');
+    replaceSpy.mockClear();
+
+    // Stub FileReader so the onGalleryFile promise resolves with a dataURL
+    // synchronously for deterministic assertions.
+    class FakeReader {
+      public onload: (() => void) | null = null;
+      public onerror: (() => void) | null = null;
+      public result: string | null = null;
+      public readAsDataURL(_blob: Blob): void {
+        this.result = 'data:image/jpeg;base64,ZmFrZQ==';
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as unknown as { FileReader: typeof FakeReader }).FileReader =
+      FakeReader;
+
+    const fileInput = wrapper.find('[data-testid="camera-file-input"]');
+    const input = fileInput.element as HTMLInputElement;
+    const file = new File(['dummy'], 'photo.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [file],
+    });
+    await fileInput.trigger('change');
+    await flushPromises();
+
+    expect(addSpy).toHaveBeenCalledWith('data:image/jpeg;base64,ZmFrZQ==');
+    expect(replaceSpy).toHaveBeenCalledWith('/upload');
+  });
+
+  it('gallery file pick rejects unsupported mime types without touching the store', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    const store = useUploadStore();
+    const addSpy = vi.spyOn(store, 'addPhoto');
+    toastCreateSpy.mockClear();
+
+    const fileInput = wrapper.find('[data-testid="camera-file-input"]');
+    const input = fileInput.element as HTMLInputElement;
+    const file = new File(['x'], 'doc.pdf', { type: 'application/pdf' });
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [file],
+    });
+    await fileInput.trigger('change');
+    await flushPromises();
+
+    expect(addSpy).not.toHaveBeenCalled();
+    // Error toast fired with the format-mismatch copy.
+    const hasMimeToast = toastCreateSpy.mock.calls.some((c) =>
+      ((c[0] as { message?: string })?.message ?? '').includes('jpg, png, webp'),
+    );
+    expect(hasMimeToast).toBe(true);
+  });
 });
