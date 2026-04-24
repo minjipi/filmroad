@@ -77,7 +77,7 @@ public class PhotoDetailService {
         return PhotoDetailResponse.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getImageUrl())
-                .dramaSceneImageUrl(place == null ? null : place.getSceneImageUrl())
+                .sceneImageUrl(place == null ? null : place.getSceneImageUrl())
                 .caption(photo.getCaption())
                 .tags(parseTags(photo.getTagsCsv()))
                 .visibility(photo.getVisibility())

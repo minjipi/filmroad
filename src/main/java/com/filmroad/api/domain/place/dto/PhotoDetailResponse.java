@@ -16,7 +16,7 @@ import java.util.List;
 public class PhotoDetailResponse {
     private Long id;
     private String imageUrl;                // 유저 업로드 사진
-    private String dramaSceneImageUrl;      // 작품 원본 씬 이미지 (place 에 저장, null 가능)
+    private String sceneImageUrl;           // 작품 원본 씬 이미지 (place 에 저장, null 가능)
     private String caption;
     private List<String> tags;
     private PhotoVisibility visibility;
