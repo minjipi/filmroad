@@ -23,6 +23,13 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // Uploaded photos land at /uploads/yyyy/MM/dd/<uuid>.jpg on the backend;
+      // dev-time <img> requests must be proxied to :8080 so feed/shot/profile
+      // pages can render them. Production is same-origin so no proxy needed.
+      '/uploads': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
   test: {
