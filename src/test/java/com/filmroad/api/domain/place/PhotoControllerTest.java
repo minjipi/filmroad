@@ -8,6 +8,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -16,6 +17,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -51,6 +56,9 @@ class PhotoControllerTest {
 
     @Autowired
     private com.filmroad.api.domain.user.UserRepository userRepository;
+
+    @Value("${project.upload.path}")
+    private String uploadPath;
 
     private Cookie demoAccessCookie() {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
@@ -90,6 +98,33 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.imageUrl", startsWith("/uploads/")))
                 .andExpect(jsonPath("$.results.visibility", is("PUBLIC")))
                 .andExpect(jsonPath("$.results.workId", is(1)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — imageUrl 은 `/uploads/yyyy/MM/dd/<uuid>.<ext>` 날짜 폴더 경로 (task #43)")
+    void upload_storesInDateBucketedPath() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+
+        MvcResult result = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage())
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                // 형식 검증: /uploads/YYYY/MM/DD/<uuid>.<ext>. regex 는 json-path matcher 로 직접 걸기 어려우므로
+                // startsWith + 추가 패턴 분리.
+                .andExpect(jsonPath("$.results.imageUrl", startsWith("/uploads/")))
+                .andExpect(jsonPath("$.results.imageUrl",
+                        matchesPattern("^/uploads/\\d{4}/\\d{2}/\\d{2}/[0-9a-fA-F-]+\\.(jpg|jpeg|png|webp)$")))
+                .andReturn();
+
+        // imageUrl 에서 `/uploads/` 접두를 떼서 실제 파일 시스템에도 써졌는지 확인 (날짜 디렉토리 자동 생성 포함).
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        String imageUrl = body.at("/results/imageUrl").asText();
+        String relative = imageUrl.substring("/uploads/".length());
+        Path written = Paths.get(uploadPath).resolve(relative).normalize();
+        assertThat(Files.exists(written))
+                .as("파일이 날짜 서브폴더에 실제로 써졌는지")
+                .isTrue();
     }
 
     @Test
