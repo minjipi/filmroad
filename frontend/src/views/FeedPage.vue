@@ -32,7 +32,11 @@
 
       <div class="feed-scroll no-scrollbar">
         <template v-for="(p, idx) in posts" :key="p.id">
-          <article class="post">
+          <article
+            class="post"
+            data-testid="feed-post"
+            @click="onOpenShot(p.id)"
+          >
             <div class="post-head">
               <div class="avatar">
                 <img v-if="p.author.avatarUrl" :src="p.author.avatarUrl" :alt="p.author.handle" />
@@ -46,7 +50,12 @@
                   <span class="drama">{{ p.work.title }}</span>·{{ p.place.name }}
                 </div>
               </div>
-              <button class="more" type="button" aria-label="more" @click="onMore">
+              <button
+                class="more"
+                type="button"
+                aria-label="more"
+                @click.stop="onMore"
+              >
                 <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
               </button>
             </div>
@@ -73,19 +82,23 @@
             </div>
 
             <div class="post-actions">
-              <span :class="['a', p.liked ? 'on' : '']" @click="onToggleLike(p)">
+              <span
+                :class="['a', p.liked ? 'on' : '']"
+                data-testid="feed-like"
+                @click.stop="onToggleLike(p)"
+              >
                 <ion-icon :icon="p.liked ? heart : heartOutline" class="ic-22" />
                 {{ formatCount(p.likeCount) }}
               </span>
-              <span class="a" @click="onComment(p)">
+              <span class="a" data-testid="feed-comment" @click.stop="onComment(p)">
                 <ion-icon :icon="chatbubbleOutline" class="ic-22" />
                 {{ formatCount(p.commentCount) }}
               </span>
-              <span class="a" @click="onShare">
+              <span class="a" data-testid="feed-share-action" @click.stop="onShare">
                 <ion-icon :icon="paperPlaneOutline" class="ic-22" />
               </span>
               <span class="spacer" />
-              <span class="a" data-testid="feed-save" @click="onToggleSave(p)">
+              <span class="a" data-testid="feed-save" @click.stop="onToggleSave(p)">
                 <ion-icon
                   :icon="isSaved(p.place.id) ? bookmark : bookmarkOutline"
                   class="ic-22"
@@ -260,6 +273,12 @@ async function onShare(): Promise<void> {
   await showInfo('공유는 곧 공개됩니다');
 }
 
+// task #38: whole-card tap → ShotDetailPage. Action buttons inside the card
+// use `@click.stop` so they don't trigger this navigation.
+async function onOpenShot(id: number): Promise<void> {
+  await router.push(`/shot/${id}`);
+}
+
 async function onMore(): Promise<void> {
   await showInfo('메뉴는 곧 공개됩니다');
 }
@@ -382,6 +401,9 @@ ion-content.feed-content {
 .post {
   padding: 18px 0 16px;
   border-bottom: 8px solid var(--fr-line-soft);
+  /* Whole card is tappable to navigate to ShotDetailPage (task #38). Inner
+     action buttons stop propagation so they don't double-trigger. */
+  cursor: pointer;
 }
 .post-head {
   display: flex;
