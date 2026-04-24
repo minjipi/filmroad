@@ -119,6 +119,28 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
                                                Pageable pageable);
 
     /**
+     * 다른 유저의 공개 프로필 grid 용. viewer 기준 visibility 필터(PUBLIC / 본인 / FOLLOWERS+팔로우)
+     * 을 적용해 owner 의 사진 중 viewer 가 볼 수 있는 것만 id DESC 로 반환.
+     */
+    @Query("""
+            SELECT p FROM PlacePhoto p
+            JOIN FETCH p.place pl
+            JOIN FETCH pl.work w
+            WHERE p.user.id = :ownerId
+              AND (
+                p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
+                OR (:viewerId IS NOT NULL AND p.user.id = :viewerId)
+                OR (p.visibility = com.filmroad.api.domain.place.PhotoVisibility.FOLLOWERS
+                    AND :viewerId IS NOT NULL
+                    AND p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :viewerId))
+              )
+            ORDER BY p.id DESC
+            """)
+    List<PlacePhoto> findVisibleByOwnerIdOrderByIdDesc(@Param("ownerId") Long ownerId,
+                                                      @Param("viewerId") Long viewerId,
+                                                      Pageable pageable);
+
+    /**
      * 유저가 사진을 올린 적이 있는 place id 집합을 batch 로 반환. 컬렉션 상세의 "인증" 판정에 사용.
      */
     @Query("SELECT DISTINCT p.place.id FROM PlacePhoto p WHERE p.user.id = :userId AND p.place.id IN :placeIds")

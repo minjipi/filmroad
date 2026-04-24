@@ -12,4 +12,7 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, Long> {
     List<UserBadge> findByUserIdOrderByAcquiredAtDesc(@Param("userId") Long userId);
 
     boolean existsByUserIdAndBadgeId(Long userId, Long badgeId);
+
+    /** 공개 프로필 stats 중 "뱃지" 카운트 용도. */
+    long countByUserId(Long userId);
 }

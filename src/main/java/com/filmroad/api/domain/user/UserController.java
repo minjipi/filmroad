@@ -3,12 +3,14 @@ package com.filmroad.api.domain.user;
 import com.filmroad.api.common.model.BaseResponse;
 import com.filmroad.api.domain.user.dto.MyPhotosResponse;
 import com.filmroad.api.domain.user.dto.ProfileResponse;
+import com.filmroad.api.domain.user.dto.PublicUserProfileResponse;
 import com.filmroad.api.domain.user.dto.UpdateProfileRequest;
 import com.filmroad.api.domain.user.dto.UserMeDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,5 +43,14 @@ public class UserController {
             @RequestParam(value = "limit", required = false) Integer limit
     ) {
         return BaseResponse.success(userService.getMyPhotos(cursor, limit));
+    }
+
+    /**
+     * 공개 프로필 (17-user-profile.html). header + stats + stampHighlights + 상위 인증샷 9개.
+     * 존재하지 않으면 404 USER_NOT_FOUND.
+     */
+    @GetMapping("/{id}")
+    public BaseResponse<PublicUserProfileResponse> getPublicProfile(@PathVariable("id") Long id) {
+        return BaseResponse.success(userService.getPublicProfile(id));
     }
 }
