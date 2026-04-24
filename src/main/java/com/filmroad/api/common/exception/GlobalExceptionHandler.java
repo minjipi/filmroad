@@ -81,7 +81,8 @@ public class GlobalExceptionHandler {
                 || statusCode == BaseResponseStatus.WORK_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.USER_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.COMMENT_NOT_FOUND.getCode()
-                || statusCode == BaseResponseStatus.COLLECTION_NOT_FOUND.getCode()) {
+                || statusCode == BaseResponseStatus.COLLECTION_NOT_FOUND.getCode()
+                || statusCode == BaseResponseStatus.PHOTO_NOT_FOUND.getCode()) {
             return 404;
         }
         if (statusCode == BaseResponseStatus.UNAUTHORIZED_COMMENT.getCode()) {

@@ -54,6 +54,7 @@ public class SecurityConfig {
                                 "/api/map/places",
                                 "/api/places/*",
                                 "/api/places/*/photos",
+                                "/api/photos/*",
                                 "/api/photos/*/comments",
                                 "/api/works/*",
                                 "/api/feed",

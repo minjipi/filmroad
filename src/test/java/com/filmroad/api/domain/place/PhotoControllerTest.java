@@ -46,6 +46,12 @@ class PhotoControllerTest {
     @Autowired
     private PlacePhotoRepository placePhotoRepository;
 
+    @Autowired
+    private PlaceRepository placeRepository;
+
+    @Autowired
+    private com.filmroad.api.domain.user.UserRepository userRepository;
+
     private Cookie demoAccessCookie() {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
     }
@@ -161,6 +167,98 @@ class PhotoControllerTest {
                         .cookie(demoAccessCookie()))
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40060)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진: place/work/author/topComments 블록 + viewer-specific liked/saved")
+    void getPhoto_publicSeed_returnsDetail() throws Exception {
+        // 시드 photo 100 = place 10(주문진 영진해변), work 1(도깨비, tvN), user_id=1, visibility=PUBLIC.
+        // user=1 토큰 → isMe=true, photo_like(photo=100)/place_like(place=10)/saved_place(place=10) 전부 시드에 있어 liked=saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.id", is(100)))
+                .andExpect(jsonPath("$.results.imageUrl", notNullValue()))
+                .andExpect(jsonPath("$.results.visibility", is("PUBLIC")))
+                .andExpect(jsonPath("$.results.liked", is(true)))
+                .andExpect(jsonPath("$.results.saved", is(true)))
+                .andExpect(jsonPath("$.results.place.id", is(10)))
+                .andExpect(jsonPath("$.results.place.name", is("주문진 영진해변 방파제")))
+                .andExpect(jsonPath("$.results.work.id", is(1)))
+                .andExpect(jsonPath("$.results.work.title", is("도깨비")))
+                .andExpect(jsonPath("$.results.work.type", is("DRAMA")))
+                .andExpect(jsonPath("$.results.work.network", is("tvN")))
+                .andExpect(jsonPath("$.results.author.id", is(1)))
+                .andExpect(jsonPath("$.results.author.isMe", is(true)))
+                .andExpect(jsonPath("$.results.topComments", notNullValue()))
+                .andExpect(jsonPath("$.results.moreCommentsCount", greaterThanOrEqualTo(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 타 유저 PUBLIC 사진: isMe=false, liked/saved 는 viewer 에 없으면 false")
+    void getPhoto_foreignPublic_isMeFalseAndViewerSpecificFlags() throws Exception {
+        // photo 101 = place 10, user_id=2 (이서준), visibility=PUBLIC. user=1 토큰으로 조회.
+        // user=1 은 photo 101 에 대한 photo_like 없음 → liked=false.
+        // place 10 은 user=1 saved_place(place=10) 있음 → saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/101")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.author.id", is(2)))
+                .andExpect(jsonPath("$.results.author.isMe", is(false)))
+                .andExpect(jsonPath("$.results.liked", is(false)))
+                .andExpect(jsonPath("$.results.saved", is(true)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 내 PRIVATE 사진은 owner 본인에게 200")
+    void getPhoto_ownPrivate_allowedForOwner() throws Exception {
+        // 직접 user=1 소유 PRIVATE 사진을 저장.
+        com.filmroad.api.domain.user.User u1 = userRepository.findById(1L).orElseThrow();
+        Place p = placeRepository.findById(10L).orElseThrow();
+        int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
+        PlacePhoto own = placePhotoRepository.save(PlacePhoto.builder()
+                .place(p).user(u1)
+                .imageUrl("/uploads/own-private.jpg")
+                .orderIndex(nextOrder)
+                .visibility(PhotoVisibility.PRIVATE)
+                .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/photos/" + own.getId())
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.visibility", is("PRIVATE")))
+                .andExpect(jsonPath("$.results.author.isMe", is(true)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 다른 유저의 PRIVATE 사진은 404 로 숨김 (enumeration 방지)")
+    void getPhoto_foreignPrivate_returns404() throws Exception {
+        // user=2 가 올린 PRIVATE 사진 1건.
+        com.filmroad.api.domain.user.User u2 = userRepository.findById(2L).orElseThrow();
+        Place p = placeRepository.findById(10L).orElseThrow();
+        int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
+        PlacePhoto foreign = placePhotoRepository.save(PlacePhoto.builder()
+                .place(p).user(u2)
+                .imageUrl("/uploads/u2-private.jpg")
+                .orderIndex(nextOrder)
+                .visibility(PhotoVisibility.PRIVATE)
+                .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/photos/" + foreign.getId())
+                        .cookie(demoAccessCookie()))   // user=1 토큰
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40070)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/99999 (없음) → 404 PHOTO_NOT_FOUND")
+    void getPhoto_unknownId_returns404() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/99999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40070)));
     }
 
     @Test
