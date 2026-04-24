@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
+// Route the api mock by URL so the task-#41 refetch-on-entry flow
+// (onMounted + onIonViewWillEnter both call profileStore.fetch() +
+// fetchMyPhotos()) returns shapes that match the test fixtures instead
+// of wiping seeded state with `{data: null}`.
+const { apiGetMock } = vi.hoisted(() => ({ apiGetMock: vi.fn() }));
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: null }) },
+  default: { get: apiGetMock },
 }));
 
 const { pushSpy, replaceSpy, backSpy } = vi.hoisted(() => ({
@@ -127,12 +132,34 @@ function mountProfile(
     savedState?: typeof savedSeedState;
   } = {},
 ) {
+  // Route the api mock to reflect the same data we're about to seed into
+  // the store so the task-#41 refetch-on-entry doesn't overwrite the
+  // fixtures with `{data: null}`.
+  const seededPhotos = overrides.myPhotos ?? [];
+  apiGetMock.mockImplementation((url: string) => {
+    if (url === '/api/users/me') {
+      return Promise.resolve({
+        data: {
+          user: profileState.user,
+          stats: profileState.stats,
+          miniMapPins: profileState.miniMapPins,
+        },
+      });
+    }
+    if (url === '/api/users/me/photos') {
+      return Promise.resolve({
+        data: { photos: seededPhotos, nextCursor: null },
+      });
+    }
+    return Promise.resolve({ data: null });
+  });
+
   return mountWithStubs(ProfilePage, {
     initialState: {
       profile: {
         ...profileState,
         // task #35 fields — default empty so the empty-state asserts cleanly.
-        myPhotos: overrides.myPhotos ?? [],
+        myPhotos: seededPhotos,
         myPhotosLoading: false,
         myPhotosError: null,
         myPhotosNextCursor: null,
@@ -149,6 +176,7 @@ describe('ProfilePage.vue', () => {
     replaceSpy.mockClear();
     backSpy.mockClear();
     toastCreateSpy.mockClear();
+    apiGetMock.mockReset();
   });
 
   it('renders the profile card with nickname, handle and level pill', async () => {
@@ -350,6 +378,41 @@ describe('ProfilePage.vue', () => {
     await flushPromises();
     // Now pushes the real photo id (777), not the grid position.
     expect(pushSpy).toHaveBeenCalledWith('/shot/777');
+  });
+
+  it('page entry triggers profileStore.fetch + fetchMyPhotos (task #41 refresh-on-enter)', async () => {
+    // Both mount AND ion-view re-entry should refetch. jsdom doesn't run
+    // Ionic's lifecycle hooks, so we assert the mount path (which shares
+    // the same refreshProfileData handler with onIonViewWillEnter).
+    mountProfile({
+      myPhotos: [
+        {
+          id: 1,
+          imageUrl: 'https://cdn/p/1.jpg',
+          caption: null,
+          placeId: 10,
+          placeName: '주문진',
+          regionLabel: '강원',
+          workId: 1,
+          workTitle: '도깨비',
+          visibility: 'PUBLIC' as const,
+          createdAt: '2026-04-22T00:00:00Z',
+        },
+      ],
+      myPhotosLoaded: false,
+    });
+    await flushPromises();
+
+    // /api/users/me is hit by profileStore.fetch().
+    const hitMe = apiGetMock.mock.calls.some(
+      (call) => String(call[0]) === '/api/users/me',
+    );
+    // /api/users/me/photos is hit by profileStore.fetchMyPhotos().
+    const hitPhotos = apiGetMock.mock.calls.some(
+      (call) => String(call[0]) === '/api/users/me/photos',
+    );
+    expect(hitMe).toBe(true);
+    expect(hitPhotos).toBe(true);
   });
 
   it('first-time photos tab entry calls fetchMyPhotos; re-entry uses cached state (task #35)', async () => {

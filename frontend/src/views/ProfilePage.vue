@@ -200,7 +200,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon, actionSheetController } from '@ionic/vue';
+import {
+  IonPage,
+  IonContent,
+  IonIcon,
+  actionSheetController,
+  onIonViewWillEnter,
+} from '@ionic/vue';
 import {
   shareSocialOutline,
   menuOutline,
@@ -283,9 +289,10 @@ function pinStyle(p: MiniMapPin): Record<string, string> {
 }
 
 // task #35: PLACEHOLDER_IMAGES / gridCells were removed. Photos tab now
-// renders `profileStore.myPhotos` from `/api/users/me/photos`; the first
-// fetch fires on initial mount (see onMounted below) and on re-entry into
-// the 'photos' tab if state hasn't been loaded yet.
+// renders `profileStore.myPhotos` from `/api/users/me/photos`; task #41
+// rewired the fetch to fire on every page *entry* (mount + ion-view
+// re-entry) so uploads / edits from other pages land back on /profile
+// already fresh.
 
 async function onSelectLocalTab(t: LocalTab): Promise<void> {
   // task #36: saved tab is back to in-place — no router.push for any tab.
@@ -375,18 +382,39 @@ async function handleLogout(): Promise<void> {
   await router.replace('/onboarding');
 }
 
-onMounted(async () => {
+// task #41: refresh on every page entry (not just first mount) so /profile
+// picks up fresh data after a user uploads a shot, edits their profile, or
+// any other write-path that mutates server state. Ionic caches the page in
+// its router outlet, so `onMounted` alone never re-fires — we hook the
+// ionic-specific `onIonViewWillEnter` lifecycle that runs on both first
+// entry AND re-entry from a pushed/popped route.
+//
+// Both hooks target the same handler; the in-flight `loading` flag
+// prevents a duplicate first-mount fetch (mounted fires before
+// ionViewWillEnter, so by the time Ionic's hook runs the initial fetch
+// has already flipped `profileStore.loading = true` synchronously).
+async function refreshProfileData(): Promise<void> {
+  if (profileStore.loading) return;
   await profileStore.fetch();
   if (error.value) await showError(error.value);
-  // Default tab is 'photos' — kick off the grid fetch right after the
-  // profile payload lands so the grid renders without an extra tab tap.
-  // Guarded by myPhotosLoaded so navigation back to /profile doesn't
-  // trigger a redundant refetch (and so test fixtures that pre-seed the
-  // grid aren't clobbered by a null-mock fetch).
-  if (localTab.value === 'photos' && !myPhotosLoaded.value) {
+  // Always re-fetch the photos grid on page entry — users come back to
+  // /profile after uploading a new shot and expect to see it without
+  // pulling to refresh or reloading the page.
+  if (!profileStore.myPhotosLoading) {
     await profileStore.fetchMyPhotos();
   }
-});
+  // If the user was on the saved tab (mutated from SavedPage or the
+  // collection picker elsewhere), refresh collections too. Reset the
+  // tab-level `savedFetched` guard so the next tab-click fetch still
+  // no-ops on a cache-hit rather than double-fetching.
+  if (localTab.value === 'saved' && !savedStore.loading) {
+    savedFetched.value = true;
+    await savedStore.fetch();
+  }
+}
+
+onMounted(refreshProfileData);
+onIonViewWillEnter(refreshProfileData);
 </script>
 
 <style scoped>
