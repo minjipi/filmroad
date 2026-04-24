@@ -17,12 +17,20 @@
       <div class="cs-body no-scrollbar">
         <p v-if="items.length === 0 && !loading" class="empty-note">첫 댓글을 남겨보세요</p>
         <div v-for="c in items" :key="c.id" class="cs-item">
-          <div class="ava">
+          <div
+            class="ava"
+            data-testid="cs-author"
+            @click="onOpenAuthor(c.author.userId)"
+          >
             <img v-if="c.author.avatarUrl" :src="c.author.avatarUrl" :alt="c.author.handle" />
           </div>
           <div class="body">
             <div class="row">
-              <span class="handle">{{ c.author.handle }}</span>
+              <span
+                class="handle"
+                data-testid="cs-author-handle"
+                @click="onOpenAuthor(c.author.userId)"
+              >{{ c.author.handle }}</span>
               <ion-icon v-if="c.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
               <span class="time">{{ formatRelativeTime(c.createdAt) }}</span>
             </div>
@@ -81,6 +89,7 @@ import {
   paperPlaneOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useCommentStore, type Comment } from '@/stores/comment';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
@@ -112,6 +121,21 @@ const authReady = computed<boolean>(() => user.value !== null);
 
 function isOwn(c: Comment): boolean {
   return user.value !== null && c.author.userId === user.value.id;
+}
+
+// task #42: tapping a comment author (avatar or handle) opens their
+// public profile. Route to /profile when the signed-in viewer taps
+// their own comment instead of the public view.
+const router = useRouter();
+async function onOpenAuthor(userId: number): Promise<void> {
+  // Close the sheet so the transition doesn't fight the navigation
+  // animation — Ionic keeps the sheet modal in the DOM otherwise.
+  emit('close');
+  if (user.value?.id === userId) {
+    await router.push('/profile');
+    return;
+  }
+  await router.push(`/user/${userId}`);
 }
 
 function close(): void {

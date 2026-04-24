@@ -355,6 +355,30 @@ describe('FeedPage.vue', () => {
     expect(followSpy).toHaveBeenCalledWith(10);
   });
 
+  it('tapping the post-head avatar/meta pushes /user/:id (task #42)', async () => {
+    const { wrapper } = mountFeed({ posts: [makePost(1), makePost(2)] });
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const headers = wrapper.findAll('[data-testid="feed-author"]');
+    expect(headers.length).toBe(2);
+    await headers[1].trigger('click');
+    // makePost(id) sets author.userId = id, so post#2 routes to /user/2.
+    expect(pushSpy).toHaveBeenCalledWith('/user/2');
+  });
+
+  it('tapping a reco-card pushes /user/:id (task #42)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const cards = wrapper.findAll('[data-testid="reco-card"]');
+    expect(cards.length).toBeGreaterThan(0);
+    await cards[0].trigger('click');
+    // makeUser(10) → /user/10.
+    expect(pushSpy).toHaveBeenCalledWith('/user/10');
+  });
+
   it('FOLLOWING tab with empty posts renders the follow-empty empty-note', async () => {
     const { wrapper } = mountFeed({ posts: [], tab: 'FOLLOWING' });
     await flushPromises();

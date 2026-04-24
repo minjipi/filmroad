@@ -34,10 +34,18 @@
         <template v-for="(p, idx) in posts" :key="p.id">
           <article class="post">
             <div class="post-head">
-              <div class="avatar">
+              <div
+                class="avatar"
+                data-testid="feed-author"
+                @click.stop="onOpenUser(p.author.userId)"
+              >
                 <img v-if="p.author.avatarUrl" :src="p.author.avatarUrl" :alt="p.author.handle" />
               </div>
-              <div class="meta">
+              <div
+                class="meta"
+                data-testid="feed-author-meta"
+                @click.stop="onOpenUser(p.author.userId)"
+              >
                 <div class="nm">
                   {{ p.author.handle }}
                   <ion-icon v-if="p.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
@@ -114,6 +122,8 @@
                 v-for="u in recommendedUsers"
                 :key="u.userId"
                 class="reco-card"
+                data-testid="reco-card"
+                @click="onOpenUser(u.userId)"
               >
                 <div class="th">
                   <img v-if="u.avatarUrl" :src="u.avatarUrl" :alt="u.handle" />
@@ -124,7 +134,7 @@
                   <button
                     :class="['follow', u.following ? 'followed' : '']"
                     type="button"
-                    @click="onFollow(u)"
+                    @click.stop="onFollow(u)"
                   >{{ u.following ? '팔로잉' : '팔로우' }}</button>
                 </div>
               </div>
@@ -186,6 +196,7 @@ import { useRouter } from 'vue-router';
 import { useFeedStore, type FeedPost, type FeedTab, type FeedUser } from '@/stores/feed';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
+import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
@@ -194,6 +205,7 @@ import { formatRelativeTime } from '@/utils/formatRelativeTime';
 const feedStore = useFeedStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const { posts, recommendedUsers, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
@@ -254,6 +266,17 @@ function onCommentCreated(): void {
   if (id == null) return;
   const post = posts.value.find((x) => x.id === id);
   if (post) post.commentCount += 1;
+}
+
+// task #42: avatar / handle tap in post-head + reco-card opens the public
+// user profile. If the author is the signed-in viewer, route to /profile
+// (personal dashboard) instead of the public view.
+async function onOpenUser(userId: number): Promise<void> {
+  if (authStore.user?.id === userId) {
+    await router.push('/profile');
+    return;
+  }
+  await router.push(`/user/${userId}`);
 }
 
 async function onShare(): Promise<void> {
