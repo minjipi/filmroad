@@ -94,33 +94,109 @@
           </p>
         </div>
 
-        <div v-else class="home-grid">
+        <template v-else>
           <div
-            v-for="p in places"
-            :key="p.id"
-            class="photo-card"
-            @click="onOpenDetail(p.id)"
+            v-if="scope === 'NEAR' && geoStatus === 'denied'"
+            class="geo-banner"
+            data-testid="geo-denied-banner"
           >
-            <img :src="p.coverImageUrl" :alt="p.name" />
-            <div class="grad" />
-            <div
-              :class="['like', p.liked ? 'on' : '']"
-              @click.stop="onToggleLike(p.id)"
-            >
-              <ion-icon :icon="p.liked ? heart : heartOutline" class="ic-16" />
+            <ion-icon :icon="locationOutline" class="ic-20" />
+            <div class="txt">
+              <b>위치 사용을 허용하면 내 근처 장소를 볼 수 있어요</b>
+              <span>주소창 자물쇠 아이콘 → 권한 설정 → 위치 허용</span>
             </div>
-            <div class="cap">
-              <div class="chip-wrap">
-                <FrChip variant="primary">{{ p.workTitle }}</FrChip>
+          </div>
+
+          <div class="home-grid">
+            <div
+              v-for="p in places"
+              :key="p.id"
+              class="photo-card"
+              @click="onOpenDetail(p.id)"
+            >
+              <img :src="p.coverImageUrl" :alt="p.name" />
+              <div class="grad" />
+              <div
+                :class="['like', p.liked ? 'on' : '']"
+                @click.stop="onToggleLike(p.id)"
+              >
+                <ion-icon :icon="p.liked ? heart : heartOutline" class="ic-16" />
               </div>
-              <div class="t">{{ p.name }}</div>
-              <div class="loc">
-                <ion-icon :icon="locationOutline" class="ic-16" />{{ p.regionLabel }}
+              <div class="cap">
+                <div class="chip-wrap">
+                  <FrChip variant="primary">{{ p.workTitle }}</FrChip>
+                </div>
+                <div class="t">{{ p.name }}</div>
+                <div class="loc">
+                  <ion-icon :icon="locationOutline" class="ic-16" />{{ p.regionLabel }}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+
+          <div
+            v-if="scope === 'NEAR' && geoStatus === 'granted' && places.length === 0"
+            class="nearby-empty"
+            data-testid="nearby-empty"
+          >
+            <ion-icon :icon="locationOutline" class="ic-22 empty-ic" />
+            <p class="msg">
+              반경 <b>{{ radiusKm }}km</b> 이내에 등록된 장소가 없어요
+            </p>
+            <span class="hint">반경을 넓혀서 다시 찾아볼까요?</span>
+            <div class="radius-toggle" data-testid="radius-toggle">
+              <button
+                v-for="km in radiusOptions"
+                :key="km"
+                type="button"
+                :class="['rt', radiusKm === km ? 'on' : '']"
+                @click="onExpandRadius(km)"
+              >{{ km }}km</button>
+            </div>
+          </div>
+        </template>
       </div>
+
+      <Teleport to="body">
+        <div
+          v-if="showPrimingSheet"
+          class="geo-prime-backdrop"
+          role="dialog"
+          aria-label="위치 사용 안내"
+          @click.self="onPrimingDismiss"
+        >
+          <div class="geo-prime-sheet" data-testid="geo-priming-sheet">
+            <button
+              type="button"
+              class="close"
+              aria-label="닫기"
+              @click="onPrimingDismiss"
+            >
+              <ion-icon :icon="closeOutline" class="ic-22" />
+            </button>
+            <div class="hero-ic">
+              <ion-icon :icon="locationOutline" class="ic-28" />
+            </div>
+            <h2>내 위치로 근처 성지를 찾아드려요</h2>
+            <p>
+              정확한 추천을 위해 위치 정보가 필요해요.<br />
+              위치는 전송되지 않고, 근처 장소를 찾는 데만 쓰여요.
+            </p>
+            <button
+              type="button"
+              class="primary"
+              data-testid="geo-prime-accept"
+              @click="onPrimingAccept"
+            >위치 허용하기</button>
+            <button
+              type="button"
+              class="ghost"
+              data-testid="geo-prime-dismiss"
+              @click="onPrimingDismiss"
+            >나중에</button>
+          </div>
+        </div>
+      </Teleport>
 
     </ion-content>
     <FrTabBar :model-value="'home'" />
@@ -128,12 +204,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   locationOutline,
   searchOutline,
   notificationsOutline,
+  closeOutline,
   heart,
   heartOutline,
 } from 'ionicons/icons';
@@ -143,20 +220,98 @@ import { useHomeStore, type HomeScope } from '@/stores/home';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
+import { useGeolocation } from '@/composables/useGeolocation';
 
 const homeStore = useHomeStore();
 const { hero, works, places, popularWorks, loading, error, selectedWorkId, scope } =
   storeToRefs(homeStore);
-const { showError } = useToast();
+const { showError, showInfo } = useToast();
 const router = useRouter();
+
+const geo = useGeolocation();
+const { coords: geoCoords, status: geoStatus } = geo;
+
+// 반경 토글. NEAR 결과 0개일 때 노출되며, 사용자가 직접 30→50→100 km 로 넓힐 수 있다.
+const radiusKm = ref<number>(30);
+const radiusOptions: number[] = [30, 50, 100];
+
+// 첫 NEAR 탭 직전에 한번만 띄우는 priming bottom sheet.
+const showPrimingSheet = ref(false);
+const PRIMED_STORAGE_KEY = 'filmroad.geo-primed';
+
+function hasBeenPrimed(): boolean {
+  try {
+    return localStorage.getItem(PRIMED_STORAGE_KEY) === 'yes';
+  } catch {
+    return false;
+  }
+}
+
+function markPrimed(): void {
+  try {
+    localStorage.setItem(PRIMED_STORAGE_KEY, 'yes');
+  } catch {
+    // private mode / Storage 비활성화 — priming 이 매번 뜨는 건 감수.
+  }
+}
 
 async function onSelectWork(id: number | null): Promise<void> {
   await homeStore.setWork(id);
   if (error.value) await showError(error.value);
 }
 
+async function loadNearWithRadius(km: number): Promise<void> {
+  // 이미 권한 받아둔 좌표가 있으면 그걸로, 없으면 지금 요청.
+  const c = geoCoords.value ?? (await geo.request());
+  if (!c) {
+    // 차단/타임아웃/비지원 — NEAR 시맨틱은 유지하되 데이터는 TRENDING 으로 폴백.
+    // 배너는 scope=NEAR + status=denied 컨디션으로 뜨므로 UX 연속성 유지.
+    homeStore.scope = 'NEAR';
+    await homeStore.fetchHome();
+    if (geoStatus.value === 'unavailable') {
+      await showInfo('위치 정보를 사용할 수 없어 전국 트렌드로 보여드려요');
+    }
+    return;
+  }
+  await homeStore.setScope('NEAR', {
+    lat: c.latitude,
+    lng: c.longitude,
+    radiusKm: km,
+  });
+}
+
 async function onSelectScope(s: HomeScope): Promise<void> {
+  if (s === 'NEAR') {
+    // 첫 탭이면 priming sheet 를 먼저. 수락/거부 후 flow 가 이어짐.
+    if (!hasBeenPrimed() && geoStatus.value === 'idle') {
+      showPrimingSheet.value = true;
+      return;
+    }
+    await loadNearWithRadius(radiusKm.value);
+    if (error.value) await showError(error.value);
+    return;
+  }
   await homeStore.setScope(s);
+  if (error.value) await showError(error.value);
+}
+
+async function onPrimingAccept(): Promise<void> {
+  markPrimed();
+  showPrimingSheet.value = false;
+  await loadNearWithRadius(radiusKm.value);
+  if (error.value) await showError(error.value);
+}
+
+function onPrimingDismiss(): void {
+  // 나중에: primed 플래그만 세우고 스코프는 유지 (TRENDING). 다음번 NEAR 탭
+  // 시엔 priming 없이 바로 request() 흐름으로 간다.
+  markPrimed();
+  showPrimingSheet.value = false;
+}
+
+async function onExpandRadius(km: number): Promise<void> {
+  radiusKm.value = km;
+  await loadNearWithRadius(km);
   if (error.value) await showError(error.value);
 }
 
@@ -375,5 +530,186 @@ ion-content {
 .photo-card .loc {
   display: flex; align-items: center; gap: 3px;
   font-size: 10px; opacity: 0.85; margin-top: 3px;
+}
+
+/* ---------- 위치 권한 거부 배너 ---------- */
+.geo-banner {
+  margin: 0 20px 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  color: #9a3412;
+}
+.geo-banner .txt {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.geo-banner .txt b {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #7c2d12;
+}
+.geo-banner .txt span {
+  font-size: 11.5px;
+  color: #9a3412;
+  opacity: 0.9;
+}
+
+/* ---------- NEAR 0개 empty state + 반경 토글 ---------- */
+.nearby-empty {
+  margin: 4px 20px 0;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: var(--fr-bg-muted);
+  text-align: center;
+  color: var(--fr-ink-2);
+}
+.nearby-empty .empty-ic {
+  color: var(--fr-ink-4);
+}
+.nearby-empty .msg {
+  margin: 10px 0 4px;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.nearby-empty .msg b { font-weight: 800; }
+.nearby-empty .hint {
+  font-size: 12px;
+  color: var(--fr-ink-3);
+}
+.radius-toggle {
+  margin-top: 14px;
+  display: inline-flex;
+  background: #ffffff;
+  border: 1px solid var(--fr-line);
+  border-radius: 10px;
+  padding: 2px;
+  gap: 2px;
+}
+.radius-toggle .rt {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink-3);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.radius-toggle .rt.on {
+  background: var(--fr-ink);
+  color: #ffffff;
+}
+</style>
+
+<!-- Teleport 된 priming sheet 는 scoped 밖에서 스타일링. -->
+<style>
+.geo-prime-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: geo-fade-in 0.18s ease-out;
+}
+.geo-prime-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 20px 20px 0 0;
+  padding: 32px 24px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: 0 -20px 60px rgba(15, 23, 42, 0.22);
+  animation: geo-slide-up 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  text-align: center;
+  color: var(--fr-ink);
+}
+.geo-prime-sheet .close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(118, 118, 128, 0.18);
+  color: rgba(60, 60, 67, 0.72);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.geo-prime-sheet .hero-ic {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #e6f8fd;
+  color: #14BCED;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.geo-prime-sheet h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+.geo-prime-sheet p {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #475569;
+}
+.geo-prime-sheet .primary,
+.geo-prime-sheet .ghost {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  border-radius: 12px;
+  border: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.geo-prime-sheet .primary {
+  background: #14BCED;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+.geo-prime-sheet .primary:active { opacity: 0.88; }
+.geo-prime-sheet .ghost {
+  background: transparent;
+  color: #64748b;
+}
+.geo-prime-sheet .ghost:active { color: #334155; }
+
+@keyframes geo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes geo-slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 </style>

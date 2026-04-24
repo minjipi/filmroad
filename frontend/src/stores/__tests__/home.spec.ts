@@ -85,6 +85,11 @@ describe('home store', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('default scope is TRENDING (first page load does not request geolocation)', () => {
+    const store = useHomeStore();
+    expect(store.scope).toBe('TRENDING');
+  });
+
   it('setWork(id) triggers a refetch with workId in the query params', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
 
@@ -93,14 +98,59 @@ describe('home store', () => {
 
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ workId: 1, scope: 'NEAR' });
+    expect(opts?.params).toMatchObject({ workId: 1, scope: 'TRENDING' });
     expect(store.selectedWorkId).toBe(1);
   });
 
-  it("setScope('TRENDING') triggers a refetch with scope: 'TRENDING'", async () => {
+  it('fetchHome forwards lat/lng/radiusKm to /api/home when provided', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome({ lat: 37.5665, lng: 126.978, radiusKm: 50 });
+
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({
+      scope: 'TRENDING',
+      lat: 37.5665,
+      lng: 126.978,
+      radiusKm: 50,
+    });
+  });
+
+  it("setScope('NEAR', {lat, lng, radiusKm}) refetches with those coords + radius", async () => {
+    mockApi.get.mockResolvedValue({ data: fixture });
+    const store = useHomeStore();
+    await store.setScope('NEAR', { lat: 37.5, lng: 127.0, radiusKm: 30 });
+
+    expect(store.scope).toBe('NEAR');
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({
+      scope: 'NEAR',
+      lat: 37.5,
+      lng: 127.0,
+      radiusKm: 30,
+    });
+  });
+
+  it("setScope('NEAR', {radiusKm: 100}) still refetches even when scope is already NEAR (radius toggle)", async () => {
+    mockApi.get.mockResolvedValue({ data: fixture });
+    const store = useHomeStore();
+    await store.setScope('NEAR', { lat: 37, lng: 127, radiusKm: 30 });
+    mockApi.get.mockClear();
+
+    await store.setScope('NEAR', { lat: 37, lng: 127, radiusKm: 100 });
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ scope: 'NEAR', radiusKm: 100 });
+  });
+
+  it("setScope back to 'TRENDING' from NEAR triggers a refetch with scope: 'TRENDING'", async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
 
     const store = useHomeStore();
+    // Move off the default TRENDING first so switching back actually refetches.
+    await store.setScope('NEAR', { lat: 37, lng: 127, radiusKm: 30 });
+    mockApi.get.mockClear();
+
     await store.setScope('TRENDING');
 
     expect(mockApi.get).toHaveBeenCalledTimes(1);

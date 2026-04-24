@@ -55,6 +55,9 @@ export type HomeScope = 'NEAR' | 'TRENDING' | 'POPULAR_WORKS';
 interface FetchOptions {
   lat?: number;
   lng?: number;
+  // 단위 km. NEAR scope 에서만 의미가 있고, 서버는 기본 30km 로 가정한다.
+  // 프런트가 반경 토글을 제공할 땐 여기에 명시적으로 실어 보낸다.
+  radiusKm?: number;
 }
 
 interface State {
@@ -77,7 +80,9 @@ export const useHomeStore = defineStore('home', {
     loading: false,
     error: null,
     selectedWorkId: null,
-    scope: 'NEAR',
+    // 첫 진입에선 위치 권한 팝업을 띄우지 않기 위해 TRENDING 으로 시작한다.
+    // 사용자가 '내 위치 근처' 탭을 실제로 탭할 때 비로소 NEAR 로 전환된다.
+    scope: 'TRENDING',
   }),
   actions: {
     async fetchHome(opts: FetchOptions = {}): Promise<void> {
@@ -88,6 +93,7 @@ export const useHomeStore = defineStore('home', {
         if (this.selectedWorkId !== null) params.workId = this.selectedWorkId;
         if (typeof opts.lat === 'number') params.lat = opts.lat;
         if (typeof opts.lng === 'number') params.lng = opts.lng;
+        if (typeof opts.radiusKm === 'number') params.radiusKm = opts.radiusKm;
         const { data } = await api.get<HomeResponse>('/api/home', { params });
         this.hero = data.hero;
         this.works = data.works;
@@ -104,15 +110,17 @@ export const useHomeStore = defineStore('home', {
       this.selectedWorkId = id;
       await this.fetchHome();
     },
-    async setScope(s: HomeScope): Promise<void> {
-      if (this.scope === s) return;
+    async setScope(s: HomeScope, opts?: FetchOptions): Promise<void> {
+      // 같은 scope 여도 opts (radius 토글 등) 가 들어오면 재요청해야 하므로
+      // opts 없을 때만 short-circuit.
+      if (this.scope === s && !opts) return;
       this.scope = s;
       // POPULAR_WORKS is a view-only toggle — works grid renders from the
       // already-hydrated popularWorks array, no network round-trip needed.
       // NEAR / TRENDING affect the server-side place sort, so those still
       // refetch.
       if (s === 'POPULAR_WORKS') return;
-      await this.fetchHome();
+      await this.fetchHome(opts ?? {});
     },
     async toggleLike(placeId: number): Promise<void> {
       if (!useAuthStore().isAuthenticated) {

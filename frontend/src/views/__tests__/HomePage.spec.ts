@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
 // Must mock api before HomePage -> home store is evaluated.
@@ -24,6 +24,30 @@ vi.mock('@ionic/vue', async () => {
   const actual = await vi.importActual<typeof import('@ionic/vue')>('@ionic/vue');
   return { ...actual, toastController: { create: toastCreateSpy } };
 });
+
+// useGeolocation 은 모듈 싱글톤이라 테스트마다 상태가 누적되면 flaky 해진다.
+// 제어 가능한 refs + spy 로 아예 모듈을 mock out.
+const { geoRequestSpy, geoCoordsRef, geoStatusRef } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ref } = require('vue');
+  return {
+    geoRequestSpy: vi.fn(),
+    geoCoordsRef: ref(null),
+    geoStatusRef: ref('idle'),
+  };
+});
+vi.mock('@/composables/useGeolocation', () => ({
+  useGeolocation: () => ({
+    coords: geoCoordsRef,
+    status: geoStatusRef,
+    error: { value: null },
+    request: geoRequestSpy,
+    reset: () => {
+      geoCoordsRef.value = null;
+      geoStatusRef.value = 'idle';
+    },
+  }),
+}));
 
 import HomePage from '@/views/HomePage.vue';
 import { useHomeStore, type HomeResponse } from '@/stores/home';
@@ -112,6 +136,19 @@ describe('HomePage.vue', () => {
     toastCreateSpy.mockClear();
     pushSpy.mockClear();
     backSpy.mockClear();
+    geoRequestSpy.mockReset();
+    geoCoordsRef.value = null;
+    geoStatusRef.value = 'idle';
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    // Teleport("body") 로 document.body 에 추가된 priming 시트는 wrapper 가
+    // 언마운트돼도 jsdom 에 그대로 남는다. 다음 테스트가 "시트가 없는 상태"를
+    // 전제할 수 있게 수동으로 청소.
+    document.body
+      .querySelectorAll('.geo-prime-backdrop')
+      .forEach((el) => el.remove());
   });
 
   it('renders the hero title from the store', async () => {
@@ -232,6 +269,116 @@ describe('HomePage.vue', () => {
     await flushPromises();
 
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.places[0].id}`);
+  });
+
+  it('tapping "내 위치 근처" (first time) opens the priming sheet instead of firing geolocation', async () => {
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    const segs = wrapper.findAll('[data-testid="home-segmented"] .seg');
+    await segs[0].trigger('click'); // "내 위치 근처"
+    await flushPromises();
+
+    // Teleport("body") 로 올라가서 wrapper 바깥에 있으므로 document 에서 조회.
+    expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).not.toBeNull();
+    expect(geoRequestSpy).not.toHaveBeenCalled();
+  });
+
+  it('priming accept → calls geolocation.request → setScope NEAR with coords + default radius 30', async () => {
+    geoRequestSpy.mockImplementation(async () => {
+      geoCoordsRef.value = { latitude: 37.5665, longitude: 126.978, accuracy: 10 };
+      geoStatusRef.value = 'granted';
+      return geoCoordsRef.value;
+    });
+
+    const { wrapper, store } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+    const setScopeSpy = vi.spyOn(store, 'setScope');
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+    const acceptBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="geo-prime-accept"]',
+    );
+    expect(acceptBtn).not.toBeNull();
+    acceptBtn!.click();
+    await flushPromises();
+
+    expect(geoRequestSpy).toHaveBeenCalledTimes(1);
+    expect(setScopeSpy).toHaveBeenCalledWith('NEAR', {
+      lat: 37.5665,
+      lng: 126.978,
+      radiusKm: 30,
+    });
+    expect(localStorage.getItem('filmroad.geo-primed')).toBe('yes');
+  });
+
+  it('priming dismiss → sets primed flag but stays on TRENDING (no geolocation call)', async () => {
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+    const dismissBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="geo-prime-dismiss"]',
+    );
+    expect(dismissBtn).not.toBeNull();
+    dismissBtn!.click();
+    await flushPromises();
+
+    expect(geoRequestSpy).not.toHaveBeenCalled();
+    expect(localStorage.getItem('filmroad.geo-primed')).toBe('yes');
+    expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).toBeNull();
+  });
+
+  it('second NEAR tap after primed skips the sheet and requests location directly', async () => {
+    localStorage.setItem('filmroad.geo-primed', 'yes');
+    geoRequestSpy.mockImplementation(async () => {
+      geoCoordsRef.value = { latitude: 35.18, longitude: 129.08, accuracy: 20 };
+      geoStatusRef.value = 'granted';
+      return geoCoordsRef.value;
+    });
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).toBeNull();
+    expect(geoRequestSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('denied status renders the re-enable banner on the NEAR scope', async () => {
+    geoStatusRef.value = 'denied';
+    const { wrapper } = mountHomePage({ scope: 'NEAR' });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="geo-denied-banner"]').exists()).toBe(true);
+  });
+
+  it('empty NEAR results with granted location renders the radius-expand toggle', async () => {
+    geoStatusRef.value = 'granted';
+    geoCoordsRef.value = { latitude: 37.5665, longitude: 126.978, accuracy: 10 };
+
+    const { wrapper } = mountHomePage({ scope: 'NEAR' });
+    // Empty the places list on the (already-hydrated) store.
+    const store = useHomeStore();
+    store.places = [];
+    await flushPromises();
+
+    const empty = wrapper.find('[data-testid="nearby-empty"]');
+    expect(empty.exists()).toBe(true);
+    const buttons = wrapper.findAll('[data-testid="radius-toggle"] .rt');
+    expect(buttons.map((b) => b.text())).toEqual(['30km', '50km', '100km']);
+
+    const setScopeSpy = vi.spyOn(store, 'setScope');
+    await buttons[1].trigger('click'); // 50km
+    await flushPromises();
+
+    expect(setScopeSpy).toHaveBeenCalledWith('NEAR', {
+      lat: 37.5665,
+      lng: 126.978,
+      radiusKm: 50,
+    });
   });
 
   it('clicking a .like dispatches toggleLike and reflects the server response', async () => {
