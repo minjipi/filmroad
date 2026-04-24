@@ -22,7 +22,7 @@ public class FeedController {
 
     @GetMapping
     public BaseResponse<FeedResponse> getFeed(
-            @RequestParam(required = false, defaultValue = "POPULAR") FeedTab tab,
+            @RequestParam(required = false, defaultValue = "RECENT") FeedTab tab,
             @RequestParam(required = false) Long workId,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,

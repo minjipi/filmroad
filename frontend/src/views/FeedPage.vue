@@ -94,11 +94,11 @@
             </div>
 
             <div class="post-caption">
-              <template v-if="p.caption">
+              <div v-if="p.caption" class="caption-text">
                 <b>{{ p.author.handle }}</b> {{ p.caption }}
-              </template>
+              </div>
               <div v-if="p.visitedAt" class="visit-chip">
-                <ion-icon :icon="checkmarkCircle" class="ic-16" />여기 다녀왔어요 · {{ formatVisitDate(p.visitedAt) }}
+                <ion-icon :icon="checkmarkCircle" class="ic-16" />여기 다녀왔어요
               </div>
             </div>
             <div class="post-time">{{ formatRelativeTime(p.createdAt) }}</div>
@@ -189,7 +189,7 @@ import { useUiStore } from '@/stores/ui';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
-import { formatRelativeTime, formatVisitDate } from '@/utils/formatRelativeTime';
+import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const feedStore = useFeedStore();
 const savedStore = useSavedStore();
@@ -202,9 +202,14 @@ const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 const activeCommentPhotoId = ref<number | null>(null);
 
+// Tab order places 최신 first (task #33 — RECENT is the new default), then
+// 인기, 팔로잉, 내 주변, 작품별. 13-feed.html shows "팔로잉 · 인기 · 내 주변 ·
+// 작품별" — the design predates the RECENT addition; we prepend here rather
+// than reshuffle the rest.
 const tabs: Array<{ key: FeedTab; label: string }> = [
-  { key: 'FOLLOWING', label: '팔로잉' },
+  { key: 'RECENT', label: '최신' },
   { key: 'POPULAR', label: '인기' },
+  { key: 'FOLLOWING', label: '팔로잉' },
   { key: 'NEARBY', label: '내 주변' },
   { key: 'BY_WORK', label: '작품별' },
 ];
@@ -298,7 +303,10 @@ ion-content.feed-content {
 
 .feed-scroll {
   overflow-y: auto;
-  padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  /* FrTabBar occupies 84px + sab at the bottom; 120px leaves ~36px of
+     breathing room so the last post card's border-bottom + visit-chip
+     aren't covered by the nav. (task #32) */
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
 .feed-head {

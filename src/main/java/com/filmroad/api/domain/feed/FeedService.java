@@ -51,17 +51,18 @@ public class FeedService {
 
     @Transactional(readOnly = true)
     public FeedResponse getFeed(FeedTab tab, Long workId, Double lat, Double lng, Long cursor, int limit) {
-        FeedTab effectiveTab = tab == null ? FeedTab.POPULAR : tab;
+        FeedTab effectiveTab = tab == null ? FeedTab.RECENT : tab;
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         int fetchSize = safeLimit + 1;
 
         Long viewerId = currentUser.currentUserId();
         Long effectiveWorkId = (effectiveTab == FeedTab.BY_WORK) ? workId : null;
         List<PlacePhoto> fetched = switch (effectiveTab) {
-            case POPULAR -> placePhotoRepository.findFeedPopular(null, cursor, PageRequest.of(0, fetchSize));
+            case RECENT -> placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case POPULAR -> placePhotoRepository.findFeedPopular(null, cursor, viewerId, PageRequest.of(0, fetchSize));
             case FOLLOWING -> placePhotoRepository.findFeedByFollowedUsers(viewerId, null, cursor, PageRequest.of(0, fetchSize));
-            case BY_WORK -> placePhotoRepository.findFeedPopular(effectiveWorkId, cursor, PageRequest.of(0, fetchSize));
-            case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng);
+            case BY_WORK -> placePhotoRepository.findFeedPopular(effectiveWorkId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng, viewerId);
         };
 
         boolean hasMore = fetched.size() > safeLimit;
@@ -127,8 +128,8 @@ public class FeedService {
         return result;
     }
 
-    private List<PlacePhoto> fetchNearby(Long cursor, int fetchSize, Double lat, Double lng) {
-        List<PlacePhoto> recent = placePhotoRepository.findFeedRecent(null, cursor, PageRequest.of(0, fetchSize * 3));
+    private List<PlacePhoto> fetchNearby(Long cursor, int fetchSize, Double lat, Double lng, Long viewerId) {
+        List<PlacePhoto> recent = placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize * 3));
         if (lat == null || lng == null) {
             return recent.size() > fetchSize ? recent.subList(0, fetchSize) : recent;
         }

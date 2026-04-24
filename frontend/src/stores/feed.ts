@@ -3,7 +3,11 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 
-export type FeedTab = 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_WORK';
+// RECENT = time-sorted feed (task #33, the new default). POPULAR keeps the
+// engagement-ranked view; FOLLOWING scopes to accounts the user follows;
+// NEARBY orders by distance when coordinates are available; BY_WORK filters
+// to a single work id (paired with `workId`).
+export type FeedTab = 'RECENT' | 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_WORK';
 
 export interface FeedAuthor {
   userId: number;
@@ -89,7 +93,9 @@ export const useFeedStore = defineStore('feed', {
   state: (): State => ({
     posts: [],
     recommendedUsers: [],
-    tab: 'POPULAR',
+    // Default tab is RECENT (task #33) — most users want the newest posts
+    // first when landing on /feed. POPULAR is still available as a tab.
+    tab: 'RECENT',
     workId: null,
     cursor: null,
     hasMore: false,
