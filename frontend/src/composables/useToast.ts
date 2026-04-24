@@ -18,5 +18,15 @@ export function useToast() {
   async function showInfo(msg: string): Promise<void> {
     return show({ msg, variant: 'success' });
   }
-  return { show, showError, showInfo };
+  async function showCenter(msg: string): Promise<void> {
+    const t = await toastController.create({
+      message: msg,
+      duration: 2000,
+      color: 'dark',
+      position: 'middle',
+      cssClass: 'fr-toast-center',
+    });
+    await t.present();
+  }
+  return { show, showError, showInfo, showCenter };
 }
