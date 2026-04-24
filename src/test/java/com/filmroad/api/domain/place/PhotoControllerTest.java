@@ -1,5 +1,6 @@
 package com.filmroad.api.domain.place;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.filmroad.api.domain.auth.JwtTokenService;
 import com.filmroad.api.domain.place.dto.PhotoUploadRequest;
@@ -13,8 +14,10 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -40,6 +43,9 @@ class PhotoControllerTest {
     @Autowired
     private JwtTokenService jwtTokenService;
 
+    @Autowired
+    private PlacePhotoRepository placePhotoRepository;
+
     private Cookie demoAccessCookie() {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
     }
@@ -50,9 +56,16 @@ class PhotoControllerTest {
                 objectMapper.writeValueAsBytes(meta));
     }
 
+    // 실제 JPEG SOI 마커(FF D8 FF) 로 시작하는 최소 바이트. magic-byte 검증을 통과시킨다.
+    private static final byte[] JPEG_BYTES = new byte[]{
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0,
+            0, 0x10, 'J', 'F', 'I', 'F', 0, 1, 1, 0, 0, 0x48, 0, 0x48, 0, 0,
+            (byte) 0xFF, (byte) 0xD9 // EOI
+    };
+
     private MockMultipartFile buildImage() {
         return new MockMultipartFile(
-                "file", "test.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[]{1, 2, 3, 4});
+                "file", "test.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG_BYTES);
     }
 
     @Test
@@ -117,6 +130,62 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.visibility", is("FOLLOWERS")))
                 .andExpect(jsonPath("$.results.tags", hasSize(3)))
                 .andExpect(jsonPath("$.results.tags", contains("도깨비", "강릉", "인생샷")));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — .jpg 확장자 + text/plain Content-Type 우회 시도 → 400 INVALID_FILE_TYPE")
+    void upload_contentTypeBypass_returnsValidationError() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+        MockMultipartFile suspicious = new MockMultipartFile(
+                "file", "evil.jsp.jpg", MediaType.TEXT_PLAIN_VALUE, JPEG_BYTES);
+
+        mockMvc.perform(multipart("/api/photos")
+                        .file(suspicious)
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40060)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 확장자·Content-Type 은 이미지지만 magic byte 가 JPEG/PNG/WebP 가 아님 → 400")
+    void upload_badMagicBytes_returnsValidationError() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+        MockMultipartFile fakeImage = new MockMultipartFile(
+                "file", "fake.jpg", MediaType.IMAGE_JPEG_VALUE,
+                new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+
+        mockMvc.perform(multipart("/api/photos")
+                        .file(fakeImage)
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40060)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — DB 에 저장된 PlacePhoto row 의 user_id 가 로그인 유저(1)로 채워짐 (회귀 방지)")
+    void upload_persistsUploaderUserId() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, "회귀 테스트", null, PhotoVisibility.PUBLIC, false);
+
+        MvcResult result = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage())
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        // 응답 body 에서 방금 저장한 PlacePhoto id 추출.
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        long photoId = body.at("/results/id").asLong();
+        assertThat(photoId).isGreaterThan(0);
+
+        // Hibernate 로 다시 fetch 해 user_id 컬럼이 실제로 채워졌는지 확정.
+        PlacePhoto persisted = placePhotoRepository.findById(photoId).orElseThrow();
+        assertThat(persisted.getUser())
+                .as("PlacePhoto.user 는 NOT NULL 이어야 하고 current user 와 일치해야 함")
+                .isNotNull();
+        assertThat(persisted.getUser().getId()).isEqualTo(1L);
     }
 
     @Test

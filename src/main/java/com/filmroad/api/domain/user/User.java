@@ -82,4 +82,18 @@ public class User extends BaseEntity {
     public void applyFollowingDelta(int delta) {
         this.followingCount = Math.max(0, this.followingCount + delta);
     }
+
+    // 프로필 편집 적용. null 필드는 "변경 없음". bio/avatarUrl 은 빈 문자열로 지우기 허용.
+    public void updateProfile(String nickname, String bio, String avatarUrl) {
+        if (nickname != null) {
+            String trimmed = nickname.trim();
+            if (!trimmed.isEmpty()) this.nickname = trimmed;
+        }
+        if (bio != null) {
+            this.bio = bio.isBlank() ? null : bio.trim();
+        }
+        if (avatarUrl != null) {
+            this.avatarUrl = avatarUrl.isBlank() ? null : avatarUrl.trim();
+        }
+    }
 }

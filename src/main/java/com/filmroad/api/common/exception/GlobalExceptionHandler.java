@@ -11,6 +11,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import static com.filmroad.api.common.model.BaseResponseStatus.REQUEST_ERROR;
 
@@ -47,6 +49,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<BaseResponse<Object>> handleBadCredentialsException(BadCredentialsException ex) {
         return handleBaseException(BaseException.of(BaseResponseStatus.INVALID_USER_INFO));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<BaseResponse<Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        // multipart max-file-size 초과. 현재 application.yml 10MB. HTTP 413 + 사용자 친화 한국어 메시지.
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(BaseResponse.error(BaseResponseStatus.UPLOAD_FAILED,
+                        "파일 크기가 너무 커요 (최대 10MB)."));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<BaseResponse<Object>> handleMultipart(MultipartException ex) {
+        // 잘못된 multipart 바디, 파트 누락 등.
+        log.warn("[UPLOAD] multipart 처리 실패: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error(BaseResponseStatus.UPLOAD_FAILED,
+                        "파일 업로드 요청이 잘못되었어요. 다시 시도해주세요."));
     }
 
     @ExceptionHandler(Exception.class)

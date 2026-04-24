@@ -6,7 +6,11 @@ vi.mock('@/services/api', () => ({
 }));
 
 import api from '@/services/api';
-import { useProfileStore, type ProfileResponse } from '@/stores/profile';
+import {
+  useProfileStore,
+  type MyPhoto,
+  type ProfileResponse,
+} from '@/stores/profile';
 
 const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
 
@@ -80,5 +84,96 @@ describe('profile store', () => {
     expect(store.error).toBe('unauth');
     expect(store.loading).toBe(false);
     expect(store.user).toBeNull();
+  });
+
+  // ---------------- task #35: fetchMyPhotos ----------------
+
+  function makePhoto(id: number, overrides: Partial<MyPhoto> = {}): MyPhoto {
+    return {
+      id,
+      imageUrl: `https://cdn/p/${id}.jpg`,
+      caption: null,
+      placeId: id,
+      placeName: `장소${id}`,
+      regionLabel: '강원 강릉시',
+      workId: 1,
+      workTitle: '도깨비',
+      visibility: 'PUBLIC',
+      createdAt: '2026-04-22T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('fetchMyPhotos() first-page: GET /api/users/me/photos?limit=30 populates photos + nextCursor (task #35)', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      data: { photos: [makePhoto(10), makePhoto(9)], nextCursor: 9 },
+    });
+
+    const store = useProfileStore();
+    await store.fetchMyPhotos();
+
+    expect(store.myPhotos.length).toBe(2);
+    expect(store.myPhotos[0].id).toBe(10);
+    expect(store.myPhotosNextCursor).toBe(9);
+    expect(store.myPhotosLoaded).toBe(true);
+    expect(store.myPhotosLoading).toBe(false);
+    expect(store.myPhotosError).toBeNull();
+
+    const [url, opts] = mockApi.get.mock.calls[0];
+    expect(url).toBe('/api/users/me/photos');
+    expect(opts?.params).toMatchObject({ limit: 30 });
+    // cursor omitted on the first page.
+    expect(opts?.params?.cursor).toBeUndefined();
+  });
+
+  it('fetchMyPhotos(cursor=N) appends to the existing list and forwards cursor in the request', async () => {
+    // Seed first page.
+    mockApi.get.mockResolvedValueOnce({
+      data: { photos: [makePhoto(10), makePhoto(9)], nextCursor: 9 },
+    });
+    const store = useProfileStore();
+    await store.fetchMyPhotos();
+    expect(store.myPhotos.length).toBe(2);
+
+    // Second page: same call shape with cursor=9 → appends.
+    mockApi.get.mockResolvedValueOnce({
+      data: { photos: [makePhoto(8), makePhoto(7)], nextCursor: null },
+    });
+    await store.fetchMyPhotos(9);
+
+    expect(store.myPhotos.length).toBe(4);
+    expect(store.myPhotos.map((p) => p.id)).toEqual([10, 9, 8, 7]);
+    expect(store.myPhotosNextCursor).toBeNull();
+
+    const [, opts] = mockApi.get.mock.calls[1];
+    expect(opts?.params).toMatchObject({ cursor: 9, limit: 30 });
+  });
+
+  it('fetchMyPhotos honors a custom limit argument (server clamps to 60)', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      data: { photos: [], nextCursor: null },
+    });
+    const store = useProfileStore();
+    await store.fetchMyPhotos(null, 10);
+
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ limit: 10 });
+  });
+
+  it('fetchMyPhotos failure surfaces myPhotosError and clears loading (existing list untouched)', async () => {
+    // Seed a prior successful page.
+    mockApi.get.mockResolvedValueOnce({
+      data: { photos: [makePhoto(1)], nextCursor: null },
+    });
+    const store = useProfileStore();
+    await store.fetchMyPhotos();
+
+    mockApi.get.mockRejectedValueOnce(new Error('server down'));
+    await store.fetchMyPhotos(1);
+
+    expect(store.myPhotosError).toBe('server down');
+    expect(store.myPhotosLoading).toBe(false);
+    // Existing photos remain — failed pagination doesn't blank the grid.
+    expect(store.myPhotos.length).toBe(1);
   });
 });

@@ -157,6 +157,81 @@ describe('saved store', () => {
     expect(body).toEqual({ placeId: 99, collectionId: null });
   });
 
+  it('toggleSave(on) pushes savedPlaceIds BEFORE the POST resolves (optimistic, task #32)', async () => {
+    const store = useSavedStore();
+    expect(store.isSaved(42)).toBe(false);
+
+    // Hold the POST promise open so we can inspect state mid-flight.
+    let resolvePost: (v: { data: { saved: boolean; totalCount: number } }) => void = () => {};
+    mockApi.post.mockImplementationOnce(
+      () => new Promise((r) => { resolvePost = r; }),
+    );
+
+    const p = store.toggleSave(42);
+    // Yield once so the optimistic mutation lands.
+    await Promise.resolve();
+    // isSaved flips instantly — no await for the POST. This is the core
+    // claim of the optimistic behavior: the bookmark icon can re-render
+    // before any network round-trip lands.
+    expect(store.isSaved(42)).toBe(true);
+
+    // Post-await state depends on what `fetch()` returns; we've asserted
+    // what matters above. Unblock the POST so the test exits cleanly.
+    resolvePost({ data: { saved: true, totalCount: 1 } });
+    // Also mock the subsequent fetch so the await resolves without error.
+    mockApi.get.mockResolvedValueOnce({
+      data: {
+        collections: [],
+        items: [
+          {
+            placeId: 42,
+            name: 'x',
+            regionLabel: 'y',
+            coverImageUrl: 'z',
+            workId: 1,
+            workTitle: 'w',
+            distanceKm: null,
+            likeCount: 0,
+            visited: false,
+            collectionId: null,
+          },
+        ],
+        totalCount: 1,
+        nearbyRouteSuggestion: null,
+      },
+    });
+    await p;
+  });
+
+  it('toggleSave(on) rollbacks optimistic push when the POST fails (task #32)', async () => {
+    const store = useSavedStore();
+    expect(store.isSaved(42)).toBe(false);
+
+    mockApi.post.mockRejectedValueOnce(new Error('server down'));
+    await store.toggleSave(42);
+
+    // The pre-POST push was reverted — icon returns to outline.
+    expect(store.isSaved(42)).toBe(false);
+    expect(store.savedPlaceIds).not.toContain(42);
+    expect(store.error).toBe('server down');
+  });
+
+  it('toggleSave(off) rollbacks optimistic removal (items + savedPlaceIds) when POST fails', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+    const itemCountBefore = store.items.length;
+
+    mockApi.post.mockRejectedValueOnce(new Error('server down'));
+    await store.toggleSave(10);
+
+    // Rollback restored both the id and the full item row.
+    expect(store.isSaved(10)).toBe(true);
+    expect(store.savedPlaceIds).toContain(10);
+    expect(store.items.length).toBe(itemCountBefore);
+    expect(store.items.find((i) => i.placeId === 10)).toBeDefined();
+  });
+
   it('toggleSave(on) adds to savedPlaceIds AND re-fetches so items surfaces the new place (not just the id)', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useSavedStore();

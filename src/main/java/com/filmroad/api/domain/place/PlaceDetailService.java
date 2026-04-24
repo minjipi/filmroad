@@ -39,7 +39,8 @@ public class PlaceDetailService {
         boolean liked = placeLikeRepository.existsByUserIdAndPlaceId(currentUser.currentUserId(), place.getId());
 
         List<PlacePhotoDto> photos = placePhotoRepository
-                .findByPlaceIdOrderByOrderIndexAscIdAsc(place.getId(), PageRequest.of(0, PHOTO_LIMIT))
+                .findByPlaceIdOrderByOrderIndexAscIdAsc(place.getId(),
+                        currentUser.currentUserId(), PageRequest.of(0, PHOTO_LIMIT))
                 .stream()
                 .map(PlacePhotoDto::from)
                 .toList();

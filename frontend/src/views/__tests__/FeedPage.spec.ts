@@ -97,7 +97,7 @@ function mountFeed(overrides: {
           makePost(3),
         ],
         recommendedUsers: overrides.recommendedUsers ?? [makeUser(10), makeUser(11)],
-        tab: overrides.tab ?? 'POPULAR',
+        tab: overrides.tab ?? 'RECENT',
         workId: null,
         cursor: null,
         hasMore: false,
@@ -141,14 +141,14 @@ describe('FeedPage.vue', () => {
     const setTabSpy = vi.spyOn(store, 'setTab').mockResolvedValue();
 
     const tabs = wrapper.findAll('.feed-tabs .t');
-    // Order per FeedPage: 팔로잉 / 인기 / 내 주변 / 작품별.
-    expect(tabs.length).toBe(4);
-    expect(tabs.map((t) => t.text())).toEqual(['팔로잉', '인기', '내 주변', '작품별']);
-    // tab='POPULAR' (index 1) should have .on.
-    expect(tabs[0].classes()).not.toContain('on');
-    expect(tabs[1].classes()).toContain('on');
+    // Order per FeedPage (task #33): 최신 / 인기 / 팔로잉 / 내 주변 / 작품별.
+    expect(tabs.length).toBe(5);
+    expect(tabs.map((t) => t.text())).toEqual(['최신', '인기', '팔로잉', '내 주변', '작품별']);
+    // Default tab = RECENT (index 0) → .on marker on the first tab.
+    expect(tabs[0].classes()).toContain('on');
+    expect(tabs[1].classes()).not.toContain('on');
 
-    await tabs[2].trigger('click'); // 내 주변 → NEARBY
+    await tabs[3].trigger('click'); // 내 주변 → NEARBY
     expect(setTabSpy).toHaveBeenCalledWith('NEARBY');
   });
 
@@ -266,6 +266,48 @@ describe('FeedPage.vue', () => {
     // Saved → single-tap unsave path, picker never opens.
     expect(toggleSpy).toHaveBeenCalledWith(10);
     expect(pickerSpy).not.toHaveBeenCalled();
+  });
+
+  it('bookmark icon re-renders immediately when savedPlaceIds mutates (task #32 reactivity)', async () => {
+    const { wrapper } = mountFeed({ posts: [makePost(1)] });
+    await flushPromises();
+    const saved = useSavedStore();
+
+    // Initially unsaved — the icon stub carries the outline variant.
+    const saveCell = () => wrapper.find('[data-testid="feed-save"]');
+    const iconRef = () => saveCell().find('ion-icon-stub').attributes('icon');
+    const outlineIcon = iconRef();
+    expect(outlineIcon).toBeTruthy();
+
+    // Simulate CollectionPicker's optimistic push — the same mutation the
+    // real toggleSave(on) performs before its POST resolves.
+    saved.savedPlaceIds = [10];
+    await flushPromises();
+
+    // The icon attribute must flip — same cell, different icon ref.
+    const filledIcon = iconRef();
+    expect(filledIcon).toBeTruthy();
+    expect(filledIcon).not.toBe(outlineIcon);
+
+    // And flipping back behaves the same (unsave path).
+    saved.savedPlaceIds = [];
+    await flushPromises();
+    expect(iconRef()).toBe(outlineIcon);
+  });
+
+  it('feed-scroll container renders and hosts the post list (task #32 nav-clearance guard)', async () => {
+    // jsdom doesn't reliably expose scoped <style> text, so we can't assert
+    // on the computed padding-bottom rule directly. The behavioral guard
+    // is: the scroll container exists, all posts render inside it, and the
+    // tail spacer is present — those three together ensure the nav-clearance
+    // contract is wired up correctly even if we can't measure it.
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    const scroll = wrapper.find('.feed-scroll');
+    expect(scroll.exists()).toBe(true);
+    expect(scroll.findAll('article.post').length).toBe(3);
+    expect(scroll.find('.tail').exists()).toBe(true);
   });
 
   it('clicking the comment icon opens the CommentSheet with that photoId', async () => {

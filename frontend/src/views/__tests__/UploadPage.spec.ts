@@ -241,4 +241,86 @@ describe('UploadPage.vue', () => {
     expect(submitSpy).toHaveBeenCalledTimes(1);
     expect(replaceSpy).toHaveBeenCalledWith('/reward/10');
   });
+
+  it('upload error surfaces an inline retry banner; tapping 재시도 calls uploadStore.retry (task #31)', async () => {
+    const { wrapper } = mountUpload();
+    await flushPromises();
+    const store = useUploadStore();
+
+    // Simulate a prior failed submit — error set, loading=false.
+    store.error = '네트워크 오류';
+    await flushPromises();
+
+    const banner = wrapper.find('[data-testid="upload-error-banner"]');
+    expect(banner.exists()).toBe(true);
+    expect(banner.text()).toContain('네트워크 오류');
+
+    const fakeRes: PhotoResponse = {
+      id: 77,
+      imageUrl: 'https://cdn/p/77.jpg',
+      placeId: 10,
+      workId: 1,
+      workTitle: '도깨비',
+      workEpisode: '1회',
+      caption: null,
+      tags: [],
+      visibility: 'PUBLIC',
+      createdAt: '2026-04-23T00:00:00Z',
+    };
+    const retrySpy = vi.spyOn(store, 'retry').mockResolvedValue(fakeRes);
+
+    await wrapper.find('[data-testid="upload-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(retrySpy).toHaveBeenCalledTimes(1);
+    expect(replaceSpy).toHaveBeenCalledWith('/reward/10');
+  });
+
+  it('error banner is hidden while loading (progress bar takes over)', async () => {
+    const { wrapper } = mountUpload();
+    await flushPromises();
+    const store = useUploadStore();
+    store.error = '네트워크 오류';
+    store.loading = true;
+    await flushPromises();
+
+    // Banner suppressed during in-flight upload.
+    expect(wrapper.find('[data-testid="upload-error-banner"]').exists()).toBe(false);
+    // Progress bar is visible instead.
+    expect(wrapper.find('[data-testid="upload-progress"]').exists()).toBe(true);
+  });
+
+  it('offline mode: banner renders and "공유하기" is disabled (task #31)', async () => {
+    // Force navigator.onLine=false before the component mounts so useOnline()
+    // initializes to offline. Also fire the event once for good measure.
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      'onLine',
+    );
+    Object.defineProperty(window.navigator, 'onLine', {
+      configurable: true,
+      get: () => false,
+    });
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      window.dispatchEvent(new Event('offline'));
+      await flushPromises();
+
+      const banner = wrapper.find('[data-testid="upload-offline-banner"]');
+      expect(banner.exists()).toBe(true);
+      expect(banner.text()).toContain('인터넷 연결');
+
+      // Share button disabled — even with a valid place + photos.
+      const shareBtn = wrapper.find('button.post').element as HTMLButtonElement;
+      expect(shareBtn.disabled).toBe(true);
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window.navigator, 'onLine', originalDescriptor);
+      } else {
+        delete (window.navigator as unknown as { onLine?: boolean }).onLine;
+      }
+      window.dispatchEvent(new Event('online'));
+    }
+  });
 });

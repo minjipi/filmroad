@@ -125,6 +125,18 @@ export const useSavedStore = defineStore('saved', {
         useUiStore().showLoginPrompt('저장은 로그인 후 이용할 수 있어요.');
         return;
       }
+      // Optimistic toggle — update savedPlaceIds BEFORE the POST lands so
+      // bookmark icons across Feed / Gallery / PlaceDetail / Map flip
+      // immediately (task #32). The snapshot lets us roll back if the
+      // server rejects.
+      const wasSaved = this.savedPlaceIds.includes(placeId);
+      const itemsSnapshot = [...this.items];
+      if (wasSaved) {
+        this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
+        this.items = this.items.filter((i) => i.placeId !== placeId);
+      } else {
+        this.savedPlaceIds.push(placeId);
+      }
       try {
         // Only forward collectionId when the caller explicitly supplied one —
         // omitting it entirely keeps the server-side default ("unassigned"
@@ -136,6 +148,8 @@ export const useSavedStore = defineStore('saved', {
         if (collectionId !== undefined) body.collectionId = collectionId;
         const { data } = await api.post<{ saved: boolean; totalCount: number }>('/api/saved/toggle', body);
         this.totalCount = data.totalCount;
+        // Server may disagree with our optimistic assumption (rare: race
+        // between two tabs). Reconcile to whatever the server says.
         if (data.saved) {
           if (!this.savedPlaceIds.includes(placeId)) {
             this.savedPlaceIds.push(placeId);
@@ -151,6 +165,16 @@ export const useSavedStore = defineStore('saved', {
           this.items = this.items.filter((i) => i.placeId !== placeId);
         }
       } catch (e) {
+        // Rollback the optimistic update so the UI stays consistent with
+        // the actual server state.
+        if (wasSaved) {
+          if (!this.savedPlaceIds.includes(placeId)) {
+            this.savedPlaceIds.push(placeId);
+          }
+          this.items = itemsSnapshot;
+        } else {
+          this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
+        }
         this.error = e instanceof Error ? e.message : 'Failed to toggle save';
       }
     },

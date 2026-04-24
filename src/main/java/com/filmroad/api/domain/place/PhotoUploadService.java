@@ -4,7 +4,6 @@ import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.domain.badge.Badge;
-import com.filmroad.api.domain.badge.BadgeConditionType;
 import com.filmroad.api.domain.badge.BadgeRepository;
 import com.filmroad.api.domain.badge.UserBadge;
 import com.filmroad.api.domain.badge.UserBadgeRepository;
@@ -25,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,13 +33,34 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * 인증샷 업로드 — 파일 검증 → DB 저장 → 파일 write 순으로 수행.
+ * 파일 write 가 마지막이라, 검증/저장 중 실패가 나도 orphan 파일이 생기지 않는다.
+ * (파일 write 자체가 실패하면 throw → 트랜잭션 롤백되어 DB 엔티티도 남지 않음.)
+ *
+ * <h3>운영 전환 TODO (후속 task)</h3>
+ * <ul>
+ *   <li>로컬 filesystem → S3 (presigned URL 업로드, CDN 캐시 전면 적용). 현재는 `project.upload.path` 로컬 경로.</li>
+ *   <li>orphan 파일 청소 — DB 트랜잭션 커밋 이후 파일 write 가 FS 오류로 실패하는 경우 대비
+ *       주기적 스윕 job (예: PlacePhoto.imageUrl 과 실제 파일 시스템 diff) 추가.</li>
+ *   <li>썸네일 생성 파이프라인 — 업로드 시 Lambda/워커에서 320/640 리사이즈 원본 보관.</li>
+ *   <li>백업 — S3 cross-region replication 또는 주기적 snapshot.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class PhotoUploadService {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
+    private static final Set<String> ALLOWED_CONTENT_TYPES =
+            Set.of("image/jpeg", "image/jpg", "image/png", "image/webp");
+    // 확장자 입력 우회 방어: 영문/숫자만 허용.
+    private static final Pattern EXT_SAFE = Pattern.compile("^[a-z0-9]{1,10}$");
+    private static final int MAGIC_BYTE_PEEK = 12;
+
     private static final int POINTS_PER_UPLOAD = 50;
     private static final int POINTS_PER_LEVEL = 100;
     private static final int MAX_LEVEL = 10;
@@ -64,26 +85,38 @@ public class PhotoUploadService {
         Place place = placeRepository.findById(req.getPlaceId())
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
 
+        // 확장자 + Content-Type + magic byte 3단 검증. 한 개라도 통과 못 하면 업로드 거부.
         String extension = extractExtension(file.getOriginalFilename());
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+        if (!EXT_SAFE.matcher(extension).matches() || !ALLOWED_EXTENSIONS.contains(extension)) {
+            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
+        }
+        if (!isImageMagicByteValid(file)) {
             throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
         }
 
         String filename = UUID.randomUUID() + "." + extension;
-        Path target = Paths.get(uploadPath).resolve(filename);
-
-        try {
-            Files.createDirectories(target.getParent());
-            file.transferTo(target.toFile());
-        } catch (IOException e) {
-            throw BaseException.of(BaseResponseStatus.UPLOAD_FAILED);
+        Path uploadDir = Paths.get(uploadPath).toAbsolutePath().normalize();
+        Path target = uploadDir.resolve(filename).normalize();
+        // Path traversal 2차 방어 — 어떤 이유로든 target 이 uploadDir 바깥을 가리키면 거부.
+        if (!target.startsWith(uploadDir)) {
+            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
         }
 
         int nextOrderIndex = placePhotoRepository.findMaxOrderIndexByPlaceId(place.getId()) + 1;
         PhotoVisibility visibility = req.getVisibility() != null ? req.getVisibility() : PhotoVisibility.PUBLIC;
 
+        Long userId = currentUser.currentUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.RESPONSE_NULL_ERROR));
+
+        // --- DB 저장 먼저, 파일 write 가장 마지막 ---
         PlacePhoto savedPhoto = placePhotoRepository.save(PlacePhoto.builder()
                 .place(place)
+                .user(user)
                 .imageUrl("/uploads/" + filename)
                 .authorNickname(null)
                 .orderIndex(nextOrderIndex)
@@ -91,10 +124,6 @@ public class PhotoUploadService {
                 .visibility(visibility)
                 .tagsCsv(normalizeTags(req.getTags()))
                 .build());
-
-        Long userId = currentUser.currentUserId();
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> BaseException.of(BaseResponseStatus.RESPONSE_NULL_ERROR));
 
         if (!stampRepository.existsByUserIdAndPlaceId(userId, place.getId())) {
             stampRepository.save(Stamp.builder()
@@ -116,6 +145,15 @@ public class PhotoUploadService {
         int workPercent = workTotalCount == 0 ? 0 : (int) Math.round(100.0 * workStampCount / workTotalCount);
 
         List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, workStampCount, workTotalCount);
+
+        // DB 검증/저장 전부 성공 후, 마지막으로 파일을 실제 디스크에 기록.
+        // 여기서 IO 예외가 나면 트랜잭션 롤백되어 방금 저장한 PlacePhoto·Stamp·User 포인트 변경도 되돌아간다.
+        try {
+            Files.createDirectories(target.getParent());
+            file.transferTo(target.toFile());
+        } catch (IOException e) {
+            throw BaseException.of(BaseResponseStatus.UPLOAD_FAILED);
+        }
 
         StampRewardDto stampReward = StampRewardDto.builder()
                 .placeName(place.getName())
@@ -160,11 +198,42 @@ public class PhotoUploadService {
         return awarded;
     }
 
+    /**
+     * 파일 첫 바이트로 JPEG/PNG/WebP signature 확인. 확장자·Content-Type 우회 공격 방어.
+     */
+    private static boolean isImageMagicByteValid(MultipartFile file) {
+        byte[] head;
+        try (InputStream is = file.getInputStream()) {
+            head = is.readNBytes(MAGIC_BYTE_PEEK);
+        } catch (IOException e) {
+            return false;
+        }
+        if (head == null || head.length < 4) return false;
+        // JPEG: FF D8 FF
+        if ((head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8 && (head[2] & 0xFF) == 0xFF) {
+            return true;
+        }
+        // PNG: 89 50 4E 47
+        if ((head[0] & 0xFF) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G') {
+            return true;
+        }
+        // WebP: "RIFF" .... "WEBP"
+        if (head.length >= 12 && head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F'
+                && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P') {
+            return true;
+        }
+        return false;
+    }
+
     private static String extractExtension(String filename) {
         if (filename == null) return "";
-        int dot = filename.lastIndexOf('.');
-        if (dot < 0 || dot == filename.length() - 1) return "";
-        return filename.substring(dot + 1).toLowerCase();
+        // path separator 가 남아있어도 마지막 파일명만 본다 — "../evil.jsp" 같은 케이스 방어.
+        String base = filename.replace('\\', '/');
+        int slash = base.lastIndexOf('/');
+        if (slash >= 0) base = base.substring(slash + 1);
+        int dot = base.lastIndexOf('.');
+        if (dot < 0 || dot == base.length() - 1) return "";
+        return base.substring(dot + 1).toLowerCase();
     }
 
     private static String normalizeTags(String tags) {

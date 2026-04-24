@@ -5,6 +5,27 @@ vi.mock('@/services/api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
+// task #37: mock the geolocation composable so NEARBY tests can drive
+// success / null paths without touching navigator.geolocation.
+const { geolocationMock } = vi.hoisted(() => ({
+  geolocationMock: vi.fn<[], Promise<{ lat: number; lng: number } | null>>(),
+}));
+vi.mock('@/composables/useGeolocation', () => ({
+  getCurrentCoords: geolocationMock,
+}));
+
+// Stub toastController so the NEARBY-denied path's toast doesn't touch
+// real Ionic internals.
+const { toastCreateSpy } = vi.hoisted(() => ({
+  toastCreateSpy: vi
+    .fn()
+    .mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }),
+}));
+vi.mock('@ionic/vue', async () => {
+  const actual = await vi.importActual<typeof import('@ionic/vue')>('@ionic/vue');
+  return { ...actual, toastController: { create: toastCreateSpy } };
+});
+
 import api from '@/services/api';
 import {
   useFeedStore,
@@ -74,6 +95,21 @@ describe('feed store', () => {
     setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
+    geolocationMock.mockReset();
+    toastCreateSpy.mockClear();
+  });
+
+  it('default tab is RECENT and the first fetch forwards params.tab=RECENT (task #33)', async () => {
+    const store = useFeedStore();
+    // State default — no fetch yet, no setTab call.
+    expect(store.tab).toBe('RECENT');
+
+    mockApi.get.mockResolvedValueOnce({ data: page1 });
+    await store.fetch();
+
+    const [url, opts] = mockApi.get.mock.calls[0];
+    expect(url).toBe('/api/feed');
+    expect(opts?.params).toMatchObject({ tab: 'RECENT', limit: 5 });
   });
 
   it('fetch happy path populates posts/recommendedUsers/cursor and calls GET /api/feed', async () => {
@@ -91,7 +127,8 @@ describe('feed store', () => {
 
     const [url, opts] = mockApi.get.mock.calls[0];
     expect(url).toBe('/api/feed');
-    expect(opts?.params).toMatchObject({ tab: 'POPULAR', limit: 5 });
+    // Default tab flipped from POPULAR → RECENT in task #33.
+    expect(opts?.params).toMatchObject({ tab: 'RECENT', limit: 5 });
   });
 
   it('fetch failure surfaces the error message and clears loading', async () => {
@@ -109,8 +146,8 @@ describe('feed store', () => {
     await store.fetch();
     mockApi.get.mockClear();
 
-    // Same tab → no refetch.
-    await store.setTab('POPULAR');
+    // Same tab → no refetch (default is RECENT post task #33).
+    await store.setTab('RECENT');
     expect(mockApi.get).not.toHaveBeenCalled();
 
     // New tab → refetches and resets cursor.
@@ -139,7 +176,7 @@ describe('feed store', () => {
     expect(store.hasMore).toBe(false);
 
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ cursor: 'cursor-2', tab: 'POPULAR' });
+    expect(opts?.params).toMatchObject({ cursor: 'cursor-2', tab: 'RECENT' });
   });
 
   it('loadMore is a no-op when hasMore is false', async () => {
@@ -198,6 +235,127 @@ describe('feed store', () => {
     expect(u1?.following).toBe(true);
     const u2 = store.recommendedUsers.find((u) => u.userId === 2);
     expect(u2?.following).toBe(false);
+  });
+
+  // ---------- task #37: NEARBY tab geolocation wiring ----------
+
+  it('setTab(NEARBY) requests coords, caches them, and forwards lat/lng to GET /api/feed', async () => {
+    geolocationMock.mockResolvedValueOnce({ lat: 37.5665, lng: 126.978 });
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    expect(geolocationMock).toHaveBeenCalledTimes(1);
+    expect(store.nearbyCoords).toEqual({ lat: 37.5665, lng: 126.978 });
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({
+      tab: 'NEARBY',
+      lat: 37.5665,
+      lng: 126.978,
+    });
+  });
+
+  it('setTab(NEARBY) with denied permission shows an error toast and still fetches (no lat/lng)', async () => {
+    geolocationMock.mockResolvedValueOnce(null);
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    expect(geolocationMock).toHaveBeenCalledTimes(1);
+    expect(store.nearbyCoords).toBeNull();
+    // Toast fires with Korean denial copy.
+    const hasDeniedToast = toastCreateSpy.mock.calls.some((c) =>
+      ((c[0] as { message?: string })?.message ?? '').includes('위치 정보'),
+    );
+    expect(hasDeniedToast).toBe(true);
+    // Backend still called — with tab=NEARBY but no lat/lng. Server returns
+    // an empty array per the task #37 brief.
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ tab: 'NEARBY' });
+    expect(opts?.params?.lat).toBeUndefined();
+    expect(opts?.params?.lng).toBeUndefined();
+  });
+
+  it('NEARBY loadMore reuses cached coords without re-prompting geolocation', async () => {
+    // First entry caches coords.
+    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    mockApi.get.mockResolvedValueOnce({
+      data: {
+        posts: [makePost(1)],
+        hasMore: true,
+        nextCursor: 'cur-1',
+      },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+    expect(geolocationMock).toHaveBeenCalledTimes(1);
+
+    // loadMore: geolocation NOT called again.
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [makePost(2)], hasMore: false, nextCursor: null },
+    });
+    await store.loadMore();
+    expect(geolocationMock).toHaveBeenCalledTimes(1);
+    const [, opts] = mockApi.get.mock.calls[1];
+    expect(opts?.params).toMatchObject({
+      tab: 'NEARBY',
+      lat: 10,
+      lng: 20,
+      cursor: 'cur-1',
+    });
+  });
+
+  it('setTab(NEARBY) does not re-request coords on re-entry while cached', async () => {
+    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    mockApi.get.mockResolvedValue({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    // Switch to another tab then back to NEARBY — no second geolocation call.
+    await store.setTab('RECENT');
+    await store.setTab('NEARBY');
+    expect(geolocationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('explicit fetch({lat,lng}) overrides the NEARBY cache', async () => {
+    // Cache a pair.
+    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    // Explicit override.
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    await store.fetch({ lat: 99, lng: -99 });
+    const [, opts] = mockApi.get.mock.calls[1];
+    expect(opts?.params).toMatchObject({ lat: 99, lng: -99 });
+  });
+
+  it('refreshNearbyCoords clears cache and re-requests (user retry after denial)', async () => {
+    geolocationMock.mockResolvedValueOnce(null); // initial denial
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+    expect(store.nearbyCoords).toBeNull();
+
+    // User taps retry → coords granted this time.
+    geolocationMock.mockResolvedValueOnce({ lat: 37.5, lng: 127 });
+    await store.refreshNearbyCoords();
+    expect(store.nearbyCoords).toEqual({ lat: 37.5, lng: 127 });
   });
 
   it('toggleFollow failure surfaces the error message without mutating following', async () => {

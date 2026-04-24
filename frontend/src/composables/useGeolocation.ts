@@ -1,109 +1,76 @@
-import { readonly, ref, type Ref } from 'vue';
-
-export type GeolocationStatus =
-  | 'idle' // 아직 요청한 적 없음
-  | 'pending' // 브라우저 권한 팝업 또는 좌표 fix 대기 중
-  | 'granted' // 좌표 수신 완료
-  | 'denied' // 사용자가 차단 — 자동 재요청 금지 (브라우저가 팝업 안 띄움)
-  | 'unavailable'; // navigator.geolocation 없음 / 타임아웃 / POSITION_UNAVAILABLE
+/**
+ * Thin wrapper around `navigator.geolocation.getCurrentPosition` that
+ * presents a Promise-based API with a bounded timeout and swallows every
+ * failure mode into `null`. Consumers treat "no coords" as a first-class
+ * state — the feed's NEARBY tab renders an empty result in that case
+ * instead of bubbling an exception up into the UI.
+ *
+ * Failure cases that all return `null` (not throw):
+ *   - `navigator.geolocation` missing (older browsers / SSR)
+ *   - PERMISSION_DENIED (user said no)
+ *   - POSITION_UNAVAILABLE (GPS off, no signal)
+ *   - TIMEOUT (default 5s — task #37 brief)
+ *   - any other unexpected throw
+ */
 
 export interface Coords {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
+  lat: number;
+  lng: number;
 }
 
-export interface GeolocationRequestOptions {
-  /** getCurrentPosition 타임아웃. 기본 8초 — 모바일 첫 fix 감안. */
+export interface GetCurrentCoordsOptions {
+  /** Milliseconds before giving up. Defaults to 5000 per task #37 brief. */
   timeoutMs?: number;
-  /**
-   * 이 시간 이내에 받아둔 좌표가 있으면 브라우저가 재측정 없이 즉시 재사용.
-   * 기본 60초 — 홈 화면 탭 왕복 시 반복 권한 팝업 방지.
-   */
+  /** Whether to request high-accuracy GPS (slower but more precise). */
+  highAccuracy?: boolean;
+  /** Max age of a cached fix the browser may return without a fresh read. */
   maximumAgeMs?: number;
-  /** 기본 false. 첫 진입에선 배터리를 아낀다. */
-  enableHighAccuracy?: boolean;
 }
 
-// 모듈 레벨 싱글톤 — 여러 컴포넌트가 useGeolocation() 을 호출해도 같은
-// 상태/캐시를 공유한다. 홈의 priming 플로우와 미래의 지도 화면이 한 번 받은
-// 좌표를 중복 요청 없이 재사용할 수 있게 하려는 의도.
-const coordsRef: Ref<Coords | null> = ref(null);
-const statusRef: Ref<GeolocationStatus> = ref<GeolocationStatus>('idle');
-const errorRef: Ref<string | null> = ref(null);
-let pendingRequest: Promise<Coords | null> | null = null;
+const DEFAULT_TIMEOUT = 5000;
 
-function isSupported(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    'geolocation' in navigator &&
-    typeof navigator.geolocation?.getCurrentPosition === 'function'
-  );
-}
-
-function request(opts: GeolocationRequestOptions = {}): Promise<Coords | null> {
-  // 동시 호출 병합 — 여러 곳에서 request() 를 연속 호출해도 브라우저 팝업은
-  // 한 번만 뜨도록.
-  if (pendingRequest) return pendingRequest;
-
-  if (!isSupported()) {
-    statusRef.value = 'unavailable';
-    errorRef.value = 'Geolocation API not available';
-    return Promise.resolve(null);
+export async function getCurrentCoords(
+  options: GetCurrentCoordsOptions = {},
+): Promise<Coords | null> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    return null;
   }
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT;
+  const highAccuracy = options.highAccuracy ?? false;
+  const maximumAgeMs = options.maximumAgeMs ?? 60_000;
 
-  statusRef.value = 'pending';
-  errorRef.value = null;
+  return new Promise<Coords | null>((resolve) => {
+    // Belt-and-suspenders timer: if the platform geolocation ignores our
+    // `timeout` option (some Safari versions do), this guarantees the
+    // caller still unblocks at `timeoutMs`.
+    let settled = false;
+    const settle = (value: Coords | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => settle(null), timeoutMs);
 
-  pendingRequest = new Promise<Coords | null>((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        coordsRef.value = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        };
-        statusRef.value = 'granted';
-        pendingRequest = null;
-        resolve(coordsRef.value);
-      },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          statusRef.value = 'denied';
-        } else {
-          // POSITION_UNAVAILABLE / TIMEOUT / insecure-context 는 UX 상 모두
-          // "위치를 받을 수 없음" 으로 동일하게 폴백 처리.
-          statusRef.value = 'unavailable';
-        }
-        errorRef.value = err.message || `Geolocation error ${err.code}`;
-        pendingRequest = null;
-        resolve(null);
-      },
-      {
-        enableHighAccuracy: opts.enableHighAccuracy ?? false,
-        timeout: opts.timeoutMs ?? 8000,
-        maximumAge: opts.maximumAgeMs ?? 60000,
-      },
-    );
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          clearTimeout(timer);
+          settle({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          // Any error code (permission, unavailable, timeout) → null.
+          clearTimeout(timer);
+          settle(null);
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: timeoutMs,
+          maximumAge: maximumAgeMs,
+        },
+      );
+    } catch {
+      clearTimeout(timer);
+      settle(null);
+    }
   });
-
-  return pendingRequest;
-}
-
-function reset(): void {
-  // 테스트용. 싱글톤 상태를 깨끗이 리셋.
-  coordsRef.value = null;
-  statusRef.value = 'idle';
-  errorRef.value = null;
-  pendingRequest = null;
-}
-
-export function useGeolocation() {
-  return {
-    coords: readonly(coordsRef),
-    status: readonly(statusRef),
-    error: readonly(errorRef),
-    request,
-    reset,
-  };
 }

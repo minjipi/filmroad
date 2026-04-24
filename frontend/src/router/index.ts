@@ -50,6 +50,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/profile/edit',
+    name: 'ProfileEdit',
+    component: () => import('../views/ProfileEditPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/camera',
     name: 'Camera',
     component: () => import('../views/CameraPage.vue'),
