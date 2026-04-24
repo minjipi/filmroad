@@ -74,7 +74,7 @@ export interface ShotDetail {
   author: ShotAuthor;
   place: ShotPlace;
   work: ShotWork;
-  comments: ShotComment[];
+  topComments: ShotComment[];
   moreCommentsCount: number;
 }
 

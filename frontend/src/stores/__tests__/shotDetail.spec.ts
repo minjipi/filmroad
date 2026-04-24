@@ -49,7 +49,7 @@ const fixture: ShotDetail = {
     episode: '1회',
     sceneTimestamp: '00:15:24',
   },
-  comments: [
+  topComments: [
     {
       id: 1,
       content: '와 이 구도 대박…',
