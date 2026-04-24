@@ -62,6 +62,12 @@ export interface CheckEmailResult {
   reason?: string | null;
 }
 
+export interface UpdateProfilePayload {
+  nickname?: string;
+  bio?: string;
+  avatarUrl?: string;
+}
+
 const TOKEN_KEY = 'filmroad_access_token';
 
 function readStoredToken(): string | null {
@@ -195,6 +201,17 @@ export const useAuthStore = defineStore('auth', {
         params: { email },
       });
       return data;
+    },
+    async updateProfile(payload: UpdateProfilePayload): Promise<boolean> {
+      this.error = null;
+      try {
+        const { data } = await api.patch<AuthUser>('/api/users/me', payload);
+        this.user = asProfileUser(data);
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Failed to update profile';
+        return false;
+      }
     },
     async logout(): Promise<void> {
       try {

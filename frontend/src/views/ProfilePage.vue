@@ -70,18 +70,39 @@
           </div>
         </nav>
 
-        <!-- 인증샷 (기존) -->
-        <div v-if="localTab === 'photos'" class="grid3" data-testid="tab-photos">
-          <div
-            v-for="(cell, idx) in gridCells"
-            :key="cell.key"
-            class="c"
-            data-testid="shot-cell"
-            @click="onOpenShot(idx + 1)"
-          >
-            <img v-if="cell.imageUrl" :src="cell.imageUrl" :alt="cell.tag ?? ''" />
-            <span v-if="cell.tag" class="tag">{{ cell.tag }}</span>
+        <!-- 인증샷 — backend `/api/users/me/photos` 실데이터 (task #35).
+             빈 상태 placeholder + 각 cell 의 작품 chip 을 workTitle 로. -->
+        <div
+          v-if="localTab === 'photos'"
+          class="tab-photos-wrap"
+          data-testid="tab-photos"
+        >
+          <div v-if="myPhotos.length > 0" class="grid3">
+            <div
+              v-for="photo in myPhotos"
+              :key="photo.id"
+              class="c"
+              data-testid="shot-cell"
+              @click="onOpenShot(photo.id)"
+            >
+              <img :src="photo.imageUrl" :alt="photo.placeName" />
+              <span v-if="photo.workTitle" class="tag">{{ photo.workTitle }}</span>
+            </div>
           </div>
+          <p
+            v-else-if="!myPhotosLoading && myPhotosLoaded"
+            class="empty-note"
+            data-testid="photos-empty"
+          >
+            아직 인증샷이 없어요
+          </p>
+          <p
+            v-else-if="myPhotosLoading"
+            class="empty-note"
+            data-testid="photos-loading"
+          >
+            불러오는 중…
+          </p>
         </div>
 
         <!-- 수집 중인 작품 목록 -->
@@ -126,8 +147,50 @@
           </div>
         </section>
 
-        <!-- 저장 탭은 task #20 에서 다시 `/saved` 페이지로 라우팅되도록 환원.
-             onSelectLocalTab 이 즉시 push 하므로 이 탭의 본문은 렌더되지 않는다. -->
+        <!-- 저장 탭 (task #36): in-place 컬렉션 요약. 11-saved.html 의
+             `.collection-row` 가로 스크롤 패턴을 그대로 차용 — 132px 카드
+             + 1.05 aspect-ratio. 첫 카드 "기본" 은 `collectionId==null`
+             미분류 count; 사용자 컬렉션은 `/collection/:id` 로 네비게이션.
+             "새 컬렉션" 카드는 SavedPage 전용이라 여기선 렌더하지 않음. -->
+        <section
+          v-else-if="localTab === 'saved'"
+          class="saved-tab"
+          data-testid="tab-saved"
+        >
+          <div class="collection-row no-scrollbar">
+            <div
+              class="coll default"
+              data-testid="coll-default"
+              @click="onOpenDefaultCollection"
+            >
+              <div class="coll-placeholder">
+                <ion-icon :icon="bookmarkOutline" class="ic-24" />
+              </div>
+              <div>
+                <div class="name">기본</div>
+                <div class="count">
+                  <ion-icon :icon="bookmarkOutline" class="ic-16" />{{ defaultCount }}곳
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="c in savedCollections"
+              :key="c.id"
+              class="coll"
+              data-testid="coll-card"
+              @click="onOpenCollection(c.id)"
+            >
+              <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
+              <div />
+              <div>
+                <div class="name">{{ c.name }}</div>
+                <div class="count">
+                  <ion-icon :icon="locationOutline" class="ic-16" />{{ c.count }}곳
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
     </ion-content>
@@ -136,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon, actionSheetController } from '@ionic/vue';
 import {
   shareSocialOutline,
@@ -156,6 +219,7 @@ import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useProfileStore, type MiniMapPin } from '@/stores/profile';
 import { useStampbookStore } from '@/stores/stampbook';
+import { useSavedStore } from '@/stores/saved';
 import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
@@ -165,9 +229,11 @@ type LocalTab = 'photos' | 'stampbook' | 'saved';
 const router = useRouter();
 const profileStore = useProfileStore();
 const stampbookStore = useStampbookStore();
+const savedStore = useSavedStore();
 const authStore = useAuthStore();
-const { user, stats, miniMapPins, error } = storeToRefs(profileStore);
+const { user, stats, miniMapPins, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
 const { works: stampbookWorks } = storeToRefs(stampbookStore);
+const { collections: savedCollections, items: savedItems } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 
 // photos / stampbook 는 in-place 렌더, '저장' 탭은 task #20 에서 다시
@@ -216,48 +282,53 @@ function pinStyle(p: MiniMapPin): Record<string, string> {
   };
 }
 
-interface GridCell {
-  key: string;
-  imageUrl: string | null;
-  tag: string | null;
-}
-
-const PLACEHOLDER_IMAGES = [
-  'https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1555042827-6d274530c333?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1582200236025-a134371fa7db?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=300&q=80',
-];
-
-const gridCells = computed<GridCell[]>(() => {
-  const cellCount = Math.max(miniMapPins.value.length, 9);
-  const cells: GridCell[] = [];
-  for (let i = 0; i < cellCount; i += 1) {
-    cells.push({
-      key: `c-${i}`,
-      imageUrl: PLACEHOLDER_IMAGES[i % PLACEHOLDER_IMAGES.length],
-      tag: null,
-    });
-  }
-  return cells;
-});
+// task #35: PLACEHOLDER_IMAGES / gridCells were removed. Photos tab now
+// renders `profileStore.myPhotos` from `/api/users/me/photos`; the first
+// fetch fires on initial mount (see onMounted below) and on re-entry into
+// the 'photos' tab if state hasn't been loaded yet.
 
 async function onSelectLocalTab(t: LocalTab): Promise<void> {
-  if (t === 'saved') {
-    // 저장 탭은 전용 페이지(/saved)에서 컬렉션 · AI 루트 배너까지 함께
-    // 보여주는 구조라 in-place 렌더 대신 라우팅한다 (task #20).
-    await router.push('/saved');
-    return;
-  }
+  // task #36: saved tab is back to in-place — no router.push for any tab.
   localTab.value = t;
   if (t === 'stampbook' && stampbookWorks.value.length === 0) {
     await stampbookStore.fetch();
   }
+  // First-time entry into 'photos' triggers the fetch; subsequent entries
+  // reuse the cached list (users can scroll away and back without refetch).
+  if (t === 'photos' && !myPhotosLoaded.value && !myPhotosLoading.value) {
+    await profileStore.fetchMyPhotos();
+  }
+}
+
+// ---------- Saved tab (task #36) ----------
+// Derive the "기본" count from items whose collectionId is null — these are
+// unfiled places. savedStore is the single source of truth; no local cache.
+const defaultCount = computed(
+  () => savedItems.value.filter((i) => i.collectionId == null).length,
+);
+
+// First saved-tab entry fires savedStore.fetch() once. savedStore is shared
+// across SavedPage + CollectionPicker, so if the user already visited /saved
+// this session the cache hits and the fetch is a no-op.
+const savedFetched = ref(false);
+watch(
+  () => localTab.value,
+  async (v) => {
+    if (v !== 'saved' || savedFetched.value) return;
+    savedFetched.value = true;
+    await savedStore.fetch();
+    if (savedStore.error) await showError(savedStore.error);
+  },
+);
+
+async function onOpenDefaultCollection(): Promise<void> {
+  // No /collection/default route — SavedPage doubles as the unclassified
+  // drill-down until a dedicated default-collection page exists.
+  await router.push('/saved');
+}
+
+async function onOpenCollection(id: number): Promise<void> {
+  await router.push(`/collection/${id}`);
 }
 
 async function onOpenStampbook(): Promise<void> {
@@ -273,7 +344,7 @@ async function onOpenShot(id: number): Promise<void> {
 }
 
 async function onEdit(): Promise<void> {
-  await showInfo('프로필 편집은 곧 공개됩니다');
+  await router.push('/profile/edit');
 }
 
 async function onShare(): Promise<void> {
@@ -307,6 +378,14 @@ async function handleLogout(): Promise<void> {
 onMounted(async () => {
   await profileStore.fetch();
   if (error.value) await showError(error.value);
+  // Default tab is 'photos' — kick off the grid fetch right after the
+  // profile payload lands so the grid renders without an extra tab tap.
+  // Guarded by myPhotosLoaded so navigation back to /profile doesn't
+  // trigger a redundant refetch (and so test fixtures that pre-seed the
+  // grid aren't clobbered by a null-mock fetch).
+  if (localTab.value === 'photos' && !myPhotosLoaded.value) {
+    await profileStore.fetchMyPhotos();
+  }
 });
 </script>
 
@@ -530,6 +609,74 @@ ion-content.pf-content {
   border-radius: 999px;
   font-size: 9px; font-weight: 700;
   backdrop-filter: blur(4px);
+}
+
+/* ---------- 저장 탭 — 컬렉션 요약 (task #36) ----------
+   11-saved.html `.collection-row` 패턴 그대로: 132px 고정 폭 카드 +
+   aspect-ratio 1.05, 가로 스크롤. "기본" 카드는 이미지 없이 slate gradient
+   + 북마크 아이콘, 나머지는 커버 이미지 + gradient overlay. */
+.saved-tab {
+  padding: 8px 0 14px;
+}
+.collection-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 16px 14px;
+  overflow-x: auto;
+}
+.collection-row .coll {
+  flex-shrink: 0;
+  width: 132px;
+  aspect-ratio: 1.05;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #ffffff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+}
+.collection-row .coll::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.15), rgba(15, 23, 42, 0.8));
+  z-index: 1;
+}
+.collection-row .coll > * {
+  position: relative;
+  z-index: 2;
+}
+.collection-row .coll img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.collection-row .coll .name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.collection-row .coll .count {
+  font-size: 10.5px;
+  opacity: 0.9;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.collection-row .coll.default {
+  background: linear-gradient(135deg, #475569, #1e293b);
+}
+.collection-row .coll .coll-placeholder {
+  align-self: flex-start;
+  opacity: 0.75;
 }
 
 /* ---------- 스탬프북 요약 ---------- */
