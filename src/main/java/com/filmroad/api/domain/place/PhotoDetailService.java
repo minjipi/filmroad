@@ -7,6 +7,7 @@ import com.filmroad.api.domain.comment.PostComment;
 import com.filmroad.api.domain.comment.PostCommentRepository;
 import com.filmroad.api.domain.follow.UserFollowRepository;
 import com.filmroad.api.domain.like.PhotoLikeRepository;
+import com.filmroad.api.domain.place.dto.GroupPhotoSummary;
 import com.filmroad.api.domain.place.dto.PhotoDetailAuthorDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailCommentDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailPlaceDto;
@@ -66,6 +67,13 @@ public class PhotoDetailService {
         boolean saved = viewerId != null && place != null
                 && savedPlaceRepository.existsByUserIdAndPlaceId(viewerId, place.getId());
 
+        // 같은 batch(groupKey) 의 photo 전부를 orderIndex ASC 로 — visibility 필터는 쿼리에서 처리됨.
+        List<GroupPhotoSummary> groupPhotos = placePhotoRepository
+                .findAllByGroupKeyOrderByOrderIndexAsc(photo.getGroupKey(), viewerId)
+                .stream()
+                .map(GroupPhotoSummary::from)
+                .toList();
+
         return PhotoDetailResponse.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getImageUrl())
@@ -85,6 +93,7 @@ public class PhotoDetailService {
                         .map(PhotoDetailCommentDto::from)
                         .toList())
                 .moreCommentsCount(moreComments)
+                .groupPhotos(groupPhotos)
                 .build();
     }
 

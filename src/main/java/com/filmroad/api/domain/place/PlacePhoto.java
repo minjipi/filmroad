@@ -52,6 +52,11 @@ public class PlacePhoto extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // 같은 업로드 batch (멀티 파일 업로드) 에 속한 photo 들은 동일한 UUID v4 groupKey 를 공유.
+    // 단독 업로드도 자기만의 groupKey 를 갖는다. ShotDetailPage carousel 이 이 키로 묶여 조회됨.
+    @Column(name = "group_key", nullable = false, length = 36)
+    private String groupKey;
+
     @Column(name = "like_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private int likeCount;
 
