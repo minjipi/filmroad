@@ -27,21 +27,31 @@ public class PhotoUploadResponse {
     private Date createdAt;
     private StampRewardDto stamp;
     private RewardDeltaDto reward;
+    /**
+     * 같은 업로드 batch 의 사진 전체 (대표 사진 포함). 단일 업로드면 길이 1,
+     * 멀티 업로드면 orderIndex 오름차순. 프론트는 이 배열로 carousel 구성.
+     */
+    private List<GroupPhotoSummary> groupPhotos;
 
-    public static PhotoUploadResponse of(PlacePhoto photo, StampRewardDto stamp, RewardDeltaDto reward) {
+    /**
+     * `photos` 는 같은 batch 전체 (대표 = photos.get(0)) — orderIndex ASC 로 이미 정렬된 상태 가정.
+     */
+    public static PhotoUploadResponse of(List<PlacePhoto> photos, StampRewardDto stamp, RewardDeltaDto reward) {
+        PlacePhoto primary = photos.get(0);
         return PhotoUploadResponse.builder()
-                .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
-                .placeId(photo.getPlace().getId())
-                .workId(photo.getPlace().getWork().getId())
-                .workTitle(photo.getPlace().getWork().getTitle())
-                .workEpisode(photo.getPlace().getWorkEpisode())
-                .caption(photo.getCaption())
-                .tags(parseTags(photo.getTagsCsv()))
-                .visibility(photo.getVisibility())
-                .createdAt(photo.getCreatedAt())
+                .id(primary.getId())
+                .imageUrl(primary.getImageUrl())
+                .placeId(primary.getPlace().getId())
+                .workId(primary.getPlace().getWork().getId())
+                .workTitle(primary.getPlace().getWork().getTitle())
+                .workEpisode(primary.getPlace().getWorkEpisode())
+                .caption(primary.getCaption())
+                .tags(parseTags(primary.getTagsCsv()))
+                .visibility(primary.getVisibility())
+                .createdAt(primary.getCreatedAt())
                 .stamp(stamp)
                 .reward(reward)
+                .groupPhotos(photos.stream().map(GroupPhotoSummary::from).toList())
                 .build();
     }
 

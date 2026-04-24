@@ -28,12 +28,16 @@ public class PhotoController {
     private final PhotoDetailService photoDetailService;
     private final LikeService likeService;
 
+    /**
+     * 멀티 파일 업로드 — `files` 파트 이름으로 1~5장까지. 단일 업로드도 `files=...` 로 보낸다.
+     * meta 는 그대로 `meta` 파트에 JSON.
+     */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<PhotoUploadResponse> upload(
-            @RequestPart("file") MultipartFile file,
+            @RequestPart("files") java.util.List<MultipartFile> files,
             @RequestPart("meta") @Valid PhotoUploadRequest meta
     ) {
-        return BaseResponse.success(photoUploadService.upload(file, meta));
+        return BaseResponse.success(photoUploadService.upload(files, meta));
     }
 
     /** ShotDetailPage 용 단건 사진 상세. PUBLIC / 본인 / FOLLOWERS+팔로우 만 조회 가능, 나머지는 404. */

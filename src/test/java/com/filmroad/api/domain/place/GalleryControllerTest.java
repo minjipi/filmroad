@@ -77,6 +77,7 @@ class GalleryControllerTest {
                 .orderIndex(nextOrder)
                 .caption("user2 비공개")
                 .visibility(PhotoVisibility.PRIVATE)
+                .groupKey(java.util.UUID.randomUUID().toString())
                 .build());
 
         // user=1 의 ATOKEN 으로 갤러리 조회 → 방금 저장한 PRIVATE 사진이 응답에 없어야 한다.

@@ -33,4 +33,10 @@ public class PhotoDetailResponse {
 
     private List<PhotoDetailCommentDto> topComments;  // 상위 3개
     private int moreCommentsCount;                    // commentCount - topComments.size()
+
+    /**
+     * 같은 업로드 batch (groupKey) 의 photo 들 — orderIndex ASC. 단일 업로드면 길이 1.
+     * 프론트 carousel 은 이 배열의 길이 > 1 일 때 indicator/슬라이드 노출.
+     */
+    private List<GroupPhotoSummary> groupPhotos;
 }
