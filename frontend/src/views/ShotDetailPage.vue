@@ -35,8 +35,8 @@
       <div v-else-if="shot" class="sd-scroll no-scrollbar" data-testid="sd-loaded">
         <section class="compare">
           <img
-            v-if="shot.dramaSceneImageUrl"
-            :src="shot.dramaSceneImageUrl"
+            v-if="shot.sceneImageUrl"
+            :src="shot.sceneImageUrl"
             alt="드라마 원본"
           />
           <img :src="shot.imageUrl" class="top-img" :alt="shot.place.name" />
@@ -45,7 +45,7 @@
               <ion-icon :icon="swapHorizontal" class="ic-16" />
             </span>
           </div>
-          <span v-if="shot.dramaSceneImageUrl" class="lbl-chip l">드라마 원본</span>
+          <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
           <span class="lbl-chip r">
             <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
           </span>
@@ -133,7 +133,7 @@
           <div class="loc-map-thumb" />
           <div class="meta">
             <div class="pl">{{ shot.place.name }}</div>
-            <div class="ad">{{ shot.place.regionLabel }}</div>
+            <div class="ad">{{ shot.place.address ?? shot.place.regionLabel }}</div>
           </div>
           <button type="button" class="go" aria-label="open-place">
             <ion-icon :icon="arrowForward" class="ic-20" />
@@ -141,7 +141,7 @@
         </section>
 
         <section
-          v-if="shot.dramaSceneImageUrl"
+          v-if="shot.sceneImageUrl"
           class="scene-card"
           @click="onOpenScene"
         >
@@ -161,7 +161,7 @@
             <ion-icon :icon="chevronForwardOutline" class="ic-18 chev" />
           </div>
           <div class="body play">
-            <img :src="shot.dramaSceneImageUrl" :alt="shot.work.title" />
+            <img :src="shot.sceneImageUrl" :alt="shot.work.title" />
             <button type="button" class="play-btn" aria-label="play">
               <ion-icon :icon="play" class="ic-20" />
             </button>
@@ -178,19 +178,19 @@
           <div
             v-for="c in shot.topComments"
             :key="c.id"
-            :class="['cmt', c.isReply ? 'is-reply' : '']"
+            :class="['cmt', c.parentId != null ? 'is-reply' : '']"
             data-testid="sd-comment"
           >
             <div class="av">
               <img
-                v-if="c.authorAvatarUrl"
-                :src="c.authorAvatarUrl"
-                :alt="c.authorHandle"
+                v-if="c.author.avatarUrl"
+                :src="c.author.avatarUrl"
+                :alt="c.author.handle"
               />
             </div>
             <div class="body">
               <div class="top">
-                <span class="nm">{{ c.authorHandle }}</span>
+                <span class="nm">{{ c.author.handle }}</span>
                 <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
               </div>
               <div class="txt">{{ c.content }}</div>

@@ -3,7 +3,7 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 
-// Matches backend `PhotoDetailResponse` (task #39).
+// Matches backend `PhotoDetailResponse` (task #39 final shape).
 export type PhotoVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
 
 export interface ShotAuthor {
@@ -15,39 +15,54 @@ export interface ShotAuthor {
   isMe: boolean;
 }
 
+// Nested comment author — same shape as the post author minus `isMe`.
+export interface ShotCommentAuthor {
+  id: number;
+  nickname: string;
+  handle: string;
+  avatarUrl: string | null;
+  verified: boolean;
+}
+
 export interface ShotPlace {
   id: number;
   name: string;
   regionLabel: string;
-  latitude: number | null;
-  longitude: number | null;
+  /** Full street address — optional. Used by the loc-card when present. */
+  address: string | null;
+  latitude: number;
+  longitude: number;
 }
 
 export interface ShotWork {
   id: number;
   title: string;
-  type: string;
+  network: string | null;
   episode: string | null;
   sceneTimestamp: string | null;
-  posterUrl: string | null;
-  network: string | null;
 }
 
-export interface ShotTopComment {
+export interface ShotComment {
   id: number;
-  authorHandle: string;
-  authorAvatarUrl: string | null;
   content: string;
+  author: ShotCommentAuthor;
   createdAt: string;
+  /** Currently stub=0 on the backend (PostComment has no like field yet). */
   likeCount: number;
+  /** Currently stub=false. */
   liked: boolean;
-  isReply: boolean;
+  /**
+   * Thread parent id — `null` means top-level, non-null means a reply.
+   * Backend currently always emits null (no reply entity yet).
+   */
+  parentId: number | null;
 }
 
 export interface ShotDetail {
   id: number;
   imageUrl: string;
-  dramaSceneImageUrl: string | null;
+  /** Drama scene reference frame — null for non-scene shots. */
+  sceneImageUrl: string | null;
   caption: string | null;
   tags: string[];
   createdAt: string;
@@ -59,7 +74,7 @@ export interface ShotDetail {
   author: ShotAuthor;
   place: ShotPlace;
   work: ShotWork;
-  topComments: ShotTopComment[];
+  comments: ShotComment[];
   moreCommentsCount: number;
 }
 
