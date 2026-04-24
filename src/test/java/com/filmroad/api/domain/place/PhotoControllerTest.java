@@ -170,23 +170,44 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진은 비로그인도 200, place/work/author/comments 블록 포함")
+    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진: place/work/author/topComments 블록 + viewer-specific liked/saved")
     void getPhoto_publicSeed_returnsDetail() throws Exception {
-        // 시드 photo 100 은 place 10(주문진 영진해변), work 1(도깨비), user_id=1, visibility=PUBLIC.
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100"))
+        // 시드 photo 100 = place 10(주문진 영진해변), work 1(도깨비, tvN), user_id=1, visibility=PUBLIC.
+        // user=1 토큰 → isMe=true, photo_like(photo=100)/place_like(place=10)/saved_place(place=10) 전부 시드에 있어 liked=saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100")
+                        .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.results.id", is(100)))
                 .andExpect(jsonPath("$.results.imageUrl", notNullValue()))
                 .andExpect(jsonPath("$.results.visibility", is("PUBLIC")))
+                .andExpect(jsonPath("$.results.liked", is(true)))
+                .andExpect(jsonPath("$.results.saved", is(true)))
                 .andExpect(jsonPath("$.results.place.id", is(10)))
                 .andExpect(jsonPath("$.results.place.name", is("주문진 영진해변 방파제")))
                 .andExpect(jsonPath("$.results.work.id", is(1)))
                 .andExpect(jsonPath("$.results.work.title", is("도깨비")))
+                .andExpect(jsonPath("$.results.work.type", is("DRAMA")))
+                .andExpect(jsonPath("$.results.work.network", is("tvN")))
                 .andExpect(jsonPath("$.results.author.id", is(1)))
-                // isMe 는 viewer 기준. CurrentUser 가 DEMO_USER_ID=1 로 fallback 해서 author(1) == viewer(1) 이 되므로 true.
                 .andExpect(jsonPath("$.results.author.isMe", is(true)))
-                .andExpect(jsonPath("$.results.comments", notNullValue()));
+                .andExpect(jsonPath("$.results.topComments", notNullValue()))
+                .andExpect(jsonPath("$.results.moreCommentsCount", greaterThanOrEqualTo(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 타 유저 PUBLIC 사진: isMe=false, liked/saved 는 viewer 에 없으면 false")
+    void getPhoto_foreignPublic_isMeFalseAndViewerSpecificFlags() throws Exception {
+        // photo 101 = place 10, user_id=2 (이서준), visibility=PUBLIC. user=1 토큰으로 조회.
+        // user=1 은 photo 101 에 대한 photo_like 없음 → liked=false.
+        // place 10 은 user=1 saved_place(place=10) 있음 → saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/101")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.author.id", is(2)))
+                .andExpect(jsonPath("$.results.author.isMe", is(false)))
+                .andExpect(jsonPath("$.results.liked", is(false)))
+                .andExpect(jsonPath("$.results.saved", is(true)));
     }
 
     @Test

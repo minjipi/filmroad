@@ -2,6 +2,7 @@ package com.filmroad.api.domain.place.dto;
 
 import com.filmroad.api.domain.place.Place;
 import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.work.WorkType;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -13,6 +14,8 @@ import lombok.Getter;
 public class PhotoDetailWorkDto {
     private Long id;
     private String title;
+    private WorkType type;
+    private String posterUrl;
     private String network;
     private String episode;
     private String sceneTimestamp;
@@ -22,6 +25,8 @@ public class PhotoDetailWorkDto {
         return PhotoDetailWorkDto.builder()
                 .id(work.getId())
                 .title(work.getTitle())
+                .type(work.getType())
+                .posterUrl(work.getPosterUrl())
                 .network(work.getNetwork())
                 .episode(place == null ? null : place.getWorkEpisode())
                 .sceneTimestamp(place == null ? null : place.getSceneTimestamp())

@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PhotoDetailService {
 
-    private static final int COMMENT_PREVIEW_LIMIT = 5;
+    private static final int COMMENT_PREVIEW_LIMIT = 3;
 
     private final PlacePhotoRepository placePhotoRepository;
     private final PostCommentRepository postCommentRepository;
@@ -69,7 +69,7 @@ public class PhotoDetailService {
         return PhotoDetailResponse.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getImageUrl())
-                .sceneImageUrl(place == null ? null : place.getSceneImageUrl())
+                .dramaSceneImageUrl(place == null ? null : place.getSceneImageUrl())
                 .caption(photo.getCaption())
                 .tags(parseTags(photo.getTagsCsv()))
                 .visibility(photo.getVisibility())
@@ -81,8 +81,8 @@ public class PhotoDetailService {
                 .author(author)
                 .place(PhotoDetailPlaceDto.from(place))
                 .work(place == null ? null : PhotoDetailWorkDto.of(place.getWork(), place))
-                .comments(commentPreview.stream()
-                        .map(c -> PhotoDetailCommentDto.from(c, viewerId))
+                .topComments(commentPreview.stream()
+                        .map(PhotoDetailCommentDto::from)
                         .toList())
                 .moreCommentsCount(moreComments)
                 .build();
