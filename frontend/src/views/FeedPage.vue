@@ -4,11 +4,21 @@
       <header class="feed-head">
         <h1>탐색</h1>
         <div class="head-actions">
-          <button class="icon-btn" type="button" aria-label="notifications" @click="onNotifs">
+          <button
+            class="icon-btn"
+            type="button"
+            aria-label="notifications"
+            @click="onNotifs"
+          >
             <ion-icon :icon="heartOutline" class="ic-20" />
             <span class="dot" />
           </button>
-          <button class="icon-btn" type="button" aria-label="messages" @click="onMessages">
+          <button
+            class="icon-btn"
+            type="button"
+            aria-label="messages"
+            @click="onMessages"
+          >
             <ion-icon :icon="paperPlaneOutline" class="ic-20" />
           </button>
         </div>
@@ -27,115 +37,92 @@
           :key="t.key"
           :class="['t', tab === t.key ? 'on' : '']"
           @click="onSelectTab(t.key)"
-        >{{ t.label }}</div>
+        >
+          {{ t.label }}
+        </div>
       </nav>
 
       <div class="feed-scroll no-scrollbar">
-        <template v-for="(p, idx) in posts" :key="p.id">
-          <article class="post">
-            <div class="post-head">
-              <div class="avatar">
-                <img v-if="p.author.avatarUrl" :src="p.author.avatarUrl" :alt="p.author.handle" />
-              </div>
-              <div class="meta">
-                <div class="nm">
-                  {{ p.author.handle }}
-                  <ion-icon v-if="p.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
-                </div>
-                <div class="loc">
-                  <span class="drama">{{ p.work.title }}</span>·{{ p.place.name }}
-                </div>
-              </div>
-              <button class="more" type="button" aria-label="more" @click="onMore">
-                <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
-              </button>
-            </div>
-
-            <div class="post-image">
-              <div v-if="p.sceneCompare && p.dramaSceneImageUrl" class="compare-wrap">
-                <img :src="p.dramaSceneImageUrl" class="compare-top" alt="drama scene" />
-                <img :src="p.imageUrl" :alt="p.place.name" />
-                <div class="compare-divider" />
-                <div class="compare-lbl-top">드라마 원본</div>
-                <div class="compare-lbl-bot">내 인증샷</div>
-                <div class="drama-badge">
-                  <ion-icon :icon="filmOutline" class="ic-16" />
-                  <template v-if="p.work.workEpisode">{{ p.work.workEpisode }}</template>
-                  <template v-if="p.work.sceneTimestamp"> {{ p.work.sceneTimestamp }}</template>
-                </div>
-              </div>
-              <div v-else class="single-img">
-                <img :src="p.imageUrl" :alt="p.place.name" />
-                <div class="drama-badge dark">
-                  <ion-icon :icon="locationOutline" class="ic-16" />{{ p.place.regionLabel }}
-                </div>
-              </div>
-            </div>
-
-            <div class="post-actions">
-              <span :class="['a', p.liked ? 'on' : '']" @click="onToggleLike(p)">
-                <ion-icon :icon="p.liked ? heart : heartOutline" class="ic-22" />
-                {{ formatCount(p.likeCount) }}
-              </span>
-              <span class="a" @click="onComment(p)">
-                <ion-icon :icon="chatbubbleOutline" class="ic-22" />
-                {{ formatCount(p.commentCount) }}
-              </span>
-              <span class="a" @click="onShare">
-                <ion-icon :icon="paperPlaneOutline" class="ic-22" />
-              </span>
-              <span class="spacer" />
-              <span class="a" data-testid="feed-save" @click="onToggleSave(p)">
-                <ion-icon
-                  :icon="isSaved(p.place.id) ? bookmark : bookmarkOutline"
-                  class="ic-22"
-                />
-              </span>
-            </div>
-
-            <div class="post-caption">
-              <div v-if="p.caption" class="caption-text">
-                <b>{{ p.author.handle }}</b> {{ p.caption }}
-              </div>
-              <div v-if="p.visitedAt" class="visit-chip">
-                <ion-icon :icon="checkmarkCircle" class="ic-16" />여기 다녀왔어요
-              </div>
-            </div>
-            <div class="post-time">{{ formatRelativeTime(p.createdAt) }}</div>
-          </article>
-
-          <section
-            v-if="idx === 0 && recommendedUsers.length > 0"
-            class="reco-strip"
+        <!-- Work-title chip row — filters the grid client-side. "전체"
+             resets to the full list. Mirrors 13-feed.html's .chip-row. -->
+        <div class="chip-row no-scrollbar">
+          <div
+            :class="['c', activeChip === null ? 'on' : '']"
+            data-testid="feed-chip"
+            data-chip="전체"
+            @click="onSelectChip(null)"
           >
-            <h3><span class="sp">추천</span> 같은 작품 인증 중인 사람들</h3>
-            <div class="reco-row no-scrollbar">
-              <div
-                v-for="u in recommendedUsers"
-                :key="u.userId"
-                class="reco-card"
-              >
-                <div class="th">
-                  <img v-if="u.avatarUrl" :src="u.avatarUrl" :alt="u.handle" />
-                </div>
-                <div class="body">
-                  <div class="t">{{ u.handle }}</div>
-                  <div class="s">{{ recoProgressText(u) }}</div>
-                  <button
-                    :class="['follow', u.following ? 'followed' : '']"
-                    type="button"
-                    @click="onFollow(u)"
-                  >{{ u.following ? '팔로잉' : '팔로우' }}</button>
-                </div>
+            <ion-icon :icon="flameOutline" class="ic-16" />전체
+          </div>
+          <div
+            v-for="c in chips"
+            :key="c"
+            :class="['c', activeChip === c ? 'on' : '']"
+            data-testid="feed-chip"
+            :data-chip="c"
+            @click="onSelectChip(c)"
+          >
+            {{ c }}
+          </div>
+        </div>
+
+        <!-- Featured hero — the highest-like post after chip-filter. Tapping
+             opens the shot detail directly. -->
+        <div
+          v-if="featured"
+          class="featured-wrap"
+          data-testid="feed-featured"
+          @click="onOpenShot(featured.id)"
+        >
+          <div class="featured">
+            <img :src="featured.imageUrl" :alt="featured.place.name" />
+            <div class="info">
+              <span class="tag">
+                <ion-icon :icon="flameOutline" class="ic-16" />오늘의 인기
+              </span>
+              <div class="t">{{ featured.caption ?? featured.place.name }}</div>
+              <div class="s">
+                {{ featured.author.handle }} · {{ featured.work.title }}
+                <span class="dot" />♥ {{ formatCount(featured.likeCount) }}
               </div>
             </div>
-          </section>
-        </template>
+          </div>
+        </div>
 
-        <p v-if="posts.length === 0 && !loading && tab === 'FOLLOWING'" class="empty-note">
-          아직 팔로우한 사용자가 없어요<br />추천에서 팔로우해보세요
-        </p>
-        <p v-else-if="posts.length === 0 && !loading" class="empty-note">표시할 게시물이 없어요</p>
+        <div class="sec-h">
+          <span>최근 인증샷</span>
+          <span
+            class="more"
+            data-testid="feed-see-all"
+            @click="onOpenDetailFeed"
+          >전체보기 ›</span>
+        </div>
+
+        <!-- 3-column grid of remaining posts. Compare-mode posts get a
+             center vertical divider; multi/video posts carry a top-right
+             type icon. Tap → /shot/:id (task #38 parity). -->
+        <div class="grid" data-testid="feed-grid">
+          <div
+            v-for="p in gridPosts"
+            :key="p.id"
+            :class="['cell', p.sceneCompare ? 'compare' : '']"
+            data-testid="feed-grid-cell"
+            :data-post-id="p.id"
+            @click="onOpenShot(p.id)"
+          >
+            <img :src="p.imageUrl" :alt="p.place.name" />
+            <span class="drama">{{ p.work.title }}</span>
+            <span class="likes">
+              <ion-icon :icon="heart" class="ic-16" />{{ formatCount(p.likeCount) }}
+            </span>
+          </div>
+          <p
+            v-if="gridPosts.length === 0 && featured === null && !loading"
+            class="empty-note"
+          >
+            표시할 인증샷이 없어요
+          </p>
+        </div>
 
         <ion-infinite-scroll
           v-if="hasMore"
@@ -150,17 +137,11 @@
       </div>
     </ion-content>
     <FrTabBar :model-value="'feed'" />
-    <CommentSheet
-      :photo-id="activeCommentPhotoId"
-      :open="activeCommentPhotoId !== null"
-      @close="activeCommentPhotoId = null"
-      @created="onCommentCreated"
-    />
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import {
   IonPage,
   IonContent,
@@ -173,39 +154,19 @@ import {
   heartOutline,
   paperPlaneOutline,
   searchOutline,
-  checkmarkCircle,
-  ellipsisHorizontal,
-  filmOutline,
-  locationOutline,
-  chatbubbleOutline,
-  bookmark,
-  bookmarkOutline,
+  flameOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
-import { useFeedStore, type FeedPost, type FeedTab, type FeedUser } from '@/stores/feed';
-import { useSavedStore } from '@/stores/saved';
-import { useUiStore } from '@/stores/ui';
+import { useFeedStore, type FeedTab } from '@/stores/feed';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
-import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
-import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const feedStore = useFeedStore();
-const savedStore = useSavedStore();
-const uiStore = useUiStore();
 const router = useRouter();
-const { posts, recommendedUsers, tab, hasMore, loading, error } = storeToRefs(feedStore);
+const { posts, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
 
-const isSaved = (id: number): boolean => savedStore.isSaved(id);
-
-const activeCommentPhotoId = ref<number | null>(null);
-
-// Tab order places 최신 first (task #33 — RECENT is the new default), then
-// 인기, 팔로잉, 내 주변, 작품별. 13-feed.html shows "팔로잉 · 인기 · 내 주변 ·
-// 작품별" — the design predates the RECENT addition; we prepend here rather
-// than reshuffle the rest.
 const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'RECENT', label: '최신' },
   { key: 'POPULAR', label: '인기' },
@@ -214,14 +175,55 @@ const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'BY_WORK', label: '작품별' },
 ];
 
+// Chip filter — derives the distinct set of work titles from the current
+// `posts` so the row always reflects what the grid can actually surface.
+// "전체" (null) disables the filter. Kept client-side for now; a later
+// iteration could push this to the server as `workTitle` param.
+const activeChip = ref<string | null>(null);
+const chips = computed<string[]>(() => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of posts.value) {
+    const t = p.work.title;
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+});
+
+// Filtered posts (chip applied). featured = highest-like from the filtered
+// set; grid = everything else.
+const filteredPosts = computed(() => {
+  if (activeChip.value === null) return posts.value;
+  return posts.value.filter((p) => p.work.title === activeChip.value);
+});
+const featured = computed(() => {
+  if (filteredPosts.value.length === 0) return null;
+  // Pick the highest-like post as the hero. Stable ordering via slice().
+  return filteredPosts.value
+    .slice()
+    .sort((a, b) => b.likeCount - a.likeCount)[0];
+});
+const gridPosts = computed(() => {
+  const f = featured.value;
+  if (!f) return filteredPosts.value;
+  return filteredPosts.value.filter((p) => p.id !== f.id);
+});
+
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 }
 
 async function onSelectTab(t: FeedTab): Promise<void> {
+  activeChip.value = null;
   await feedStore.setTab(t);
   if (error.value) await showError(error.value);
+}
+
+function onSelectChip(c: string | null): void {
+  activeChip.value = c;
 }
 
 async function onInfinite(ev: Event): Promise<void> {
@@ -230,38 +232,15 @@ async function onInfinite(ev: Event): Promise<void> {
   if (target) await target.complete();
 }
 
-async function onToggleLike(p: FeedPost): Promise<void> {
-  await feedStore.toggleLikePost(p.id);
-  if (error.value) await showError(error.value);
+async function onOpenShot(id: number): Promise<void> {
+  await router.push(`/shot/${id}`);
 }
 
-async function onToggleSave(p: FeedPost): Promise<void> {
-  const pid = p.place.id;
-  if (savedStore.isSaved(pid)) {
-    await savedStore.toggleSave(pid);
-    if (savedStore.error) await showError(savedStore.error);
-    return;
-  }
-  uiStore.openCollectionPicker(pid);
-}
-
-function onComment(p: FeedPost): void {
-  activeCommentPhotoId.value = p.id;
-}
-
-function onCommentCreated(): void {
-  const id = activeCommentPhotoId.value;
-  if (id == null) return;
-  const post = posts.value.find((x) => x.id === id);
-  if (post) post.commentCount += 1;
-}
-
-async function onShare(): Promise<void> {
-  await showInfo('공유는 곧 공개됩니다');
-}
-
-async function onMore(): Promise<void> {
-  await showInfo('메뉴는 곧 공개됩니다');
+async function onOpenDetailFeed(): Promise<void> {
+  // "전체보기 ›" takes the user into the Instagram-style full-card scroll
+  // (per 13-feed-detail.html). Routing target is /feed/detail; the grid
+  // stays as the /feed landing for quick Explore.
+  await router.push('/feed/detail');
 }
 
 async function onNotifs(): Promise<void> {
@@ -276,22 +255,8 @@ async function onSearch(): Promise<void> {
   await router.push('/search');
 }
 
-async function onFollow(u: FeedUser): Promise<void> {
-  await feedStore.toggleFollow(u.userId);
-  if (error.value) await showError(error.value);
-}
-
-function recoProgressText(u: FeedUser): string {
-  if (u.stampCountForWork <= 0) return '';
-  if (u.workTitle) return `${u.workTitle} ${u.stampCountForWork}곳 수집`;
-  return `${u.stampCountForWork}곳 수집`;
-}
-
 onMounted(async () => {
   await feedStore.fetch();
-  if (recommendedUsers.value.length === 0) {
-    await feedStore.fetchRecommended();
-  }
   if (error.value) await showError(error.value);
 });
 </script>
@@ -303,9 +268,8 @@ ion-content.feed-content {
 
 .feed-scroll {
   overflow-y: auto;
-  /* FrTabBar occupies 84px + sab at the bottom; 120px leaves ~36px of
-     breathing room so the last post card's border-bottom + visit-chip
-     aren't covered by the nav. (task #32) */
+  /* FrTabBar occupies 84px + sab; keep 120px clearance so the last grid
+     row + the infinite-scroll spinner don't bump into the nav. */
   padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
@@ -317,13 +281,18 @@ ion-content.feed-content {
 }
 .feed-head h1 {
   margin: 0;
-  font-size: 24px; font-weight: 900;
+  font-size: 24px;
+  font-weight: 900;
   letter-spacing: -0.03em;
   color: var(--fr-ink);
 }
-.head-actions { display: flex; gap: 6px; }
+.head-actions {
+  display: flex;
+  gap: 6px;
+}
 .icon-btn {
-  width: 40px; height: 40px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   background: var(--fr-bg-muted);
   color: var(--fr-ink-2);
@@ -336,8 +305,10 @@ ion-content.feed-content {
 }
 .icon-btn .dot {
   position: absolute;
-  top: 10px; right: 10px;
-  width: 8px; height: 8px;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--fr-coral);
   border: 2px solid var(--fr-bg-muted);
@@ -379,283 +350,203 @@ ion-content.feed-content {
   border-bottom-color: var(--fr-ink);
 }
 
-.post {
-  padding: 18px 0 16px;
-  border-bottom: 8px solid var(--fr-line-soft);
-}
-.post-head {
+/* ---------- Chip filter row (work titles) ---------- */
+.chip-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 20px 12px;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 20px 4px;
 }
-.avatar {
-  width: 38px; height: 38px;
-  border-radius: 50%;
-  overflow: hidden;
+.chip-row .c {
   flex-shrink: 0;
-  background: #eee;
-}
-.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.post-head .meta { flex: 1; min-width: 0; }
-.post-head .nm {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-2);
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--fr-ink);
-}
-.post-head .verified { color: var(--fr-primary); }
-.post-head .loc {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11.5px;
-  color: var(--fr-ink-3);
-  margin-top: 2px;
-}
-.post-head .loc .drama {
-  color: var(--fr-primary);
-  font-weight: 700;
-}
-.post-head .more {
-  width: 28px; height: 28px;
-  color: var(--fr-ink-3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
+  letter-spacing: -0.01em;
   cursor: pointer;
+  user-select: none;
+}
+.chip-row .c.on {
+  background: var(--fr-ink);
+  color: #ffffff;
 }
 
-.post-image {
-  position: relative;
-  background: #000;
+/* ---------- Featured hero card ---------- */
+.featured-wrap {
+  padding: 10px 20px 4px;
 }
-.compare-wrap {
+.featured {
   position: relative;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
   overflow: hidden;
+  background: #000;
+  cursor: pointer;
 }
-.compare-wrap img {
-  position: absolute;
-  inset: 0;
+.featured img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.compare-top {
-  clip-path: inset(0 0 50% 0);
+.featured::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.05) 50%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
 }
-.compare-divider {
+.featured .info {
   position: absolute;
   left: 0;
   right: 0;
-  top: 50%;
-  height: 2px;
-  background: #ffffff;
+  bottom: 0;
+  padding: 14px;
+  color: #ffffff;
   z-index: 2;
 }
-.compare-divider::before,
-.compare-divider::after {
-  content: '';
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #ffffff;
-  top: 50%;
-  transform: translateY(-50%);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-.compare-divider::before { left: -12px; }
-.compare-divider::after { right: -12px; }
-.compare-lbl-top,
-.compare-lbl-bot {
-  position: absolute;
-  z-index: 3;
-  background: rgba(0, 0, 0, 0.75);
-  color: #ffffff;
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 999px;
-  letter-spacing: -0.01em;
-  backdrop-filter: blur(6px);
-}
-.compare-lbl-top { top: 12px; left: 12px; }
-.compare-lbl-bot { bottom: 12px; left: 12px; }
-.drama-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
-  background: rgba(20, 188, 237, 0.95);
-  color: #ffffff;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  backdrop-filter: blur(6px);
-}
-.drama-badge.dark {
-  background: rgba(15, 23, 42, 0.85);
-}
-
-.single-img {
-  aspect-ratio: 4 / 5;
-  position: relative;
-}
-.single-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.post-actions {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 20px 6px;
-  color: var(--fr-ink-2);
-}
-.post-actions .a {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.post-actions .a.on { color: var(--fr-coral); }
-.post-actions .spacer { flex: 1; }
-
-.post-caption {
-  padding: 6px 20px 4px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--fr-ink-2);
-}
-.post-caption b {
-  font-weight: 800;
-  color: var(--fr-ink);
-}
-.post-time {
-  padding: 8px 20px 0;
-  font-size: 11px;
-  color: var(--fr-ink-4);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.visit-chip {
+.featured .tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 7px 11px;
-  background: var(--fr-primary-soft);
-  color: var(--fr-primary);
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.reco-strip {
-  padding: 18px 0;
-  border-bottom: 8px solid var(--fr-line-soft);
-  background: #fafbfc;
-}
-.reco-strip h3 {
-  padding: 0 20px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 10.5px;
   font-weight: 800;
-  margin: 0 0 12px;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--fr-ink);
-}
-.reco-strip h3 .sp {
-  font-size: 10px;
-  color: #ffffff;
-  background: var(--fr-violet);
-  padding: 2px 7px;
+  padding: 4px 9px;
   border-radius: 999px;
-  font-weight: 800;
-  letter-spacing: 0;
+  background: rgba(20, 188, 237, 0.95);
+  margin-bottom: 7px;
 }
-.reco-row {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 0 20px;
-}
-.reco-card {
-  flex-shrink: 0;
-  width: 128px;
-  background: #ffffff;
-  border: 1px solid var(--fr-line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.reco-card .th {
-  width: 100%;
-  height: 128px;
-  background: #eef2f6;
-  overflow: hidden;
-}
-.reco-card .th img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.reco-card .body { padding: 10px; }
-.reco-card .t {
-  font-size: 12px;
+.featured .t {
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.25;
+}
+.featured .s {
+  font-size: 11.5px;
+  margin-top: 3px;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.featured .s .dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0.5;
+}
+
+/* ---------- Section header ---------- */
+.sec-h {
+  padding: 18px 20px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   color: var(--fr-ink);
 }
-.reco-card .s {
-  font-size: 10.5px;
-  color: var(--fr-ink-3);
-  margin-top: 3px;
-}
-.reco-card .follow {
-  margin-top: 8px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--fr-primary);
-  color: #ffffff;
-  border: none;
-  font-weight: 700;
+.sec-h .more {
   font-size: 11.5px;
-  width: 100%;
+  font-weight: 700;
+  color: var(--fr-primary);
   cursor: pointer;
 }
-.reco-card .follow.followed {
-  background: var(--fr-bg-muted);
-  color: var(--fr-ink-2);
+
+/* ---------- 3-column grid ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.cell {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  background: #eef2f6;
+}
+.cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+.cell:hover img {
+  transform: scale(1.04);
+}
+.cell .drama {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 3px 6px;
+  border-radius: 5px;
+  backdrop-filter: blur(6px);
+  letter-spacing: -0.01em;
+}
+.cell .likes {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cell.compare::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: #ffffff;
+  z-index: 1;
+  opacity: 0.9;
+}
+.cell.compare::after {
+  content: '비교';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 8.5px;
+  font-weight: 900;
+  color: #ffffff;
+  background: rgba(20, 188, 237, 0.92);
+  padding: 2px 5px;
+  border-radius: 999px;
+  z-index: 2;
+  letter-spacing: -0.01em;
 }
 
 .empty-note {
+  grid-column: 1 / -1;
   padding: 48px 8px;
   text-align: center;
   color: var(--fr-ink-3);
   font-size: 13px;
 }
 
-.tail { height: 20px; }
+.tail {
+  height: 20px;
+}
 </style>

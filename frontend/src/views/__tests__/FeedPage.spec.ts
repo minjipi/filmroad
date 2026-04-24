@@ -35,12 +35,14 @@ import {
   useFeedStore,
   type FeedPost,
   type FeedTab,
-  type FeedUser,
 } from '@/stores/feed';
-import { useSavedStore } from '@/stores/saved';
 import { mountWithStubs } from './__helpers__/mount';
 
-function makePost(id: number, overrides: Partial<FeedPost> = {}): FeedPost {
+function makePost(
+  id: number,
+  workTitle = '도깨비',
+  overrides: Partial<FeedPost> = {},
+): FeedPost {
   return {
     id,
     imageUrl: `https://cdn/p/${id}.jpg`,
@@ -56,7 +58,7 @@ function makePost(id: number, overrides: Partial<FeedPost> = {}): FeedPost {
       verified: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시 주문진읍' },
-    work: { id: 1, title: '도깨비', workEpisode: '1회', sceneTimestamp: '00:24:10' },
+    work: { id: 1, title: workTitle, workEpisode: '1회', sceneTimestamp: '00:24:10' },
     likeCount: 100 + id,
     commentCount: 3,
     liked: false,
@@ -66,63 +68,53 @@ function makePost(id: number, overrides: Partial<FeedPost> = {}): FeedPost {
   };
 }
 
-function makeUser(id: number, following = false): FeedUser {
-  return {
-    userId: id,
-    handle: `reco${id}`,
-    nickname: `추천${id}`,
-    avatarUrl: `https://img/r${id}.jpg`,
-    verified: false,
-    workTitle: '도깨비',
-    stampCountForWork: id,
-    following,
-  };
-}
-
 function mountFeed(overrides: {
   posts?: FeedPost[];
-  recommendedUsers?: FeedUser[];
   tab?: FeedTab;
 } = {}) {
   return mountWithStubs(FeedPage, {
     initialState: {
       feed: {
         posts: overrides.posts ?? [
-          makePost(1, {
-            sceneCompare: true,
-            dramaSceneImageUrl: 'https://cdn/scene/1.jpg',
-            liked: true,
-          }),
-          makePost(2, { visitedAt: '2026-04-20T10:00:00Z' }),
-          makePost(3),
+          // Post 1 (highest like) becomes the hero; the rest fill the grid.
+          makePost(1, '도깨비', { sceneCompare: true, likeCount: 1248 }),
+          makePost(2, '미스터션샤인', { likeCount: 834 }),
+          makePost(3, '갯마을차차차', { sceneCompare: true, likeCount: 562 }),
+          makePost(4, '도깨비', { likeCount: 472 }),
         ],
-        recommendedUsers: overrides.recommendedUsers ?? [makeUser(10), makeUser(11)],
+        recommendedUsers: [],
         tab: overrides.tab ?? 'RECENT',
         workId: null,
         cursor: null,
         hasMore: false,
         loading: false,
         error: null,
+        nearbyCoords: null,
       },
     },
     stubs: {
       'ion-infinite-scroll': true,
       'ion-infinite-scroll-content': true,
-      CommentSheet: {
-        props: ['photoId', 'open'],
-        template:
-          '<div class="comment-sheet-stub" :data-photo-id="photoId ?? \'\'" :data-open="open"></div>',
-      },
     },
   });
 }
 
-describe('FeedPage.vue', () => {
+describe('FeedPage.vue (Explore grid — task #40)', () => {
   beforeEach(() => {
     toastCreateSpy.mockClear();
     pushSpy.mockClear();
     replaceSpy.mockClear();
     backSpy.mockClear();
+  });
+
+  it('renders the head (탐색 title + notif/send icons) + search bar + tab row', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    expect(wrapper.find('.feed-head h1').text()).toBe('탐색');
+    expect(wrapper.find('.search-bar').text()).toContain('작품, 장소, 사용자 검색');
+    const tabs = wrapper.findAll('.feed-tabs .t');
+    expect(tabs.map((t) => t.text())).toEqual(['최신', '인기', '팔로잉', '내 주변', '작품별']);
   });
 
   it('tapping the search bar pushes /search', async () => {
@@ -134,233 +126,139 @@ describe('FeedPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/search');
   });
 
-  it('renders four tabs with the active one marked and setTab is dispatched on click', async () => {
+  it('chip row renders "전체" + one chip per distinct work title in posts (task #40)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    const chips = wrapper.findAll('[data-testid="feed-chip"]');
+    // 전체 + (도깨비 / 미스터션샤인 / 갯마을차차차) — duplicates collapsed.
+    expect(chips.length).toBe(4);
+    expect(chips.map((c) => c.attributes('data-chip'))).toEqual([
+      '전체',
+      '도깨비',
+      '미스터션샤인',
+      '갯마을차차차',
+    ]);
+    // Default active = 전체.
+    expect(chips[0].classes()).toContain('on');
+  });
+
+  it('featured hero is the highest-like post from the filtered set', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    const featured = wrapper.find('[data-testid="feed-featured"]');
+    expect(featured.exists()).toBe(true);
+    // Post 1 (likeCount 1248) wins.
+    expect(featured.find('img').attributes('src')).toBe('https://cdn/p/1.jpg');
+    expect(featured.text()).toContain('도깨비');
+    expect(featured.text()).toContain('1.2k');
+  });
+
+  it('grid renders one cell per non-featured post with drama chip + like count', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    const cells = wrapper.findAll('[data-testid="feed-grid-cell"]');
+    // 4 posts, 1 becomes the hero → grid shows the other 3.
+    expect(cells.length).toBe(3);
+    // Posts ordered by posts[] minus the hero.
+    expect(cells.map((c) => c.attributes('data-post-id'))).toEqual(['2', '3', '4']);
+    // Post 3 has sceneCompare=true → .compare class for the split-stripe marker.
+    expect(cells[1].classes()).toContain('compare');
+    expect(cells[0].classes()).not.toContain('compare');
+  });
+
+  it('tapping a grid cell pushes /shot/:id (task #38 wiring preserved)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const cells = wrapper.findAll('[data-testid="feed-grid-cell"]');
+    await cells[1].trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/shot/3');
+  });
+
+  it('tapping the featured hero pushes /shot/:id for the hero post', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="feed-featured"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/shot/1');
+  });
+
+  it('selecting a work chip narrows the grid + hero to matching posts (task #40)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    const chips = wrapper.findAll('[data-testid="feed-chip"]');
+    // Click "미스터션샤인".
+    const minister = chips.find((c) => c.attributes('data-chip') === '미스터션샤인');
+    expect(minister).toBeDefined();
+    await minister!.trigger('click');
+    await flushPromises();
+
+    // Hero becomes the only 미스터션샤인 post (id=2).
+    expect(
+      wrapper.find('[data-testid="feed-featured"] img').attributes('src'),
+    ).toBe('https://cdn/p/2.jpg');
+    // Grid is empty — only one match, and it's the hero.
+    expect(wrapper.findAll('[data-testid="feed-grid-cell"]').length).toBe(0);
+  });
+
+  it('selecting "전체" resets the filter and restores the full grid', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    // Filter then reset.
+    const chips = () => wrapper.findAll('[data-testid="feed-chip"]');
+    await chips().find((c) => c.attributes('data-chip') === '도깨비')!.trigger('click');
+    await flushPromises();
+    await chips().find((c) => c.attributes('data-chip') === '전체')!.trigger('click');
+    await flushPromises();
+
+    // Back to full grid (3 non-hero cells).
+    expect(wrapper.findAll('[data-testid="feed-grid-cell"]').length).toBe(3);
+  });
+
+  it('"전체보기 ›" tap pushes /feed/detail (full-card scroll)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="feed-see-all"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/feed/detail');
+  });
+
+  it('tab click dispatches feedStore.setTab + clears any active chip', async () => {
     const { wrapper } = mountFeed();
     await flushPromises();
     const store = useFeedStore();
     const setTabSpy = vi.spyOn(store, 'setTab').mockResolvedValue();
 
+    // Seed an active chip first.
+    const chips = wrapper.findAll('[data-testid="feed-chip"]');
+    await chips
+      .find((c) => c.attributes('data-chip') === '도깨비')!
+      .trigger('click');
+    await flushPromises();
+
+    // Flip to NEARBY.
     const tabs = wrapper.findAll('.feed-tabs .t');
-    // Order per FeedPage (task #33): 최신 / 인기 / 팔로잉 / 내 주변 / 작품별.
-    expect(tabs.length).toBe(5);
-    expect(tabs.map((t) => t.text())).toEqual(['최신', '인기', '팔로잉', '내 주변', '작품별']);
-    // Default tab = RECENT (index 0) → .on marker on the first tab.
-    expect(tabs[0].classes()).toContain('on');
-    expect(tabs[1].classes()).not.toContain('on');
-
-    await tabs[3].trigger('click'); // 내 주변 → NEARBY
+    await tabs[3].trigger('click'); // 내 주변
     expect(setTabSpy).toHaveBeenCalledWith('NEARBY');
+    // Active chip resets to 전체.
+    const after = wrapper.findAll('[data-testid="feed-chip"]');
+    expect(after[0].classes()).toContain('on');
   });
 
-  it('compare posts render .compare-wrap; single posts render .single-img', async () => {
-    const { wrapper } = mountFeed();
+  it('empty posts → no featured hero, no grid cells, empty-note shown', async () => {
+    const { wrapper } = mountFeed({ posts: [] });
     await flushPromises();
 
-    const posts = wrapper.findAll('.post');
-    expect(posts.length).toBe(3);
-    // Post 1 is sceneCompare=true → .compare-wrap.
-    expect(posts[0].find('.compare-wrap').exists()).toBe(true);
-    expect(posts[0].find('.single-img').exists()).toBe(false);
-    // Post 2/3 are not compare → .single-img only.
-    expect(posts[1].find('.single-img').exists()).toBe(true);
-    expect(posts[1].find('.compare-wrap').exists()).toBe(false);
-  });
-
-  it('renders .visit-chip only on posts with a visitedAt timestamp', async () => {
-    const { wrapper } = mountFeed();
-    await flushPromises();
-
-    const posts = wrapper.findAll('.post');
-    // Post 1: visitedAt null → no chip.
-    expect(posts[0].find('.visit-chip').exists()).toBe(false);
-    // Post 2: visitedAt set → chip rendered.
-    expect(posts[1].find('.visit-chip').exists()).toBe(true);
-    expect(posts[1].find('.visit-chip').text()).toContain('여기 다녀왔어요');
-  });
-
-  it('reco-strip is inserted after the first post when recommendedUsers is non-empty', async () => {
-    const { wrapper } = mountFeed();
-    await flushPromises();
-
-    const recoStrips = wrapper.findAll('.reco-strip');
-    expect(recoStrips.length).toBe(1);
-    // It should render 2 reco cards matching fixture length.
-    const cards = recoStrips[0].findAll('.reco-card');
-    expect(cards.length).toBe(2);
-    expect(cards[0].find('.t').text()).toBe('reco10');
-  });
-
-  it('reco-strip is suppressed when recommendedUsers is empty', async () => {
-    const { wrapper } = mountFeed({ recommendedUsers: [] });
-    await flushPromises();
-
-    expect(wrapper.findAll('.reco-strip').length).toBe(0);
-  });
-
-  it('post heart reflects liked state and clicking dispatches toggleLikePost', async () => {
-    const { wrapper } = mountFeed();
-    await flushPromises();
-    const store = useFeedStore();
-
-    const posts = wrapper.findAll('.post');
-    const heart1 = posts[0].find('.post-actions .a');
-    expect(heart1.classes()).toContain('on');
-    const heart2 = posts[1].find('.post-actions .a');
-    expect(heart2.classes()).not.toContain('on');
-
-    const toggleSpy = vi
-      .spyOn(store, 'toggleLikePost')
-      .mockImplementation(async (photoId: number) => {
-        const p = store.posts.find((x) => x.id === photoId);
-        if (p) {
-          p.liked = true;
-          p.likeCount += 1;
-        }
-      });
-
-    await heart2.trigger('click');
-    await flushPromises();
-
-    expect(toggleSpy).toHaveBeenCalledWith(2);
-    const heart2After = wrapper.findAll('.post')[1].find('.post-actions .a');
-    expect(heart2After.classes()).toContain('on');
-  });
-
-  it('bookmark on unsaved place opens the collection picker (task #29) — no direct toggleSave', async () => {
-    const { useUiStore } = await import('@/stores/ui');
-    const { wrapper } = mountFeed({
-      posts: [makePost(1), makePost(2)],
-    });
-    await flushPromises();
-
-    const saved = useSavedStore();
-    const ui = useUiStore();
-    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
-    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
-
-    const saves = wrapper.findAll('[data-testid="feed-save"]');
-    expect(saves.length).toBe(2);
-    // Neither place is saved yet → tap routes through the picker.
-    await saves[1].trigger('click');
-    expect(pickerSpy).toHaveBeenCalledWith(20);
-    expect(toggleSpy).not.toHaveBeenCalled();
-  });
-
-  it('bookmark on already-saved place unsaves directly (picker skipped)', async () => {
-    const { useUiStore } = await import('@/stores/ui');
-    const { wrapper } = mountFeed({
-      posts: [makePost(1), makePost(2)],
-    });
-    await flushPromises();
-
-    const saved = useSavedStore();
-    const ui = useUiStore();
-    saved.savedPlaceIds = [10, 20]; // both places saved
-    await flushPromises();
-
-    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
-    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
-
-    const saves = wrapper.findAll('[data-testid="feed-save"]');
-    await saves[0].trigger('click');
-    // Saved → single-tap unsave path, picker never opens.
-    expect(toggleSpy).toHaveBeenCalledWith(10);
-    expect(pickerSpy).not.toHaveBeenCalled();
-  });
-
-  it('bookmark icon re-renders immediately when savedPlaceIds mutates (task #32 reactivity)', async () => {
-    const { wrapper } = mountFeed({ posts: [makePost(1)] });
-    await flushPromises();
-    const saved = useSavedStore();
-
-    // Initially unsaved — the icon stub carries the outline variant.
-    const saveCell = () => wrapper.find('[data-testid="feed-save"]');
-    const iconRef = () => saveCell().find('ion-icon-stub').attributes('icon');
-    const outlineIcon = iconRef();
-    expect(outlineIcon).toBeTruthy();
-
-    // Simulate CollectionPicker's optimistic push — the same mutation the
-    // real toggleSave(on) performs before its POST resolves.
-    saved.savedPlaceIds = [10];
-    await flushPromises();
-
-    // The icon attribute must flip — same cell, different icon ref.
-    const filledIcon = iconRef();
-    expect(filledIcon).toBeTruthy();
-    expect(filledIcon).not.toBe(outlineIcon);
-
-    // And flipping back behaves the same (unsave path).
-    saved.savedPlaceIds = [];
-    await flushPromises();
-    expect(iconRef()).toBe(outlineIcon);
-  });
-
-  it('feed-scroll container renders and hosts the post list (task #32 nav-clearance guard)', async () => {
-    // jsdom doesn't reliably expose scoped <style> text, so we can't assert
-    // on the computed padding-bottom rule directly. The behavioral guard
-    // is: the scroll container exists, all posts render inside it, and the
-    // tail spacer is present — those three together ensure the nav-clearance
-    // contract is wired up correctly even if we can't measure it.
-    const { wrapper } = mountFeed();
-    await flushPromises();
-
-    const scroll = wrapper.find('.feed-scroll');
-    expect(scroll.exists()).toBe(true);
-    expect(scroll.findAll('article.post').length).toBe(3);
-    expect(scroll.find('.tail').exists()).toBe(true);
-  });
-
-  it('clicking the comment icon opens the CommentSheet with that photoId', async () => {
-    const { wrapper } = mountFeed();
-    await flushPromises();
-
-    const sheetBefore = wrapper.find('.comment-sheet-stub');
-    expect(sheetBefore.attributes('data-open')).toBe('false');
-
-    const posts = wrapper.findAll('.post');
-    const commentIcon = posts[1].findAll('.post-actions .a')[1];
-    await commentIcon.trigger('click');
-    await flushPromises();
-
-    const sheetAfter = wrapper.find('.comment-sheet-stub');
-    expect(sheetAfter.attributes('data-open')).toBe('true');
-    expect(sheetAfter.attributes('data-photo-id')).toBe('2');
-  });
-
-  it('reco-card follow button dispatches toggleFollow with the user id and reflects following state', async () => {
-    const { wrapper } = mountFeed({
-      recommendedUsers: [makeUser(10, false), makeUser(11, true)],
-    });
-    await flushPromises();
-    const store = useFeedStore();
-
-    const followSpy = vi
-      .spyOn(store, 'toggleFollow')
-      .mockImplementation(async (userId: number) => {
-        const u = store.recommendedUsers.find((x) => x.userId === userId);
-        if (u) u.following = !u.following;
-      });
-
-    const cards = wrapper.findAll('.reco-card');
-    expect(cards.length).toBe(2);
-    // First card: not following → button label 팔로우.
-    expect(cards[0].find('.follow').text()).toBe('팔로우');
-    expect(cards[0].find('.follow').classes()).not.toContain('followed');
-    // Second card: following → button label 팔로잉 + .followed class.
-    expect(cards[1].find('.follow').text()).toBe('팔로잉');
-    expect(cards[1].find('.follow').classes()).toContain('followed');
-
-    await cards[0].find('.follow').trigger('click');
-    await flushPromises();
-    expect(followSpy).toHaveBeenCalledWith(10);
-  });
-
-  it('FOLLOWING tab with empty posts renders the follow-empty empty-note', async () => {
-    const { wrapper } = mountFeed({ posts: [], tab: 'FOLLOWING' });
-    await flushPromises();
-
-    const note = wrapper.find('.empty-note');
-    expect(note.exists()).toBe(true);
-    expect(note.text()).toContain('아직 팔로우한 사용자가 없어요');
+    expect(wrapper.find('[data-testid="feed-featured"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="feed-grid-cell"]').length).toBe(0);
+    expect(wrapper.find('.empty-note').exists()).toBe(true);
   });
 });

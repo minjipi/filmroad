@@ -108,9 +108,18 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    // Explore grid (task #40, per design/pages/13-feed.html).
     path: '/feed',
     name: 'Feed',
     component: () => import('../views/FeedPage.vue'),
+  },
+  {
+    // Instagram-style full-card scroll (task #40, per
+    // design/pages/13-feed-detail.html). Reached via "전체보기 ›" in the
+    // Explore grid or deep-linked for the legacy full-scroll view.
+    path: '/feed/detail',
+    name: 'FeedDetail',
+    component: () => import('../views/FeedDetailPage.vue'),
   },
   {
     path: '/search',
