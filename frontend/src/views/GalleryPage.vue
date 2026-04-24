@@ -152,6 +152,7 @@ import {
   type GalleryViewMode,
 } from '@/stores/gallery';
 import { useSavedStore } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
 
@@ -160,6 +161,7 @@ const props = defineProps<{ placeId: string | number }>();
 const router = useRouter();
 const galleryStore = useGalleryStore();
 const savedStore = useSavedStore();
+const uiStore = useUiStore();
 const { placeHeader, photos, total, sort, viewMode, loading, error } = storeToRefs(galleryStore);
 const { showError } = useToast();
 
@@ -172,8 +174,12 @@ const placeSaved = computed<boolean>(() =>
 async function onToggleSave(): Promise<void> {
   const id = placeHeader.value?.placeId;
   if (id == null) return;
-  await savedStore.toggleSave(id);
-  if (savedStore.error) await showError(savedStore.error);
+  if (savedStore.isSaved(id)) {
+    await savedStore.toggleSave(id);
+    if (savedStore.error) await showError(savedStore.error);
+    return;
+  }
+  uiStore.openCollectionPicker(id);
 }
 
 const activeCommentPhotoId = ref<number | null>(null);

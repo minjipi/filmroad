@@ -76,17 +76,29 @@ const fixture: HomeResponse = {
   ],
 };
 
-function mountHomePage() {
+interface HomeTestOpts {
+  popularWorks?: Array<{
+    id: number;
+    title: string;
+    posterUrl?: string | null;
+    placeCount: number;
+  }>;
+  selectedWorkId?: number | null;
+  scope?: 'NEAR' | 'TRENDING' | 'POPULAR_WORKS';
+}
+
+function mountHomePage(opts: HomeTestOpts = {}) {
   const { wrapper } = mountWithStubs(HomePage, {
     initialState: {
       home: {
         hero: fixture.hero,
         works: fixture.works,
         places: [...fixture.places],
+        popularWorks: opts.popularWorks ?? [],
         loading: false,
         error: null,
-        selectedWorkId: null,
-        scope: 'NEAR',
+        selectedWorkId: opts.selectedWorkId ?? null,
+        scope: opts.scope ?? 'NEAR',
       },
     },
   });
@@ -149,6 +161,56 @@ describe('HomePage.vue', () => {
       message: '네트워크 오류',
       color: 'danger',
     }));
+  });
+
+  it('renders the 3-way segmented control including "인기 작품"', async () => {
+    const { wrapper } = mountHomePage();
+    await flushPromises();
+    const segs = wrapper.findAll('[data-testid="home-segmented"] .seg');
+    expect(segs.length).toBe(3);
+    expect(segs.map((s) => s.text())).toEqual([
+      '내 위치 근처',
+      '전국 트렌드',
+      '인기 작품',
+    ]);
+  });
+
+  it('POPULAR_WORKS scope swaps the place grid for a works grid (one card per popular work)', async () => {
+    const { wrapper } = mountHomePage({
+      popularWorks: [
+        { id: 1, title: '도깨비', posterUrl: 'https://img/p1.jpg', placeCount: 12 },
+        { id: 2, title: '이태원 클라쓰', posterUrl: null, placeCount: 6 },
+      ],
+      scope: 'POPULAR_WORKS',
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="works-grid"]').exists()).toBe(true);
+    // Place grid is hidden under POPULAR_WORKS.
+    expect(wrapper.findAll('.home-grid.works-grid .photo-card').length).toBe(2);
+    const cards = wrapper.findAll('[data-testid="work-card"]');
+    expect(cards[0].find('.cap .t').text()).toBe('도깨비');
+    expect(cards[0].text()).toContain('성지 12곳');
+    expect(cards[1].find('.cap .t').text()).toBe('이태원 클라쓰');
+    // No posterUrl → initial fallback renders.
+    expect(cards[1].find('.work-initial').exists()).toBe(true);
+    expect(cards[1].find('.work-initial').text()).toBe('이');
+  });
+
+  it('tapping a work card navigates to that work detail page (/work/:id)', async () => {
+    const { wrapper } = mountHomePage({
+      popularWorks: [
+        { id: 42, title: '도깨비', posterUrl: null, placeCount: 12 },
+      ],
+      scope: 'POPULAR_WORKS',
+    });
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="work-card"]').trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith('/work/42');
   });
 
   it('search icon pushes /search', async () => {

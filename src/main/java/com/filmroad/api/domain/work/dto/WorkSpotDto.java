@@ -18,4 +18,6 @@ public class WorkSpotDto {
     private boolean visited;
     private Date visitedAt;
     private Long orderIndex;
+    private Double latitude;
+    private Double longitude;
 }

@@ -226,28 +226,46 @@ describe('FeedPage.vue', () => {
     expect(heart2After.classes()).toContain('on');
   });
 
-  it('bookmark button dispatches savedStore.toggleSave(placeId) and reflects isSaved', async () => {
+  it('bookmark on unsaved place opens the collection picker (task #29) — no direct toggleSave', async () => {
+    const { useUiStore } = await import('@/stores/ui');
     const { wrapper } = mountFeed({
-      posts: [
-        makePost(1),
-        makePost(2),
-      ],
+      posts: [makePost(1), makePost(2)],
     });
     await flushPromises();
 
     const saved = useSavedStore();
+    const ui = useUiStore();
     const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
-    // Icon state before: neither place saved → outline variants.
-    const savesBefore = wrapper.findAll('[data-testid="feed-save"]');
-    expect(savesBefore.length).toBe(2);
+    const saves = wrapper.findAll('[data-testid="feed-save"]');
+    expect(saves.length).toBe(2);
+    // Neither place is saved yet → tap routes through the picker.
+    await saves[1].trigger('click');
+    expect(pickerSpy).toHaveBeenCalledWith(20);
+    expect(toggleSpy).not.toHaveBeenCalled();
+  });
 
-    // Flip saved state for post#1's place (id=10) and confirm icon updates.
-    saved.savedPlaceIds = [10];
+  it('bookmark on already-saved place unsaves directly (picker skipped)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountFeed({
+      posts: [makePost(1), makePost(2)],
+    });
     await flushPromises();
-    // Actual dispatch: tapping bookmark on post#2 (placeId=20).
-    await savesBefore[1].trigger('click');
-    expect(toggleSpy).toHaveBeenCalledWith(20);
+
+    const saved = useSavedStore();
+    const ui = useUiStore();
+    saved.savedPlaceIds = [10, 20]; // both places saved
+    await flushPromises();
+
+    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
+
+    const saves = wrapper.findAll('[data-testid="feed-save"]');
+    await saves[0].trigger('click');
+    // Saved → single-tap unsave path, picker never opens.
+    expect(toggleSpy).toHaveBeenCalledWith(10);
+    expect(pickerSpy).not.toHaveBeenCalled();
   });
 
   it('clicking the comment icon opens the CommentSheet with that photoId', async () => {

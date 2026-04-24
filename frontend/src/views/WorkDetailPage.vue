@@ -52,9 +52,45 @@
         <section v-if="activeChip === 'SPOTS'" class="section">
           <div class="section-h">
             <h2>촬영지 {{ spots.length }}곳</h2>
-            <span class="s">회차순</span>
+            <span class="s sort-trigger" data-testid="spots-sort">
+              회차순<ion-icon :icon="chevronDownOutline" class="ic-16" />
+            </span>
           </div>
-          <div class="spots">
+          <div class="view-toggle" data-testid="spots-view-toggle">
+            <button
+              type="button"
+              :class="['vt', spotsView === 'list' ? 'on' : '']"
+              data-testid="spots-view-list"
+              @click="spotsView = 'list'"
+            >
+              <ion-icon :icon="listOutline" class="ic-16" />목록
+            </button>
+            <button
+              type="button"
+              :class="['vt', spotsView === 'map' ? 'on' : '']"
+              data-testid="spots-view-map"
+              @click="spotsView = 'map'"
+            >
+              <ion-icon :icon="mapOutline" class="ic-16" />지도
+            </button>
+          </div>
+          <div
+            v-if="spotsView === 'map'"
+            class="spots-map"
+            data-testid="spots-map"
+          >
+            <KakaoMap
+              v-if="mapMarkers.length > 0"
+              :center="mapCenter"
+              :zoom="8"
+              :markers="mapMarkers"
+              :selected-id="null"
+              :visited-ids="visitedPlaceIds"
+              @marker-click="onOpenSpot"
+            />
+            <p v-else class="empty-note">좌표 정보가 없어 지도를 표시할 수 없어요</p>
+          </div>
+          <div v-else class="spots">
             <div
               v-for="s in spots"
               :key="s.placeId"
@@ -72,7 +108,14 @@
                   <ion-icon :icon="locationOutline" class="ic-16" />
                   {{ s.regionShort }}<template v-if="s.workEpisode"> · {{ s.workEpisode }}</template><template v-if="s.sceneTimestamp"> {{ s.sceneTimestamp }}</template>
                 </div>
-                <div v-if="s.visited && s.visitedAt" class="e mint">{{ formatVisited(s.visitedAt) }} 인증완료</div>
+                <div
+                  v-if="s.visited && s.visitedAt"
+                  class="e mint"
+                  data-testid="spot-visited"
+                >
+                  {{ formatVisited(s.visitedAt) }} 인증완료
+                  <ion-icon :icon="checkmark" class="ic-14" />
+                </div>
                 <div v-else-if="s.sceneDescription" class="e">{{ s.sceneDescription }}</div>
               </div>
               <div class="spot-action">
@@ -94,21 +137,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
   chevronForwardOutline,
+  chevronDownOutline,
   bookmarkOutline,
   star,
   locationOutline,
   checkmark,
   sparklesOutline,
+  listOutline,
+  mapOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useWorkDetailStore, type WorkDetailChip } from '@/stores/workDetail';
+import { useWorkDetailStore, type WorkDetailChip, type WorkDetailSpot } from '@/stores/workDetail';
 import FrEmptyState from '@/components/ui/FrEmptyState.vue';
+import KakaoMap from '@/components/map/KakaoMap.vue';
+import type { MapMarker } from '@/stores/map';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ id: string | number }>();
@@ -126,6 +174,37 @@ const chipList: Array<{ key: WorkDetailChip; label: string }> = [
   { key: 'CAST', label: '출연진' },
   { key: 'FANS', label: '다른 팬들' },
 ];
+
+const spotsView = ref<'list' | 'map'>('list');
+
+function hasCoords(s: WorkDetailSpot): boolean {
+  return typeof s.latitude === 'number' && typeof s.longitude === 'number';
+}
+
+const mapMarkers = computed<MapMarker[]>(() =>
+  spots.value.filter(hasCoords).map((s) => ({
+    id: s.placeId,
+    name: s.name,
+    latitude: s.latitude as number,
+    longitude: s.longitude as number,
+    workId: workIdNum.value,
+    workTitle: work.value?.title ?? '',
+    regionLabel: s.regionShort,
+    distanceKm: null,
+  })),
+);
+
+const mapCenter = computed<{ lat: number; lng: number }>(() => {
+  const pts = mapMarkers.value;
+  if (pts.length === 0) return { lat: 36.0, lng: 127.8 };
+  const lat = pts.reduce((a, p) => a + p.latitude, 0) / pts.length;
+  const lng = pts.reduce((a, p) => a + p.longitude, 0) / pts.length;
+  return { lat, lng };
+});
+
+const visitedPlaceIds = computed<number[]>(() =>
+  spots.value.filter((s) => s.visited).map((s) => s.placeId),
+);
 
 const kindLabel = computed(() => {
   const w = work.value;
@@ -386,6 +465,56 @@ ion-content.wd-content {
   color: var(--fr-ink-3);
   font-weight: 700;
 }
+.section-h .sort-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.ic-14 {
+  width: 14px;
+  height: 14px;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--fr-bg-muted);
+  padding: 4px;
+  border-radius: 12px;
+  margin: 10px 0 14px;
+}
+.view-toggle .vt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--fr-ink-3);
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+.view-toggle .vt.on {
+  background: #ffffff;
+  color: var(--fr-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.spots-map {
+  position: relative;
+  height: 320px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--fr-bg-muted);
+  margin-bottom: 12px;
+}
 
 .spots {
   display: flex;
@@ -457,7 +586,12 @@ ion-content.wd-content {
   font-weight: 700;
   margin-top: 2px;
 }
-.spot-info .e.mint { color: var(--fr-mint); }
+.spot-info .e.mint {
+  color: var(--fr-mint);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .spot-action {
   width: 34px; height: 34px;
   border-radius: 10px;

@@ -125,17 +125,14 @@ describe('SearchPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/place/10');
   });
 
-  it('work item click pushes /map with workId query', async () => {
+  it('work item click pushes /work/:id', async () => {
     const { wrapper } = mountSearch(fixture);
     const input = wrapper.find('input.sr-input');
     await input.setValue('도깨비');
     await flushPromises();
 
     await wrapper.find('[data-testid="work-item"]').trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith({
-      path: '/map',
-      query: { workId: '1' },
-    });
+    expect(pushSpy).toHaveBeenCalledWith('/work/1');
   });
 
   it('clear (×) button resets the input and keeps focus', async () => {

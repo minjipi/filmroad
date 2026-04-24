@@ -35,6 +35,8 @@ export interface WorkDetailSpot {
   visited: boolean;
   visitedAt: string | null;
   orderIndex: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface WorkDetailResponse {

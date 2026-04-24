@@ -21,6 +21,13 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
 
     long countByPlaceId(Long placeId);
 
+    /**
+     * 유저가 사진을 올린 적이 있는 place id 집합을 batch 로 반환. 컬렉션 상세의 "인증" 판정에 사용.
+     */
+    @Query("SELECT DISTINCT p.place.id FROM PlacePhoto p WHERE p.user.id = :userId AND p.place.id IN :placeIds")
+    List<Long> findDistinctPlaceIdsByUserIdAndPlaceIdIn(@Param("userId") Long userId,
+                                                       @Param("placeIds") java.util.Collection<Long> placeIds);
+
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl

@@ -169,6 +169,7 @@ import { usePlaceDetailStore, type PlacePhoto } from '@/stores/placeDetail';
 import { useUploadStore } from '@/stores/upload';
 import { useMapStore } from '@/stores/map';
 import { useSavedStore } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ id: string | number }>();
@@ -178,6 +179,7 @@ const detailStore = usePlaceDetailStore();
 const uploadStore = useUploadStore();
 const mapStore = useMapStore();
 const savedStore = useSavedStore();
+const uiStore = useUiStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError } = useToast();
 
@@ -247,8 +249,15 @@ async function onToggleLike(): Promise<void> {
 
 async function onToggleSave(): Promise<void> {
   if (!place.value) return;
-  await savedStore.toggleSave(place.value.id);
-  if (savedStore.error) await showError(savedStore.error);
+  const pid = place.value.id;
+  // Already saved → one-shot unsave (no picker). Fresh save → open the
+  // collection picker so the user can file it (or skip into "기본").
+  if (savedStore.isSaved(pid)) {
+    await savedStore.toggleSave(pid);
+    if (savedStore.error) await showError(savedStore.error);
+    return;
+  }
+  uiStore.openCollectionPicker(pid);
 }
 
 async function onViewMap(): Promise<void> {

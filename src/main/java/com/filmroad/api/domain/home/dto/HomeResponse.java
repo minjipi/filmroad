@@ -10,5 +10,6 @@ import java.util.List;
 public class HomeResponse {
     private HeroDto hero;
     private List<WorkSummaryDto> works;
+    private List<WorkSummaryDto> popularWorks;
     private List<PlaceSummaryDto> places;
 }

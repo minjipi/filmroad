@@ -103,4 +103,29 @@ class HomeControllerTest {
                 .andExpect(jsonPath("$.results.places", hasSize(0)))
                 .andExpect(jsonPath("$.results.works", hasSize(greaterThanOrEqualTo(4))));
     }
+
+    @Test
+    @DisplayName("GET /api/home → popularWorks 는 place trendingScore 합 DESC 정렬")
+    void getHome_popularWorks_orderedByAggregatedTrendingScore() throws Exception {
+        // 시드 기준 작품별 trendingScore 합:
+        //   도깨비(1)=98+80=178, 이태원 클라쓰(2)=90+70=160,
+        //   호텔 델루나(3)=84+75=159, 미스터션샤인(4)=92+65=157
+        // 따라서 popularWorks[0] = work id=1, trendingScore=178, placeCount=2.
+        mockMvc.perform(get("/api/home"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.popularWorks", hasSize(greaterThanOrEqualTo(4))))
+                .andExpect(jsonPath("$.results.popularWorks[0].id", is(1)))
+                .andExpect(jsonPath("$.results.popularWorks[0].title", is("도깨비")))
+                .andExpect(jsonPath("$.results.popularWorks[0].type", is("DRAMA")))
+                .andExpect(jsonPath("$.results.popularWorks[0].placeCount", is(2)))
+                .andExpect(jsonPath("$.results.popularWorks[0].trendingScore", is(178)))
+                // 두 번째는 이태원 클라쓰(160), 세 번째는 호텔 델루나(159).
+                .andExpect(jsonPath("$.results.popularWorks[1].id", is(2)))
+                .andExpect(jsonPath("$.results.popularWorks[1].trendingScore", is(160)))
+                .andExpect(jsonPath("$.results.popularWorks[2].id", is(3)))
+                .andExpect(jsonPath("$.results.popularWorks[2].trendingScore", is(159)))
+                // 기존 works[] 는 filter chip 용이라 경량 shape (id/title) 유지.
+                .andExpect(jsonPath("$.results.works[0].id", notNullValue()))
+                .andExpect(jsonPath("$.results.works[0].title", notNullValue()));
+    }
 }

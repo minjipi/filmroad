@@ -122,7 +122,39 @@ describe('saved store', () => {
 
     const [url, body] = mockApi.post.mock.calls[0];
     expect(url).toBe('/api/saved/toggle');
+    // No collectionId supplied → must be absent from the body (undefined is
+    // *not* serialized), so the server stays on the "unassigned" default.
     expect(body).toEqual({ placeId: 10 });
+  });
+
+  it('toggleSave(placeId, collectionId) forwards the collection id in the POST body (task #29)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+
+    mockApi.post.mockResolvedValueOnce({ data: { saved: true, totalCount: 3 } });
+    // Re-fetch after save-on; mock it so we don't throw.
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+
+    await store.toggleSave(99, 7);
+
+    const [url, body] = mockApi.post.mock.calls[0];
+    expect(url).toBe('/api/saved/toggle');
+    expect(body).toEqual({ placeId: 99, collectionId: 7 });
+  });
+
+  it('toggleSave(placeId, null) explicitly sends collectionId=null (drop into 기본)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+
+    mockApi.post.mockResolvedValueOnce({ data: { saved: true, totalCount: 3 } });
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+
+    await store.toggleSave(99, null);
+
+    const [, body] = mockApi.post.mock.calls[0];
+    expect(body).toEqual({ placeId: 99, collectionId: null });
   });
 
   it('toggleSave(on) adds to savedPlaceIds AND re-fetches so items surfaces the new place (not just the id)', async () => {
@@ -178,6 +210,55 @@ describe('saved store', () => {
 
     expect(store.items.find((i) => i.placeId === 10)).toBeUndefined();
     expect(mockApi.get).not.toHaveBeenCalled();
+  });
+
+  it('createCollection posts to /api/saved/collections and prepends the new card to collections', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useSavedStore();
+    await store.fetch();
+    expect(store.collections.length).toBe(2);
+
+    const serverResp = {
+      id: 99,
+      name: '새 여름 여행',
+      coverImageUrl: null,
+      count: 0,
+      gradient: null,
+    };
+    mockApi.post.mockResolvedValueOnce({ data: serverResp });
+
+    const created = await store.createCollection('  새 여름 여행  ');
+
+    expect(created).toEqual(serverResp);
+    const [url, body] = mockApi.post.mock.calls[0];
+    expect(url).toBe('/api/saved/collections');
+    // Server gets the trimmed name.
+    expect(body).toEqual({ name: '새 여름 여행' });
+    // Newly-created collection sits at index 0.
+    expect(store.collections[0]).toEqual(serverResp);
+    expect(store.collections.length).toBe(3);
+  });
+
+  it('createCollection rejects empty / whitespace-only input without hitting the server', async () => {
+    const store = useSavedStore();
+    const blank = await store.createCollection('   ');
+    expect(blank).toBeNull();
+    expect(store.error).toBeTruthy();
+    expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it('createCollection on an anonymous visitor shows the login prompt and does not POST', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    useAuthStore().user = null;
+    const uiMod = await import('@/stores/ui');
+    const promptSpy = vi.spyOn(uiMod.useUiStore(), 'showLoginPrompt');
+
+    const store = useSavedStore();
+    const result = await store.createCollection('anything');
+
+    expect(result).toBeNull();
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    expect(mockApi.post).not.toHaveBeenCalled();
   });
 
   it('toggleSave on an anonymous visitor opens the login prompt instead of hitting /api/saved/toggle', async () => {

@@ -138,21 +138,42 @@ describe('GalleryPage.vue', () => {
     expect(wrapper.find('.grid-view').exists()).toBe(false);
   });
 
-  it('bookmark on a photo row dispatches savedStore.toggleSave(placeHeader.placeId)', async () => {
+  it('bookmark on a photo row opens the collection picker with the gallery place id (task #29)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
     const { wrapper } = mountGallery();
     await flushPromises();
     const saved = useSavedStore();
+    const ui = useUiStore();
     const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
     const bookmarks = wrapper.findAll('[data-testid="gallery-save"]');
     // One bookmark per feed-view post.
     expect(bookmarks.length).toBe(galleryState.photos.length);
 
     await bookmarks[0].trigger('click');
-    expect(toggleSpy).toHaveBeenCalledWith(galleryState.placeHeader.placeId);
-    // Any photo in the same gallery saves the same place.
+    expect(pickerSpy).toHaveBeenCalledWith(galleryState.placeHeader.placeId);
+    expect(toggleSpy).not.toHaveBeenCalled();
+    // Any photo in the same gallery opens the picker for the same place.
     await bookmarks[2].trigger('click');
-    expect(toggleSpy).toHaveBeenLastCalledWith(galleryState.placeHeader.placeId);
+    expect(pickerSpy).toHaveBeenLastCalledWith(galleryState.placeHeader.placeId);
+  });
+
+  it('bookmark on already-saved place unsaves directly — picker stays closed', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountGallery();
+    await flushPromises();
+    const saved = useSavedStore();
+    const ui = useUiStore();
+    saved.savedPlaceIds = [galleryState.placeHeader.placeId];
+    await flushPromises();
+    const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
+
+    const bookmarks = wrapper.findAll('[data-testid="gallery-save"]');
+    await bookmarks[0].trigger('click');
+    expect(toggleSpy).toHaveBeenCalledWith(galleryState.placeHeader.placeId);
+    expect(pickerSpy).not.toHaveBeenCalled();
   });
 
   it('clicking a post comment icon opens the CommentSheet with that photoId', async () => {
