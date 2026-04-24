@@ -54,3 +54,7 @@ db/
 
 ### Claude Code 로컬 설정 (팀원 개인용) ###
 .claude/
+
+### 인증샷 업로드 디렉토리 (dev 기본값 ./uploads) ###
+# 파일은 `yyyy/MM/dd/<uuid>.<ext>` 로 쌓임. 운영은 UPLOAD_PATH override.
+/uploads/

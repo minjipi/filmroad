@@ -114,4 +114,6 @@ management:
       enabled: false
 project:
   upload:
-    path: ${UPLOAD_PATH:/tmp/filmroad-uploads}
+    # dev 기본값: 프로젝트 루트의 ./uploads (재부팅/tmp-wipe 에도 유지, .gitignore 에 등재).
+    # 운영은 UPLOAD_PATH 환경변수로 override (예: S3 마운트 볼륨 경로).
+    path: ${UPLOAD_PATH:./uploads}

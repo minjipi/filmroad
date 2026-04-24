@@ -28,6 +28,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -60,6 +63,11 @@ public class PhotoUploadService {
     // 확장자 입력 우회 방어: 영문/숫자만 허용.
     private static final Pattern EXT_SAFE = Pattern.compile("^[a-z0-9]{1,10}$");
     private static final int MAGIC_BYTE_PEEK = 12;
+
+    // 업로드 파일은 `yyyy/MM/dd` 서브폴더로 분산. 해외 배포에서도 동일한 bucketing 을 보장하려면
+    // KST 기준으로 고정 (JVM 기본 타임존이 UTC 일 때 날짜 경계가 어긋나는 걸 방지).
+    private static final ZoneId UPLOAD_BUCKET_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter DATE_BUCKET_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
     private static final int POINTS_PER_UPLOAD = 50;
     private static final int POINTS_PER_LEVEL = 100;
@@ -98,9 +106,14 @@ public class PhotoUploadService {
             throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
         }
 
+        // yyyy/MM/dd 서브폴더로 분산 저장. 한 디렉토리에 수천 수만 파일이 쌓이는 걸 막고
+        // 백업/아카이빙을 날짜 단위로 쪼갤 수 있게 함. 경로는 서비스 단에서 KST 고정.
+        String dateBucket = LocalDate.now(UPLOAD_BUCKET_ZONE).format(DATE_BUCKET_FORMAT);
         String filename = UUID.randomUUID() + "." + extension;
+        String relativePath = dateBucket + "/" + filename;
+
         Path uploadDir = Paths.get(uploadPath).toAbsolutePath().normalize();
-        Path target = uploadDir.resolve(filename).normalize();
+        Path target = uploadDir.resolve(relativePath).normalize();
         // Path traversal 2차 방어 — 어떤 이유로든 target 이 uploadDir 바깥을 가리키면 거부.
         if (!target.startsWith(uploadDir)) {
             throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
@@ -117,7 +130,7 @@ public class PhotoUploadService {
         PlacePhoto savedPhoto = placePhotoRepository.save(PlacePhoto.builder()
                 .place(place)
                 .user(user)
-                .imageUrl("/uploads/" + filename)
+                .imageUrl("/uploads/" + relativePath)
                 .authorNickname(null)
                 .orderIndex(nextOrderIndex)
                 .caption(req.getCaption())
