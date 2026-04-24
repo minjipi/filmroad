@@ -55,4 +55,72 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.user.level", is(5)))
                 .andExpect(jsonPath("$.results.user.levelName", is("성지 순례자")));
     }
+
+    @Test
+    @DisplayName("GET /api/users/me/photos → 본인 업로드 사진만 최신순(id DESC), 10개 이하면 nextCursor=null")
+    void getMyPhotos_returnsOwnPhotosNewestFirst() throws Exception {
+        // 시드상 user=1 의 사진 id: 100, 105, 113, 122, 131, 140, 145, 153, 162, 171 (10개). DESC 선두는 171.
+        // default limit=30 > 10 이므로 한 페이지로 끝 → nextCursor = null.
+        mockMvc.perform(get("/api/users/me/photos").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.photos", hasSize(10)))
+                .andExpect(jsonPath("$.results.photos[0].id", is(171)))
+                .andExpect(jsonPath("$.results.photos[0].placeId", is(17)))
+                .andExpect(jsonPath("$.results.photos[0].regionLabel", notNullValue()))
+                .andExpect(jsonPath("$.results.photos[0].workTitle", notNullValue()))
+                .andExpect(jsonPath("$.results.photos[0].visibility", is("PUBLIC")))
+                .andExpect(jsonPath("$.results.nextCursor").value(nullValue()))
+                // 다른 user 사진 (101=user2, 110=user2) 미포함 확인.
+                .andExpect(jsonPath("$.results.photos[*].id", not(hasItem(is(101)))))
+                .andExpect(jsonPath("$.results.photos[*].id", not(hasItem(is(110)))));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/photos?limit=3 → 3개 + nextCursor = 마지막 id (다음 페이지 있음)")
+    void getMyPhotos_limitApplied_setsNextCursor() throws Exception {
+        mockMvc.perform(get("/api/users/me/photos")
+                        .param("limit", "3")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.photos", hasSize(3)))
+                .andExpect(jsonPath("$.results.photos[0].id", is(171)))
+                .andExpect(jsonPath("$.results.photos[1].id", is(162)))
+                .andExpect(jsonPath("$.results.photos[2].id", is(153)))
+                // 총 10 개 중 3 개만 가져왔으므로 다음 페이지 있음.
+                .andExpect(jsonPath("$.results.nextCursor", is(153)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/photos?cursor=153&limit=3 → cursor 미만만 이어서 반환")
+    void getMyPhotos_cursorPagination_continuesAfterCursor() throws Exception {
+        mockMvc.perform(get("/api/users/me/photos")
+                        .param("cursor", "153")
+                        .param("limit", "3")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                // 153 미만: 145, 140, 131, 122, 113, 105, 100 → 상위 3 = 145, 140, 131
+                .andExpect(jsonPath("$.results.photos[0].id", is(145)))
+                .andExpect(jsonPath("$.results.photos[1].id", is(140)))
+                .andExpect(jsonPath("$.results.photos[2].id", is(131)))
+                .andExpect(jsonPath("$.results.nextCursor", is(131)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/photos?limit=999 → 상한 60 으로 clamp (user 1 은 10개라 상한과 무관하게 10 반환)")
+    void getMyPhotos_limitClampedAt60() throws Exception {
+        mockMvc.perform(get("/api/users/me/photos")
+                        .param("limit", "999")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.photos", hasSize(10)))
+                .andExpect(jsonPath("$.results.nextCursor").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/photos 비로그인 → 401")
+    void getMyPhotos_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/users/me/photos"))
+                .andExpect(status().isUnauthorized());
+    }
 }

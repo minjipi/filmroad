@@ -2,6 +2,12 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
+import { compressDataUrl, dataUrlByteSize } from '@/utils/imageCompress';
+
+// Server-side multipart cap is 10MB; we enforce a stricter 5MB cap after
+// compression so even a failed compression round-trip stays well under the
+// server limit with headroom for meta + boundaries.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export type Visibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
 
@@ -68,6 +74,7 @@ interface State {
   visibility: Visibility;
   addToStampbook: boolean;
   loading: boolean;
+  uploadProgress: number; // 0–100, updated during multipart upload
   error: string | null;
   lastResult: PhotoResponse | null;
 }
@@ -103,6 +110,7 @@ export const useUploadStore = defineStore('upload', {
     visibility: 'PUBLIC',
     addToStampbook: true,
     loading: false,
+    uploadProgress: 0,
     error: null,
     lastResult: null,
   }),
@@ -170,10 +178,30 @@ export const useUploadStore = defineStore('upload', {
         useUiStore().showLoginPrompt('인증샷 업로드는 로그인 후 이용할 수 있어요.');
         return null;
       }
+      // Offline guard — fail fast with a clear message instead of letting
+      // axios wander into a network-layer error. navigator.onLine returns
+      // `true` by default in jsdom, so the test env isn't affected.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        this.error = '인터넷에 연결되어 있지 않아요. 연결 후 다시 시도해 주세요.';
+        return null;
+      }
       this.loading = true;
+      this.uploadProgress = 0;
       this.error = null;
       try {
-        const dataUrl = this.photos[this.selectedIndex] ?? this.photos[0];
+        const rawDataUrl = this.photos[this.selectedIndex] ?? this.photos[0];
+        // Mobile capture can be 5–12 MB; cap longest side at 1600px / JPEG 0.85
+        // so typical uploads land under ~500 KB without visible quality loss.
+        // EXIF rotation is applied inside compressDataUrl via createImageBitmap.
+        const dataUrl = await compressDataUrl(rawDataUrl, { maxPx: 1600, quality: 0.85 });
+        // Final size gate — even after compression, bail if we're over 5MB
+        // so the user gets a specific error instead of a generic 413.
+        const bytes = dataUrlByteSize(dataUrl);
+        if (bytes > MAX_UPLOAD_BYTES) {
+          const mb = (bytes / (1024 * 1024)).toFixed(1);
+          this.error = `이미지가 너무 커요 (${mb}MB). 5MB 이하만 업로드할 수 있어요.`;
+          return null;
+        }
         const blob = dataUrlToBlob(dataUrl);
         const ext = extForMime(blob.type);
         const meta = {
@@ -186,7 +214,16 @@ export const useUploadStore = defineStore('upload', {
         const form = new FormData();
         form.append('file', blob, `capture.${ext}`);
         form.append('meta', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-        const { data } = await api.post<PhotoResponse>('/api/photos', form);
+        const { data } = await api.post<PhotoResponse>('/api/photos', form, {
+          onUploadProgress: (ev) => {
+            if (ev.total && ev.total > 0) {
+              this.uploadProgress = Math.min(100, Math.round((ev.loaded * 100) / ev.total));
+            }
+          },
+          // Image upload can outlive the default 10s axios timeout on slow links.
+          timeout: 60_000,
+        });
+        this.uploadProgress = 100;
         this.lastResult = data;
         return data;
       } catch (e) {
@@ -195,6 +232,14 @@ export const useUploadStore = defineStore('upload', {
       } finally {
         this.loading = false;
       }
+    },
+    // Manual retry entry point for the UI. Semantically identical to
+    // submit() — photos / caption / tags / visibility are all still in
+    // state, so a second tap re-runs the whole flow. Having a named action
+    // keeps spec assertions crisp ("retry was triggered") and leaves room
+    // for future retry-specific policy (exponential backoff, dedupe token).
+    async retry(): Promise<PhotoResponse | null> {
+      return this.submit();
     },
     reset(): void {
       this.targetPlace = null;
@@ -206,6 +251,7 @@ export const useUploadStore = defineStore('upload', {
       this.addToStampbook = true;
       this.error = null;
       this.loading = false;
+      this.uploadProgress = 0;
       this.lastResult = null;
     },
   },

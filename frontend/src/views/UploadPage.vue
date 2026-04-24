@@ -10,9 +10,45 @@
           :disabled="!canShare"
           @click="onShare"
         >
-          {{ loading ? '공유 중...' : '공유하기' }}
+          {{ loading ? `공유 중 ${uploadProgress}%` : '공유하기' }}
         </button>
       </header>
+      <div v-if="loading" class="upload-progress" data-testid="upload-progress">
+        <div class="upload-progress-fill" :style="{ width: uploadProgress + '%' }" />
+      </div>
+
+      <!-- Offline banner — rendered whenever navigator.onLine is false.
+           Pairs with the disabled "공유하기" button so the user has a clear
+           explanation rather than a silently-inactive CTA. -->
+      <div
+        v-if="!online"
+        class="upload-offline"
+        role="status"
+        data-testid="upload-offline-banner"
+      >
+        <ion-icon :icon="cloudOfflineOutline" class="ic-18" />
+        <span>인터넷 연결을 확인해 주세요</span>
+      </div>
+
+      <!-- Persistent error banner with a retry button. Only rendered when
+           a prior submit failed — the toast dismisses quickly, but users on
+           flaky networks need a visible affordance to tap again. -->
+      <div
+        v-if="!loading && errorText"
+        class="upload-error"
+        role="alert"
+        data-testid="upload-error-banner"
+      >
+        <div class="err-text">{{ errorText }}</div>
+        <button
+          type="button"
+          class="err-retry"
+          data-testid="upload-retry"
+          @click="onRetry"
+        >
+          재시도
+        </button>
+      </div>
 
       <div class="up-scroll no-scrollbar">
         <div v-if="selectedPhoto" class="preview-wrap">
@@ -218,19 +254,22 @@ import {
   addOutline,
   closeOutline,
   searchOutline,
+  cloudOfflineOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUploadStore } from '@/stores/upload';
 import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useToast } from '@/composables/useToast';
+import { useOnline } from '@/composables/useOnline';
 
 const router = useRouter();
 const uploadStore = useUploadStore();
 const homeStore = useHomeStore();
-const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading } = storeToRefs(uploadStore);
+const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading, uploadProgress, error: errorText } = storeToRefs(uploadStore);
 const selectedPhoto = computed(() => uploadStore.selectedPhoto);
 const { showError, showInfo } = useToast();
+const online = useOnline();
 
 const fileInput = ref<HTMLInputElement | null>(null);
 
@@ -241,9 +280,16 @@ const visibilityLabel = computed(() => {
 });
 
 // "공유하기" needs both a place and at least one photo. The button text/state
-// reflects what's missing so the user isn't left guessing.
+// reflects what's missing so the user isn't left guessing. Offline browsers
+// get the same disabled treatment — submit would bail with a clearer error
+// anyway, but showing "공유하기" as tappable when there's no network feels
+// dishonest.
 const canShare = computed(
-  () => !loading.value && targetPlace.value !== null && photos.value.length > 0,
+  () =>
+    !loading.value &&
+    targetPlace.value !== null &&
+    photos.value.length > 0 &&
+    online.value,
 );
 
 // ---------- Place picker ----------
@@ -348,6 +394,20 @@ async function onShare(): Promise<void> {
   await router.replace(`/reward/${placeId ?? res.placeId}`);
 }
 
+// Re-attempt a failed upload. Uses the same state as onShare — photos,
+// caption, tags, visibility are all still populated. On success, behaves
+// identically to the first attempt (info toast + redirect to reward).
+async function onRetry(): Promise<void> {
+  const placeId = targetPlace.value?.placeId;
+  const res = await uploadStore.retry();
+  if (!res) {
+    if (uploadStore.error) await showError(uploadStore.error);
+    return;
+  }
+  await showInfo('인증샷이 공유되었습니다');
+  await router.replace(`/reward/${placeId ?? res.placeId}`);
+}
+
 onMounted(async () => {
   // Only bounce when there's literally nothing to upload. A no-target entry
   // (bottom-nav camera CTA) lands here with photos already shot — the user
@@ -394,6 +454,63 @@ ion-content.up-content {
   cursor: pointer;
 }
 .post[disabled] { opacity: 0.6; cursor: default; }
+
+.upload-progress {
+  height: 3px;
+  background: var(--fr-line-soft);
+  overflow: hidden;
+}
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--fr-primary), #7c3aed);
+  transition: width 0.15s ease-out;
+}
+
+/* Offline banner — stays visible until the connection returns (reactive
+   via useOnline composable on window online/offline events). */
+.upload-offline {
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+/* Inline error banner with retry button — stays visible until the user
+   acts, so flaky-network retries aren't gated on catching the toast. */
+.upload-error {
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #be123c;
+}
+.upload-error .err-text {
+  flex: 1;
+  line-height: 1.35;
+}
+.upload-error .err-retry {
+  background: #be123c;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 
 .up-scroll {
   overflow-y: auto;

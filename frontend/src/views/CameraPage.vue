@@ -72,9 +72,16 @@
       </div>
 
       <div class="controls">
-        <div class="thumb">
+        <button
+          class="thumb"
+          type="button"
+          aria-label="갤러리에서 선택"
+          data-testid="camera-gallery-pick"
+          @click="onPickFromGallery"
+        >
           <img v-if="photos.length > 0" :src="photos[photos.length - 1]" alt="last capture" />
-        </div>
+          <ion-icon v-else :icon="imagesOutline" class="ic-22" />
+        </button>
         <button class="shutter" type="button" aria-label="shutter" @click="onShutter">
           <div class="inner" />
         </button>
@@ -84,6 +91,14 @@
       </div>
 
       <canvas ref="canvasEl" class="capture-canvas" />
+      <input
+        ref="pickerInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style="display: none"
+        data-testid="camera-file-input"
+        @change="onGalleryFile"
+      />
     </div>
   </ion-page>
 </template>
@@ -99,6 +114,7 @@ import {
   radioButtonOnOutline,
   syncOutline,
   locationOutline,
+  imagesOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -149,7 +165,7 @@ async function startStream(): Promise<void> {
   stopStream();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     liveActive.value = false;
-    await showError('실시간 카메라를 사용할 수 없어요');
+    await showError('이 기기는 실시간 카메라를 지원하지 않아요. 갤러리에서 사진을 선택해 주세요.');
     return;
   }
   try {
@@ -163,10 +179,44 @@ async function startStream(): Promise<void> {
       await v.play().catch(() => undefined);
     }
     liveActive.value = true;
-  } catch {
+  } catch (e) {
     liveActive.value = false;
-    await showError('실시간 카메라를 사용할 수 없어요');
+    const err = e as { name?: string } | null;
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+      await showError('카메라 권한이 거부됐어요. 기기 설정에서 허용하거나 갤러리에서 선택해 주세요.');
+    } else if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
+      await showError('사용 가능한 카메라를 찾지 못했어요. 갤러리에서 선택해 주세요.');
+    } else {
+      await showError('실시간 카메라를 사용할 수 없어요. 갤러리에서 선택해 주세요.');
+    }
   }
+}
+
+const pickerInput = ref<HTMLInputElement | null>(null);
+
+function onPickFromGallery(): void {
+  pickerInput.value?.click();
+}
+
+async function onGalleryFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowed.includes(file.type)) {
+    await showError('jpg, png, webp 형식만 사용할 수 있어요');
+    return;
+  }
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+  uploadStore.addPhoto(dataUrl);
+  stopStream();
+  await router.replace('/upload');
 }
 
 function onSetMode(m: Mode): void {

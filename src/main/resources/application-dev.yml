@@ -84,8 +84,13 @@ app:
   token:
     access-max-age: 1800000
     refresh-max-age: 604800000
-    access-format: "ATOKEN=%s; HttpOnly; Secure; SameSite=Strict; Domain=localhost; Path=/; Max-Age=%d"
-    refresh-format: "RTOKEN=%s; HttpOnly; Secure; SameSite=Strict; Domain=localhost; Path=/; Max-Age=%d"
+    # SameSite=Lax 는 같은 사이트 내비게이션엔 쿠키를 실어 보내지만 타사이트 POST 는
+    # 차단해 CSRF 보호는 유지. Strict 로 두면 OAuth redirect callback(Google/Kakao → 우리 백엔드)
+    # 에서 쿠키가 떨어져 세션이 끊기므로 Lax 사용.
+    # 운영에서는 APP_TOKEN_ACCESS_FORMAT / APP_TOKEN_REFRESH_FORMAT 환경변수로
+    # Domain=.yourdomain.com 등 실도메인을 덮어쓴다.
+    access-format: "ATOKEN=%s; HttpOnly; Secure; SameSite=Lax; Domain=localhost; Path=/; Max-Age=%d"
+    refresh-format: "RTOKEN=%s; HttpOnly; Secure; SameSite=Lax; Domain=localhost; Path=/; Max-Age=%d"
 
 management:
   endpoints:

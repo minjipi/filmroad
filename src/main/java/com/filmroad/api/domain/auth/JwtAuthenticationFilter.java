@@ -20,6 +20,8 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String ACCESS_COOKIE = "ATOKEN";
+    private static final String AUTH_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenService jwtTokenService;
 
@@ -44,10 +46,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractAccessToken(HttpServletRequest request) {
+        // 1) HttpOnly 쿠키 — 브라우저 기본 경로.
         Cookie[] cookies = request.getCookies();
-        if (cookies == null) return null;
-        for (Cookie c : cookies) {
-            if (ACCESS_COOKIE.equals(c.getName())) return c.getValue();
+        if (cookies != null) {
+            for (Cookie c : cookies) {
+                if (ACCESS_COOKIE.equals(c.getName())) {
+                    String v = c.getValue();
+                    if (v != null && !v.isBlank()) return v;
+                }
+            }
+        }
+        // 2) Authorization: Bearer <token> — 쿠키가 없거나 막힌 클라이언트 (모바일 앱,
+        //    크로스-도메인 SPA, 서버-to-서버 호출, 테스트 도구) 폴백.
+        String auth = request.getHeader(AUTH_HEADER);
+        if (auth != null && auth.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
+            String token = auth.substring(BEARER_PREFIX.length()).trim();
+            if (!token.isEmpty()) return token;
         }
         return null;
     }

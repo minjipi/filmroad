@@ -26,8 +26,8 @@ class FeedControllerTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("GET /api/feed (default POPULAR) returns posts with author/place/work + pagination flags")
-    void getFeed_defaultPopular_returnsPostsWithRichFields() throws Exception {
+    @DisplayName("GET /api/feed (default RECENT) — posts 는 id DESC 로 최신 먼저, 시드 최대 id(175) 가 상단")
+    void getFeed_defaultRecent_returnsPostsNewestFirst() throws Exception {
         mockMvc.perform(get("/api/feed"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -35,7 +35,27 @@ class FeedControllerTest {
                 .andExpect(jsonPath("$.results.posts[0].author", notNullValue()))
                 .andExpect(jsonPath("$.results.posts[0].place.id", notNullValue()))
                 .andExpect(jsonPath("$.results.posts[0].work.id", notNullValue()))
+                // 시드에서 가장 큰 photo id 는 175 (place 17, order 5). RECENT 기본이면 첫 번째로 나와야 함.
+                .andExpect(jsonPath("$.results.posts[0].id", is(175)))
                 .andExpect(jsonPath("$.results.hasMore", anyOf(is(true), is(false))));
+    }
+
+    @Test
+    @DisplayName("GET /api/feed?tab=POPULAR — like_count DESC 정렬 (기본 RECENT 와 결과 달라야)")
+    void getFeed_popularTab_ordersByLikeCount() throws Exception {
+        // 시드상 가장 like_count 가 높은 photo 는 100 (영진파도, like_count=128).
+        mockMvc.perform(get("/api/feed").param("tab", "POPULAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.posts[0].id", is(100)))
+                .andExpect(jsonPath("$.results.posts[0].likeCount", is(128)));
+    }
+
+    @Test
+    @DisplayName("GET /api/feed?tab=RECENT 명시 → 기본값과 동일한 최신순 결과")
+    void getFeed_explicitRecentTab_matchesDefault() throws Exception {
+        mockMvc.perform(get("/api/feed").param("tab", "RECENT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.posts[0].id", is(175)));
     }
 
     @Test

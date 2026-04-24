@@ -76,6 +76,19 @@ describe('feed store', () => {
     mockApi.post.mockReset();
   });
 
+  it('default tab is RECENT and the first fetch forwards params.tab=RECENT (task #33)', async () => {
+    const store = useFeedStore();
+    // State default — no fetch yet, no setTab call.
+    expect(store.tab).toBe('RECENT');
+
+    mockApi.get.mockResolvedValueOnce({ data: page1 });
+    await store.fetch();
+
+    const [url, opts] = mockApi.get.mock.calls[0];
+    expect(url).toBe('/api/feed');
+    expect(opts?.params).toMatchObject({ tab: 'RECENT', limit: 5 });
+  });
+
   it('fetch happy path populates posts/recommendedUsers/cursor and calls GET /api/feed', async () => {
     mockApi.get.mockResolvedValueOnce({ data: page1 });
 
@@ -91,7 +104,8 @@ describe('feed store', () => {
 
     const [url, opts] = mockApi.get.mock.calls[0];
     expect(url).toBe('/api/feed');
-    expect(opts?.params).toMatchObject({ tab: 'POPULAR', limit: 5 });
+    // Default tab flipped from POPULAR → RECENT in task #33.
+    expect(opts?.params).toMatchObject({ tab: 'RECENT', limit: 5 });
   });
 
   it('fetch failure surfaces the error message and clears loading', async () => {
@@ -109,8 +123,8 @@ describe('feed store', () => {
     await store.fetch();
     mockApi.get.mockClear();
 
-    // Same tab → no refetch.
-    await store.setTab('POPULAR');
+    // Same tab → no refetch (default is RECENT post task #33).
+    await store.setTab('RECENT');
     expect(mockApi.get).not.toHaveBeenCalled();
 
     // New tab → refetches and resets cursor.
@@ -139,7 +153,7 @@ describe('feed store', () => {
     expect(store.hasMore).toBe(false);
 
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ cursor: 'cursor-2', tab: 'POPULAR' });
+    expect(opts?.params).toMatchObject({ cursor: 'cursor-2', tab: 'RECENT' });
   });
 
   it('loadMore is a no-op when hasMore is false', async () => {

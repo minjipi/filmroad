@@ -227,8 +227,8 @@
                   <ion-icon :icon="locationOutline" class="ic-16" />{{ p.regionLabel }}
                 </div>
                 <div class="meta">
-                  <span v-if="p.visitedAt" class="m">
-                    <ion-icon :icon="checkmark" class="ic-16 mint" />{{ formatVisitedDate(p.visitedAt) }} 방문
+                  <span v-if="p.visited" class="m">
+                    <ion-icon :icon="checkmark" class="ic-16 mint" />여기 다녀왔어요
                   </span>
                   <span v-if="p.certified" class="m">
                     <ion-icon :icon="cameraOutline" class="ic-16" />인증 완료
@@ -314,6 +314,7 @@ import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import type { MapMarker } from '@/stores/map';
 import { useToast } from '@/composables/useToast';
+import { formatVisitDate } from '@/utils/formatRelativeTime';
 
 // Route param comes via `props: true` on the router record.
 const props = defineProps<{ id: string | number }>();
@@ -338,14 +339,9 @@ function formatDistance(km: number): string {
   return `${km.toFixed(1)}km`;
 }
 
-function formatVisitedDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}.${m}.${day}`;
-}
+// Local formatter removed in task #34 — uses the shared
+// `formatVisitDate` utility so the "YYYY.MM.DD" format stays consistent
+// with FeedPage visit chips and other callers.
 
 const ownershipLabel = computed(() => {
   if (!detail.value) return '';
@@ -354,7 +350,7 @@ const ownershipLabel = computed(() => {
 
 const createdAtLabel = computed(() => {
   if (!detail.value) return '';
-  return `${formatVisitedDate(detail.value.createdAt)} 생성`;
+  return `${formatVisitDate(detail.value.createdAt)} 생성`;
 });
 
 // Ordered places across visited + upcoming, filtered to those with coords —

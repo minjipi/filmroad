@@ -37,6 +37,11 @@ import './theme/variables.css';
 import './theme/utilities.css';
 import './assets/styles/filmroad.css';
 
+import { installImageFallback } from './utils/imageFallback';
+
+// Swap any <img> that fails to load with a neutral demo placeholder.
+installImageFallback();
+
 const app = createApp(App)
   .use(IonicVue)
   .use(createPinia())

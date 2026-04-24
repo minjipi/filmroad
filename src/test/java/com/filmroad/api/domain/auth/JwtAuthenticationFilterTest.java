@@ -49,4 +49,30 @@ class JwtAuthenticationFilterTest {
         mockMvc.perform(get("/api/users/me").cookie(new Cookie("ATOKEN", "not-a-real-jwt")))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Authorization: Bearer <token> 헤더만으로도 보호 엔드포인트 통과 (쿠키 없어도 됨)")
+    void bearerHeaderOnly_accessesProtectedEndpoint() throws Exception {
+        String token = jwtTokenService.issueAccess(1L);
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.user.id", is(1)));
+    }
+
+    @Test
+    @DisplayName("ATOKEN 쿠키가 우선 — 쿠키 유효 + Bearer 헤더 위조여도 200")
+    void cookieTakesPrecedenceOverBearer() throws Exception {
+        String valid = jwtTokenService.issueAccess(1L);
+        mockMvc.perform(get("/api/users/me")
+                        .cookie(new Cookie("ATOKEN", valid))
+                        .header("Authorization", "Bearer forged-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("잘못된 Bearer 헤더 → /api/users/me 401")
+    void invalidBearer_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer nope"))
+                .andExpect(status().isUnauthorized());
+    }
 }
