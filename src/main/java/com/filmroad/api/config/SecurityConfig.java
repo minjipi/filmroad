@@ -65,6 +65,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/places/*/like").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/users/*/follow").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/comments/*").authenticated()
+                        // `/api/users/me` 와 `/me/photos` 는 auth. `/api/users/{id}` 는 permitAll (공개 프로필).
+                        // 순서가 중요 — Spring Security 는 첫 매치 승자이므로 구체적인 `/me` 를 먼저 둔다.
+                        .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/me/photos").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/users/*").permitAll()
                         .requestMatchers("/api/users/**",
                                 "/api/saved/**",
                                 "/api/photos",
@@ -105,7 +109,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://172.30.1.10:5173"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

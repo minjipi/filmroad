@@ -6,20 +6,37 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * `GET /api/users/:id` 응답 (17-user-profile.html). header / stats / follow 플래그 /
- * stampHighlights / 최근 인증샷 preview 묶음.
+ * `GET /api/users/:id` 응답 (17-user-profile.html). 프론트 store(`userProfile.ts`) 와 1:1.
+ * 공개 엔드포인트 — 비로그인 viewer 도 조회 가능하며 그 때 `isMe=false`, `following=false`.
  */
 @Getter
 @Builder
 public class PublicUserProfileResponse {
-    private PublicUserDto user;
+    // 상위 유저 메타 (flat)
+    private Long id;
+    private String nickname;
+    private String handle;
+    private String avatarUrl;
+    private String bio;
+    private boolean verified;
+    private int level;
+    private String levelName;
+    private int points;
+    private int streakDays;
+
     private PublicUserStatsDto stats;
 
-    /** viewer 가 대상 유저를 팔로우 중인지. 팔로우 버튼 toggle 표시용. */
-    private boolean following;
-    /** viewer == 대상 유저. 본인 프로필일 때 팔로우 버튼 대신 "편집" 보여주기 위함. */
+    /**
+     * viewer == target. 비로그인 조회 시 false. Boolean wrapper 로 선언해 Jackson 이
+     * "is" 접두를 떼 `me` 로 직렬화하는 걸 방지 (primitive boolean 일 때 `getIsMe()` 가 아닌
+     * `isMe()` 게터가 생성되어 발생).
+     */
     private Boolean isMe;
+    /** viewer 가 target 을 팔로우 중인지. 비로그인이면 false. */
+    private boolean following;
 
-    private List<StampHighlightDto> stampHighlights;
-    private List<PublicPhotoDto> photos;
+    /** 공개 인증샷 grid preview (PUBLIC / 본인 / FOLLOWERS+follow). */
+    private List<PublicPhotoDto> topPhotos;
+    /** 최근 수집한 작품과 진행률. */
+    private List<CollectedWorkDto> recentCollectedWorks;
 }

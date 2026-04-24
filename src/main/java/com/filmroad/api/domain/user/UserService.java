@@ -3,22 +3,21 @@ package com.filmroad.api.domain.user;
 import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
-import com.filmroad.api.domain.badge.UserBadgeRepository;
 import com.filmroad.api.domain.follow.UserFollowRepository;
 import com.filmroad.api.domain.place.PlacePhoto;
 import com.filmroad.api.domain.place.PlacePhotoRepository;
+import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
+import com.filmroad.api.domain.user.dto.CollectedWorkDto;
 import com.filmroad.api.domain.user.dto.MiniMapPinDto;
 import com.filmroad.api.domain.user.dto.MyPhotoDto;
 import com.filmroad.api.domain.user.dto.MyPhotosResponse;
 import com.filmroad.api.domain.user.dto.ProfileResponse;
 import com.filmroad.api.domain.user.dto.ProfileStatsDto;
 import com.filmroad.api.domain.user.dto.PublicPhotoDto;
-import com.filmroad.api.domain.user.dto.PublicUserDto;
 import com.filmroad.api.domain.user.dto.PublicUserProfileResponse;
 import com.filmroad.api.domain.user.dto.PublicUserStatsDto;
-import com.filmroad.api.domain.user.dto.StampHighlightDto;
 import com.filmroad.api.domain.user.dto.UpdateProfileRequest;
 import com.filmroad.api.domain.user.dto.UserMeDto;
 import com.filmroad.api.domain.work.Work;
@@ -39,14 +38,14 @@ public class UserService {
     // ProfilePage 인증샷 grid 기본값 / 상한. 60 까지로 제한해 infinite scroll 페이지당 부담을 제한.
     private static final int MY_PHOTOS_DEFAULT_LIMIT = 30;
     private static final int MY_PHOTOS_MAX_LIMIT = 60;
-    // 공개 프로필(17-user-profile.html) highlight ring / grid 수량.
-    private static final int PUBLIC_PROFILE_HIGHLIGHT_LIMIT = 5;
+    // 공개 프로필(17-user-profile.html) grid / collected-works preview 수량.
+    private static final int PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT = 5;
     private static final int PUBLIC_PROFILE_PHOTO_LIMIT = 9;
 
     private final UserRepository userRepository;
     private final StampRepository stampRepository;
     private final PlacePhotoRepository placePhotoRepository;
-    private final UserBadgeRepository userBadgeRepository;
+    private final PlaceRepository placeRepository;
     private final UserFollowRepository userFollowRepository;
     private final CurrentUser currentUser;
 
@@ -110,41 +109,50 @@ public class UserService {
     }
 
     /**
-     * 공개 프로필 조회 (17-user-profile.html). 대상 유저가 없으면 USER_NOT_FOUND(404).
-     * - stats: photoCount 는 유저 자체 totalPhotoCount 사용, badgeCount 는 user_badge count.
-     * - stampHighlights: 이 유저의 stamp 를 작품별 집계해 상위 5개 (title ASC tie-break).
-     * - photos: viewer 기준 visibility 필터를 적용한 owner 의 최신 사진 9개.
+     * 공개 프로필 조회 (17-user-profile.html) — permitAll. 비로그인 viewer 는 `isMe=false`,
+     * `following=false`. 대상 유저 없으면 USER_NOT_FOUND(404).
+     *
+     * - stats.visitedCount: stamp 총수 / photoCount: user.totalPhotoCount /
+     *   collectedWorksCount: stamp 로 방문한 distinct work 수.
+     * - topPhotos: viewer 기준 visibility 필터(PUBLIC / 본인 / FOLLOWERS+follow) 적용한 최신 9개.
+     * - recentCollectedWorks: stamp 를 work 별 집계, collectedCount/totalCount 진행률 포함.
      */
     @Transactional(readOnly = true)
     public PublicUserProfileResponse getPublicProfile(Long targetUserId) {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.USER_NOT_FOUND));
-        Long viewerId = currentUser.currentUserId();
+        Long viewerId = currentUser.currentUserIdOrNull();
+
+        long visitedCount = stampRepository.countByUserId(targetUserId);
+        long collectedWorksCount = stampRepository.findDistinctWorkIdsByUserId(targetUserId).size();
 
         PublicUserStatsDto stats = PublicUserStatsDto.builder()
+                .visitedCount(visitedCount)
                 .photoCount(target.getTotalPhotoCount())
                 .followersCount(target.getFollowersCount())
                 .followingCount(target.getFollowingCount())
-                .badgeCount(userBadgeRepository.countByUserId(targetUserId))
+                .collectedWorksCount(collectedWorksCount)
                 .build();
 
-        List<StampHighlightDto> highlights = stampRepository
+        List<CollectedWorkDto> recentCollectedWorks = stampRepository
                 .aggregateWorksByUserId(targetUserId,
-                        PageRequest.of(0, PUBLIC_PROFILE_HIGHLIGHT_LIMIT))
+                        PageRequest.of(0, PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT))
                 .stream()
                 .map(row -> {
                     Work w = (Work) row[0];
-                    long count = ((Number) row[1]).longValue();
-                    return StampHighlightDto.builder()
-                            .workId(w.getId())
-                            .workTitle(w.getTitle())
+                    long collected = ((Number) row[1]).longValue();
+                    long total = placeRepository.countByWorkId(w.getId());
+                    return CollectedWorkDto.builder()
+                            .id(w.getId())
+                            .title(w.getTitle())
                             .posterUrl(w.getPosterUrl())
-                            .count(count)
+                            .collectedCount(collected)
+                            .totalCount(total)
                             .build();
                 })
                 .toList();
 
-        List<PublicPhotoDto> photos = placePhotoRepository
+        List<PublicPhotoDto> topPhotos = placePhotoRepository
                 .findVisibleByOwnerIdOrderByIdDesc(targetUserId, viewerId,
                         PageRequest.of(0, PUBLIC_PROFILE_PHOTO_LIMIT))
                 .stream()
@@ -156,12 +164,21 @@ public class UserService {
                 && userFollowRepository.existsByFollowerIdAndFolloweeId(viewerId, targetUserId);
 
         return PublicUserProfileResponse.builder()
-                .user(PublicUserDto.from(target))
+                .id(target.getId())
+                .nickname(target.getNickname())
+                .handle(target.getHandle())
+                .avatarUrl(target.getAvatarUrl())
+                .bio(target.getBio())
+                .verified(target.isVerified())
+                .level(target.getLevel())
+                .levelName(UserMeDto.levelName(target.getLevel()))
+                .points(target.getPoints())
+                .streakDays(target.getStreakDays())
                 .stats(stats)
-                .following(following)
                 .isMe(isMe)
-                .stampHighlights(highlights)
-                .photos(photos)
+                .following(following)
+                .topPhotos(topPhotos)
+                .recentCollectedWorks(recentCollectedWorks)
                 .build();
     }
 
