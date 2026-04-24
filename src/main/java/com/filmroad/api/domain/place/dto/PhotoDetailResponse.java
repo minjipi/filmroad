@@ -1,0 +1,38 @@
+package com.filmroad.api.domain.place.dto;
+
+import com.filmroad.api.domain.place.PhotoVisibility;
+import lombok.Builder;
+import lombok.Getter;
+
+import java.util.Date;
+import java.util.List;
+
+/**
+ * `GET /api/photos/:id` 응답. ShotDetailPage 의 hero(scene·user 이미지 비교) / action bar /
+ * caption / tags / comments preview 블록을 한 번에 공급.
+ *
+ * 프론트 렌더링 편의를 위해 섹션별로 nested DTO (author/place/work/comments) 를 분리.
+ */
+@Getter
+@Builder
+public class PhotoDetailResponse {
+    private Long id;
+    private String imageUrl;            // 유저 업로드 사진
+    private String sceneImageUrl;       // 작품 원본 씬 이미지 (place 에 저장, null 가능)
+    private String caption;
+    private List<String> tags;
+    private PhotoVisibility visibility;
+    private Date createdAt;
+
+    private int likeCount;
+    private int commentCount;
+    private boolean liked;              // viewer 가 좋아요 눌렀는지
+    private boolean saved;              // place 를 저장했는지 (북마크)
+
+    private PhotoDetailAuthorDto author;
+    private PhotoDetailPlaceDto place;
+    private PhotoDetailWorkDto work;
+
+    private List<PhotoDetailCommentDto> comments;
+    private int moreCommentsCount;      // commentCount - comments.size()
+}

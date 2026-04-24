@@ -3,12 +3,14 @@ package com.filmroad.api.domain.place;
 import com.filmroad.api.common.model.BaseResponse;
 import com.filmroad.api.domain.like.LikeService;
 import com.filmroad.api.domain.like.dto.LikeToggleResponse;
+import com.filmroad.api.domain.place.dto.PhotoDetailResponse;
 import com.filmroad.api.domain.place.dto.PhotoUploadRequest;
 import com.filmroad.api.domain.place.dto.PhotoUploadResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class PhotoController {
 
     private final PhotoUploadService photoUploadService;
+    private final PhotoDetailService photoDetailService;
     private final LikeService likeService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -31,6 +34,12 @@ public class PhotoController {
             @RequestPart("meta") @Valid PhotoUploadRequest meta
     ) {
         return BaseResponse.success(photoUploadService.upload(file, meta));
+    }
+
+    /** ShotDetailPage 용 단건 사진 상세. PUBLIC / 본인 / FOLLOWERS+팔로우 만 조회 가능, 나머지는 404. */
+    @GetMapping("/{id}")
+    public BaseResponse<PhotoDetailResponse> getPhoto(@PathVariable Long id) {
+        return BaseResponse.success(photoDetailService.getPhoto(id));
     }
 
     @PostMapping("/{id}/like")
