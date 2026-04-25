@@ -55,13 +55,15 @@ export interface RewardDelta {
   newBadges: RewardBadge[];
 }
 
-// A single image inside a multi-image upload group (task #44). The primary
-// photo's fields live at the top level of PhotoResponse; `groupPhotos` lists
-// the whole batch (length >= 1) in upload/orderIndex order.
-export interface PhotoSummary {
+// A single image inside a multi-image post (task #45a/b 1:N model). The lead
+// frame's fields still live at the top level of PhotoResponse for backward
+// compatibility; `images` carries the whole batch (length >= 1) in
+// imageOrderIndex order. `id` here is the PlacePhotoImage row id, separate
+// from the post's `id`.
+export interface PhotoImageSummary {
   id: number;
   imageUrl: string;
-  orderIndex: number;
+  imageOrderIndex: number;
 }
 
 export interface PhotoResponse {
@@ -76,7 +78,7 @@ export interface PhotoResponse {
   visibility: Visibility;
   createdAt: string;
   /** All photos uploaded in this batch — length 1 for a single-image post. */
-  groupPhotos: PhotoSummary[];
+  images: PhotoImageSummary[];
   stamp?: StampProgress;
   reward?: RewardDelta;
 }
@@ -214,7 +216,7 @@ export const useUploadStore = defineStore('upload', {
       this.uploadProgress = 0;
       this.error = null;
       try {
-        // Compress each photo in order (matches backend orderIndex asc).
+        // Compress each photo in order (matches backend imageOrderIndex asc).
         // Mobile capture can be 5–12 MB; cap longest side at 1600px / JPEG 0.85
         // so typical uploads land under ~500 KB without visible quality loss.
         // EXIF rotation is applied inside compressDataUrl via createImageBitmap.

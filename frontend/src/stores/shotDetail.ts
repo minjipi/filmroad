@@ -42,13 +42,14 @@ export interface ShotWork {
   sceneTimestamp: string | null;
 }
 
-// A single frame inside a multi-image upload group (task #44). The primary
-// frame's fields live at the top of ShotDetail; `groupPhotos` lists the
-// whole batch so the hero can render a carousel when length > 1.
-export interface ShotGroupPhoto {
+// A single frame inside a multi-image post (task #45a/b 1:N model). The lead
+// frame's fields still live at the top of ShotDetail; `images` lists the
+// whole batch so the hero can render a carousel when length > 1. `id` here
+// is the PlacePhotoImage row id, separate from the post's `id`.
+export interface ShotImage {
   id: number;
   imageUrl: string;
-  orderIndex: number;
+  imageOrderIndex: number;
 }
 
 export interface ShotComment {
@@ -84,7 +85,7 @@ export interface ShotDetail {
   place: ShotPlace;
   work: ShotWork;
   /** All photos uploaded in this batch — length 1 for a single-image post. */
-  groupPhotos: ShotGroupPhoto[];
+  images: ShotImage[];
   topComments: ShotComment[];
   moreCommentsCount: number;
 }

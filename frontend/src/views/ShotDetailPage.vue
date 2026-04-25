@@ -37,7 +37,7 @@
              in the upload group. Scene-compare overlay lives only on the
              first slide; follow-up photos render as plain images. -->
         <section
-          v-if="groupPhotos.length > 1"
+          v-if="images.length > 1"
           class="sd-carousel"
           data-testid="sd-carousel"
         >
@@ -53,7 +53,7 @@
                   :src="shot.sceneImageUrl"
                   alt="드라마 원본"
                 />
-                <img :src="groupPhotos[0].imageUrl" class="top-img" :alt="shot.place.name" />
+                <img :src="images[0].imageUrl" class="top-img" :alt="shot.place.name" />
                 <div class="divider">
                   <span class="divider-handle">
                     <ion-icon :icon="swapHorizontal" class="ic-16" />
@@ -74,7 +74,7 @@
               </div>
             </div>
             <div
-              v-for="p in groupPhotos.slice(1)"
+              v-for="p in images.slice(1)"
               :key="p.id"
               class="carousel-slide"
               data-testid="sd-slide"
@@ -84,13 +84,13 @@
           </div>
           <div class="carousel-dots" data-testid="sd-dots">
             <span
-              v-for="(_, i) in groupPhotos"
+              v-for="(_, i) in images"
               :key="i"
               :class="['dot', i === currentSlide ? 'active' : '']"
             />
           </div>
           <span class="carousel-count" data-testid="sd-count">
-            {{ currentSlide + 1 }} / {{ groupPhotos.length }}
+            {{ currentSlide + 1 }} / {{ images.length }}
           </span>
         </section>
 
@@ -336,16 +336,16 @@ const commentsRef = ref<HTMLElement | null>(null);
 const carouselEl = ref<HTMLElement | null>(null);
 const currentSlide = ref(0);
 
-// Group photos always fall back to the primary photo (length-1 list) so the
-// template can treat `groupPhotos` as non-empty regardless of how old the
-// backend response is. Pre-task-#44 responses that lack `groupPhotos` still
-// render as a single-image post.
-const groupPhotos = computed(() => {
-  if (!shot.value) return [] as { id: number; imageUrl: string; orderIndex: number }[];
-  if (shot.value.groupPhotos && shot.value.groupPhotos.length > 0) {
-    return shot.value.groupPhotos;
+// Always fall back to the lead frame as a length-1 list so the template can
+// treat `images` as non-empty regardless of how old the backend response is.
+// Pre-task-#44 responses (single PlacePhoto, no PlacePhotoImage rows yet)
+// still render as a single-image post via the fallback.
+const images = computed(() => {
+  if (!shot.value) return [] as { id: number; imageUrl: string; imageOrderIndex: number }[];
+  if (shot.value.images && shot.value.images.length > 0) {
+    return shot.value.images;
   }
-  return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, orderIndex: 0 }];
+  return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, imageOrderIndex: 0 }];
 });
 
 function onCarouselScroll(e: Event): void {
