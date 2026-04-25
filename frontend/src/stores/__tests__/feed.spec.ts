@@ -5,13 +5,17 @@ vi.mock('@/services/api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
-// task #37: mock the geolocation composable so NEARBY tests can drive
-// success / null paths without touching navigator.geolocation.
+// NEARBY 탭의 geolocation 호출을 컨트롤하기 위한 mock.
+// requestLocation 은 { ok: true, coords } | { ok: false, reason } 를 돌려주므로
+// 테스트마다 mockResolvedValueOnce 로 원하는 분기를 심는다.
+type LocationResult =
+  | { ok: true; coords: { lat: number; lng: number } }
+  | { ok: false; reason: 'denied' | 'unavailable' | 'timeout' };
 const { geolocationMock } = vi.hoisted(() => ({
-  geolocationMock: vi.fn<[], Promise<{ lat: number; lng: number } | null>>(),
+  geolocationMock: vi.fn<[], Promise<LocationResult>>(),
 }));
 vi.mock('@/composables/useGeolocation', () => ({
-  getCurrentCoords: geolocationMock,
+  requestLocation: geolocationMock,
 }));
 
 // Stub toastController so the NEARBY-denied path's toast doesn't touch
@@ -240,7 +244,7 @@ describe('feed store', () => {
   // ---------- task #37: NEARBY tab geolocation wiring ----------
 
   it('setTab(NEARBY) requests coords, caches them, and forwards lat/lng to GET /api/feed', async () => {
-    geolocationMock.mockResolvedValueOnce({ lat: 37.5665, lng: 126.978 });
+    geolocationMock.mockResolvedValueOnce({ ok: true, coords: { lat: 37.5665, lng: 126.978 } });
     mockApi.get.mockResolvedValueOnce({
       data: { posts: [], hasMore: false, nextCursor: null },
     });
@@ -258,8 +262,8 @@ describe('feed store', () => {
     });
   });
 
-  it('setTab(NEARBY) with denied permission shows an error toast and still fetches (no lat/lng)', async () => {
-    geolocationMock.mockResolvedValueOnce(null);
+  it('setTab(NEARBY) with reason=denied shows a permission-specific toast and still fetches (no lat/lng)', async () => {
+    geolocationMock.mockResolvedValueOnce({ ok: false, reason: 'denied' });
     mockApi.get.mockResolvedValueOnce({
       data: { posts: [], hasMore: false, nextCursor: null },
     });
@@ -269,9 +273,9 @@ describe('feed store', () => {
 
     expect(geolocationMock).toHaveBeenCalledTimes(1);
     expect(store.nearbyCoords).toBeNull();
-    // Toast fires with Korean denial copy.
+    // 'denied' 전용 카피 — "권한이 차단" 안내가 포함돼야 함.
     const hasDeniedToast = toastCreateSpy.mock.calls.some((c) =>
-      ((c[0] as { message?: string })?.message ?? '').includes('위치 정보'),
+      ((c[0] as { message?: string })?.message ?? '').includes('권한이 차단'),
     );
     expect(hasDeniedToast).toBe(true);
     // Backend still called — with tab=NEARBY but no lat/lng. Server returns
@@ -284,7 +288,7 @@ describe('feed store', () => {
 
   it('NEARBY loadMore reuses cached coords without re-prompting geolocation', async () => {
     // First entry caches coords.
-    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    geolocationMock.mockResolvedValueOnce({ ok: true, coords: { lat: 10, lng: 20 } });
     mockApi.get.mockResolvedValueOnce({
       data: {
         posts: [makePost(1)],
@@ -312,7 +316,7 @@ describe('feed store', () => {
   });
 
   it('setTab(NEARBY) does not re-request coords on re-entry while cached', async () => {
-    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    geolocationMock.mockResolvedValueOnce({ ok: true, coords: { lat: 10, lng: 20 } });
     mockApi.get.mockResolvedValue({
       data: { posts: [], hasMore: false, nextCursor: null },
     });
@@ -327,7 +331,7 @@ describe('feed store', () => {
 
   it('explicit fetch({lat,lng}) overrides the NEARBY cache', async () => {
     // Cache a pair.
-    geolocationMock.mockResolvedValueOnce({ lat: 10, lng: 20 });
+    geolocationMock.mockResolvedValueOnce({ ok: true, coords: { lat: 10, lng: 20 } });
     mockApi.get.mockResolvedValueOnce({
       data: { posts: [], hasMore: false, nextCursor: null },
     });
@@ -344,7 +348,7 @@ describe('feed store', () => {
   });
 
   it('refreshNearbyCoords clears cache and re-requests (user retry after denial)', async () => {
-    geolocationMock.mockResolvedValueOnce(null); // initial denial
+    geolocationMock.mockResolvedValueOnce({ ok: false, reason: 'denied' });
     mockApi.get.mockResolvedValueOnce({
       data: { posts: [], hasMore: false, nextCursor: null },
     });
@@ -353,9 +357,37 @@ describe('feed store', () => {
     expect(store.nearbyCoords).toBeNull();
 
     // User taps retry → coords granted this time.
-    geolocationMock.mockResolvedValueOnce({ lat: 37.5, lng: 127 });
+    geolocationMock.mockResolvedValueOnce({ ok: true, coords: { lat: 37.5, lng: 127 } });
     await store.refreshNearbyCoords();
     expect(store.nearbyCoords).toEqual({ lat: 37.5, lng: 127 });
+  });
+
+  it('setTab(NEARBY) with reason=unavailable shows a GPS/network-specific toast', async () => {
+    geolocationMock.mockResolvedValueOnce({ ok: false, reason: 'unavailable' });
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    const hasGpsToast = toastCreateSpy.mock.calls.some((c) =>
+      ((c[0] as { message?: string })?.message ?? '').includes('GPS'),
+    );
+    expect(hasGpsToast).toBe(true);
+  });
+
+  it('setTab(NEARBY) with reason=timeout shows a retry-suggestion toast', async () => {
+    geolocationMock.mockResolvedValueOnce({ ok: false, reason: 'timeout' });
+    mockApi.get.mockResolvedValueOnce({
+      data: { posts: [], hasMore: false, nextCursor: null },
+    });
+    const store = useFeedStore();
+    await store.setTab('NEARBY');
+
+    const hasTimeoutToast = toastCreateSpy.mock.calls.some((c) =>
+      ((c[0] as { message?: string })?.message ?? '').includes('지연'),
+    );
+    expect(hasTimeoutToast).toBe(true);
   });
 
   it('toggleFollow failure surfaces the error message without mutating following', async () => {
