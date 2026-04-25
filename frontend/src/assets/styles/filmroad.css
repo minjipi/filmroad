@@ -32,3 +32,56 @@
 }
 .fr-page { width: 100%; height: 100%; display: flex; flex-direction: column; }
 
+/* ─── Toast (.fr-toast) ──────────────────────────────────────────────────
+   useToast.ts 가 모든 토스트에 `fr-toast fr-toast--{variant}` 클래스를 건다.
+   Ionic 의 ion-toast 는 shadow DOM 이라 ::part() 로 내부 요소를 잡는다.
+
+   디자인 의도: 화이트 톤 앱과 어울리게 라이트 카드 + 부드러운 그림자가
+   기본. 시스템이 다크 모드면 아래 prefers-color-scheme 블록이 다크 카드로
+   자동 전환. variant 는 좌측 아이콘 색으로만 구분 (background 통일). */
+ion-toast.fr-toast {
+  --background: #ffffff;
+  --color: var(--fr-ink);
+  --border-color: var(--fr-line);
+  --border-style: solid;
+  --border-width: 1px;
+  --border-radius: 14px;
+  --box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12),
+                0 2px 6px rgba(15, 23, 42, 0.06);
+  --min-width: 220px;
+  --max-width: min(420px, calc(100vw - 48px));
+  --start: 50%;
+  --end: 50%;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* part(message) — 메시지 본문 정렬/줄바꿈. */
+ion-toast.fr-toast::part(message) {
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+/* part(icon) — 좌측 아이콘. variant 별로 색만 다르게. */
+ion-toast.fr-toast::part(icon) {
+  font-size: 22px;
+  margin-inline-end: 10px;
+}
+ion-toast.fr-toast--success::part(icon) { color: var(--fr-mint); }
+ion-toast.fr-toast--danger::part(icon)  { color: var(--fr-coral); }
+ion-toast.fr-toast--warning::part(icon) { color: var(--fr-amber); }
+ion-toast.fr-toast--info::part(icon)    { color: var(--fr-primary); }
+
+/* 다크 모드 — 시스템 설정 따라 자동 전환. 카드 톤만 어둡게 뒤집고 아이콘
+   색은 동일 (이미 충분히 채도 있어 다크 배경에서도 잘 보임). */
+@media (prefers-color-scheme: dark) {
+  ion-toast.fr-toast {
+    --background: rgba(15, 23, 42, 0.96);
+    --color: #f8fafc;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45),
+                  0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+}
+

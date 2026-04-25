@@ -113,7 +113,10 @@ describe('NewCollectionModal.vue', () => {
 
     expect(ui.newCollectionModalOpen).toBe(true);
     expect(toastCreateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ message: '서버 오류', color: 'danger' }),
+      expect.objectContaining({
+        message: '서버 오류',
+        cssClass: expect.arrayContaining(['fr-toast--danger']),
+      }),
     );
   });
 });
