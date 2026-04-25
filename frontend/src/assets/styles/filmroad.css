@@ -50,10 +50,16 @@ ion-toast.fr-toast {
                 0 2px 6px rgba(15, 23, 42, 0.06);
   --min-width: 220px;
   --max-width: min(420px, calc(100vw - 48px));
-  --start: 50%;
-  --end: 50%;
   font-weight: 700;
   letter-spacing: -0.01em;
+  text-align: center;
+}
+
+/* 컨테이너 — 기본은 아이콘+메시지를 좌측 정렬한 채 메시지가 flex:1 로
+   퍼져서 짧은 글이면 카드 안에서 왼쪽에 붙어 보였다. justify-content:center
+   로 묶어 카드 가운데로 붙이고, 메시지는 더 이상 늘어나지 않게 한다. */
+ion-toast.fr-toast::part(container) {
+  justify-content: center;
 }
 
 /* part(message) — 메시지 본문 정렬/줄바꿈. */
@@ -61,6 +67,8 @@ ion-toast.fr-toast::part(message) {
   font-size: 14px;
   line-height: 1.4;
   word-break: keep-all;
+  flex: 0 1 auto;
+  text-align: center;
 }
 
 /* part(icon) — 좌측 아이콘. variant 별로 색만 다르게. */
