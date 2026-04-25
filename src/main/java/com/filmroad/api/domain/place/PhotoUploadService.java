@@ -109,15 +109,23 @@ public class PhotoUploadService {
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.RESPONSE_NULL_ERROR));
 
         PhotoVisibility visibility = req.getVisibility() != null ? req.getVisibility() : PhotoVisibility.PUBLIC;
-        String groupKey = UUID.randomUUID().toString();
         String dateBucket = LocalDate.now(UPLOAD_BUCKET_ZONE).format(DATE_BUCKET_FORMAT);
         Path uploadDir = Paths.get(uploadPath).toAbsolutePath().normalize();
-        int baseOrderIndex = placePhotoRepository.findMaxOrderIndexByPlaceId(place.getId()) + 1;
+        int nextOrderIndex = placePhotoRepository.findMaxOrderIndexByPlaceId(place.getId()) + 1;
         String tagsCsv = normalizeTags(req.getTags());
 
         // 2) DB 저장 먼저, 파일 write 는 가장 마지막 — file write 실패해도 트랜잭션 롤백으로 DB 엔티티 남지 않음.
-        //    각 파일의 target path 는 DB save 단계에서 미리 산출해 imageUrl 로 기록.
-        List<PlacePhoto> savedPhotos = new ArrayList<>(files.size());
+        //    1 PlacePhoto post + N PlacePhotoImage (cascade ALL). 대표 url 은 images.get(0) 기준.
+        PlacePhoto post = PlacePhoto.builder()
+                .place(place)
+                .user(user)
+                .authorNickname(null)
+                .orderIndex(nextOrderIndex)
+                .caption(req.getCaption())
+                .visibility(visibility)
+                .tagsCsv(tagsCsv)
+                .build();
+
         List<Path> pendingWrites = new ArrayList<>(files.size());
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
@@ -128,29 +136,22 @@ public class PhotoUploadService {
             if (!target.startsWith(uploadDir)) {
                 throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
             }
-
-            PlacePhoto saved = placePhotoRepository.save(PlacePhoto.builder()
-                    .place(place)
-                    .user(user)
+            PlacePhotoImage image = PlacePhotoImage.builder()
                     .imageUrl("/uploads/" + relativePath)
-                    .authorNickname(null)
-                    .orderIndex(baseOrderIndex + i)
-                    .caption(i == 0 ? req.getCaption() : null)
-                    .visibility(visibility)
-                    .tagsCsv(i == 0 ? tagsCsv : null)
-                    .groupKey(groupKey)
-                    .build());
-            savedPhotos.add(saved);
+                    .imageOrderIndex(i)
+                    .build();
+            post.addImage(image);  // 양방향 연결, cascade ALL 로 함께 persist
             pendingWrites.add(target);
         }
 
-        // Stamp / reward 는 batch 당 1회. 대표 photo(첫 장) 기준.
-        PlacePhoto primary = savedPhotos.get(0);
+        PlacePhoto savedPost = placePhotoRepository.save(post);
+
+        // Stamp / reward 는 batch 당 1회.
         if (!stampRepository.existsByUserIdAndPlaceId(userId, place.getId())) {
             stampRepository.save(Stamp.builder()
                     .user(user)
                     .place(place)
-                    .photo(primary)
+                    .photo(savedPost)
                     .build());
         }
 
@@ -199,7 +200,7 @@ public class PhotoUploadService {
                 .newBadges(newBadges)
                 .build();
 
-        return PhotoUploadResponse.of(savedPhotos, stampReward, rewardDelta);
+        return PhotoUploadResponse.of(savedPost, stampReward, rewardDelta);
     }
 
     private void validateFile(MultipartFile file) {

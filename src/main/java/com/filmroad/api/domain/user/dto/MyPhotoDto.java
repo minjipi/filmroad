@@ -27,7 +27,7 @@ public class MyPhotoDto {
     public static MyPhotoDto from(PlacePhoto photo) {
         return MyPhotoDto.builder()
                 .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
+                .imageUrl(photo.getPrimaryImageUrl())
                 .caption(photo.getCaption())
                 .placeId(photo.getPlace().getId())
                 .placeName(photo.getPlace().getName())

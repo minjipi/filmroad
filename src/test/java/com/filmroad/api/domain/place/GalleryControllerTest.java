@@ -70,15 +70,18 @@ class GalleryControllerTest {
         User user2 = userRepository.findById(2L).orElseThrow();
         Place place10 = placeRepository.findById(10L).orElseThrow();
         int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
-        PlacePhoto privatePhoto = placePhotoRepository.save(PlacePhoto.builder()
+        PlacePhoto entity = PlacePhoto.builder()
                 .place(place10)
                 .user(user2)
-                .imageUrl("/uploads/private-user2.jpg")
                 .orderIndex(nextOrder)
                 .caption("user2 비공개")
                 .visibility(PhotoVisibility.PRIVATE)
-                .groupKey(java.util.UUID.randomUUID().toString())
+                .build();
+        entity.addImage(PlacePhotoImage.builder()
+                .imageUrl("/uploads/private-user2.jpg")
+                .imageOrderIndex(0)
                 .build());
+        PlacePhoto privatePhoto = placePhotoRepository.save(entity);
 
         // user=1 의 ATOKEN 으로 갤러리 조회 → 방금 저장한 PRIVATE 사진이 응답에 없어야 한다.
         mockMvc.perform(get("/api/places/10/photos")

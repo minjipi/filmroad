@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 @Builder
 public class PhotoUploadResponse {
     private Long id;
+    /** 대표 이미지 — `images.get(0).getImageUrl()`. images 비어 있으면 null. */
     private String imageUrl;
     private Long placeId;
     private Long workId;
@@ -28,30 +29,25 @@ public class PhotoUploadResponse {
     private StampRewardDto stamp;
     private RewardDeltaDto reward;
     /**
-     * 같은 업로드 batch 의 사진 전체 (대표 사진 포함). 단일 업로드면 길이 1,
-     * 멀티 업로드면 orderIndex 오름차순. 프론트는 이 배열로 carousel 구성.
+     * 첨부 이미지 전체 (대표 포함). 단일 업로드면 길이 1, 멀티 업로드면 imageOrderIndex 오름차순.
      */
-    private List<GroupPhotoSummary> groupPhotos;
+    private List<PhotoImageSummary> images;
 
-    /**
-     * `photos` 는 같은 batch 전체 (대표 = photos.get(0)) — orderIndex ASC 로 이미 정렬된 상태 가정.
-     */
-    public static PhotoUploadResponse of(List<PlacePhoto> photos, StampRewardDto stamp, RewardDeltaDto reward) {
-        PlacePhoto primary = photos.get(0);
+    public static PhotoUploadResponse of(PlacePhoto post, StampRewardDto stamp, RewardDeltaDto reward) {
         return PhotoUploadResponse.builder()
-                .id(primary.getId())
-                .imageUrl(primary.getImageUrl())
-                .placeId(primary.getPlace().getId())
-                .workId(primary.getPlace().getWork().getId())
-                .workTitle(primary.getPlace().getWork().getTitle())
-                .workEpisode(primary.getPlace().getWorkEpisode())
-                .caption(primary.getCaption())
-                .tags(parseTags(primary.getTagsCsv()))
-                .visibility(primary.getVisibility())
-                .createdAt(primary.getCreatedAt())
+                .id(post.getId())
+                .imageUrl(post.getPrimaryImageUrl())
+                .placeId(post.getPlace().getId())
+                .workId(post.getPlace().getWork().getId())
+                .workTitle(post.getPlace().getWork().getTitle())
+                .workEpisode(post.getPlace().getWorkEpisode())
+                .caption(post.getCaption())
+                .tags(parseTags(post.getTagsCsv()))
+                .visibility(post.getVisibility())
+                .createdAt(post.getCreatedAt())
                 .stamp(stamp)
                 .reward(reward)
-                .groupPhotos(photos.stream().map(GroupPhotoSummary::from).toList())
+                .images(post.getImages().stream().map(PhotoImageSummary::from).toList())
                 .build();
     }
 

@@ -52,6 +52,9 @@ class PhotoControllerTest {
     private PlacePhotoRepository placePhotoRepository;
 
     @Autowired
+    private PlacePhotoImageRepository placePhotoImageRepository;
+
+    @Autowired
     private PlaceRepository placeRepository;
 
     @Autowired
@@ -257,13 +260,16 @@ class PhotoControllerTest {
         com.filmroad.api.domain.user.User u1 = userRepository.findById(1L).orElseThrow();
         Place p = placeRepository.findById(10L).orElseThrow();
         int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
-        PlacePhoto own = placePhotoRepository.save(PlacePhoto.builder()
+        PlacePhoto own = PlacePhoto.builder()
                 .place(p).user(u1)
-                .imageUrl("/uploads/own-private.jpg")
                 .orderIndex(nextOrder)
                 .visibility(PhotoVisibility.PRIVATE)
-                .groupKey(java.util.UUID.randomUUID().toString())
+                .build();
+        own.addImage(PlacePhotoImage.builder()
+                .imageUrl("/uploads/own-private.jpg")
+                .imageOrderIndex(0)
                 .build());
+        own = placePhotoRepository.save(own);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
                         "/api/photos/" + own.getId())
@@ -280,13 +286,16 @@ class PhotoControllerTest {
         com.filmroad.api.domain.user.User u2 = userRepository.findById(2L).orElseThrow();
         Place p = placeRepository.findById(10L).orElseThrow();
         int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
-        PlacePhoto foreign = placePhotoRepository.save(PlacePhoto.builder()
+        PlacePhoto foreign = PlacePhoto.builder()
                 .place(p).user(u2)
-                .imageUrl("/uploads/u2-private.jpg")
                 .orderIndex(nextOrder)
                 .visibility(PhotoVisibility.PRIVATE)
-                .groupKey(java.util.UUID.randomUUID().toString())
+                .build();
+        foreign.addImage(PlacePhotoImage.builder()
+                .imageUrl("/uploads/u2-private.jpg")
+                .imageOrderIndex(0)
                 .build());
+        foreign = placePhotoRepository.save(foreign);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
                         "/api/photos/" + foreign.getId())
@@ -345,12 +354,15 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.reward.newBadges", notNullValue()));
     }
 
-    // ---- task #44a · 멀티 파일 업로드 + groupPhotos ----
+    // ---- task #45a · 멀티 파일 업로드 + 1:N images ----
 
     @Test
-    @DisplayName("POST /api/photos — 3장 업로드: 같은 groupKey, orderIndex 순차, groupPhotos.size()==3")
-    void upload_storesMultipleFilesUnderSameGroupKey() throws Exception {
+    @DisplayName("POST /api/photos — 3장 업로드: PlacePhoto 1 row + place_photo_image 3 row, imageOrderIndex ASC")
+    void upload_storesMultipleFilesAsOnePostWithThreeImages() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, "세 장짜리 배치", null, PhotoVisibility.PUBLIC, false);
+
+        long postCountBefore = placePhotoRepository.count();
+        long imageCountBefore = placePhotoImageRepository.count();
 
         MvcResult result = mockMvc.perform(multipart("/api/photos")
                         .file(buildImage("a.jpg"))
@@ -359,28 +371,23 @@ class PhotoControllerTest {
                         .file(buildMeta(req))
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results.groupPhotos", hasSize(3)))
+                .andExpect(jsonPath("$.results.images", hasSize(3)))
                 .andReturn();
 
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        java.util.List<Long> ids = new java.util.ArrayList<>();
+        long postId = body.at("/results/id").asLong();
         java.util.List<Integer> orderIndexes = new java.util.ArrayList<>();
-        body.at("/results/groupPhotos").forEach(n -> {
-            ids.add(n.get("id").asLong());
-            orderIndexes.add(n.get("orderIndex").asInt());
-        });
-        assertThat(ids).hasSize(3);
-        // orderIndex 는 순차 증가
-        assertThat(orderIndexes.get(0)).isLessThan(orderIndexes.get(1));
-        assertThat(orderIndexes.get(1)).isLessThan(orderIndexes.get(2));
-        // 3장 모두 같은 groupKey
-        java.util.Set<String> groupKeys = new java.util.HashSet<>();
-        for (Long id : ids) {
-            groupKeys.add(placePhotoRepository.findById(id).orElseThrow().getGroupKey());
-        }
-        assertThat(groupKeys)
-                .as("같은 batch 는 단일 groupKey")
-                .hasSize(1);
+        body.at("/results/images").forEach(n -> orderIndexes.add(n.get("imageOrderIndex").asInt()));
+        // 0,1,2 순서로 ASC.
+        assertThat(orderIndexes).containsExactly(0, 1, 2);
+
+        // 3장 = post 1 + image 3 (정확히 차이만큼 row 증가).
+        assertThat(placePhotoRepository.count() - postCountBefore).isEqualTo(1);
+        assertThat(placePhotoImageRepository.count() - imageCountBefore).isEqualTo(3);
+
+        // 동일 post 의 images 가 N=3 인지 직접 확인.
+        PlacePhoto post = placePhotoRepository.findById(postId).orElseThrow();
+        assertThat(post.getImages()).hasSize(3);
     }
 
     @Test
@@ -403,14 +410,15 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/photos — 2장 정상 + 1장 magic-byte 위조 → 400 + 아무 row 도 저장 안 됨")
+    @DisplayName("POST /api/photos — 2장 정상 + 1장 magic-byte 위조 → 400, post / image 어느 쪽도 새로 저장되지 않음")
     void upload_rollsBackAllOnMagicByteFailure() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
         MockMultipartFile fake = new MockMultipartFile(
                 "files", "fake.jpg", MediaType.IMAGE_JPEG_VALUE,
                 new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
 
-        long before = placePhotoRepository.count();
+        long postsBefore = placePhotoRepository.count();
+        long imagesBefore = placePhotoImageRepository.count();
 
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage("ok1.jpg"))
@@ -421,10 +429,11 @@ class PhotoControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is(40060)));
 
-        // 선 검증 단계에서 거부됐으므로 DB 에는 추가된 row 가 없어야 한다.
+        // 선검증에서 거부 → post / image 어느 쪽도 새 row 없어야 한다.
         assertThat(placePhotoRepository.count())
-                .as("배치 중 하나라도 실패하면 전체 롤백 — 부분 저장 금지")
-                .isEqualTo(before);
+                .as("배치 실패 시 PlacePhoto 도 부분 저장 금지").isEqualTo(postsBefore);
+        assertThat(placePhotoImageRepository.count())
+                .as("배치 실패 시 PlacePhotoImage 도 부분 저장 금지").isEqualTo(imagesBefore);
     }
 
     @Test
@@ -451,8 +460,8 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/photos/{id} — 그룹 3장 업로드 후 상세: groupPhotos orderIndex ASC")
-    void getPhotoDetail_returnsGroupPhotosAscending() throws Exception {
+    @DisplayName("GET /api/photos/{id} — 3장 업로드된 post 의 상세: images imageOrderIndex ASC")
+    void getPhotoDetail_returnsImagesAscending() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, "batch", null, PhotoVisibility.PUBLIC, false);
         MvcResult uploaded = mockMvc.perform(multipart("/api/photos")
                         .file(buildImage("x1.jpg"))
@@ -463,27 +472,20 @@ class PhotoControllerTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        long firstId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
+        long postId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
                 .at("/results/id").asLong();
 
-        // 2번째 장의 id 로 상세 조회해도 groupPhotos 에는 같은 batch 3장이 orderIndex ASC 로 전부 반환.
-        long secondId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
-                .at("/results/groupPhotos/1/id").asLong();
-
-        MvcResult detail = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/" + secondId)
+        MvcResult detail = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/" + postId)
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results.groupPhotos", hasSize(3)))
-                .andExpect(jsonPath("$.results.groupPhotos[0].id", is((int) firstId)))
+                .andExpect(jsonPath("$.results.images", hasSize(3)))
                 .andReturn();
 
-        // orderIndex 가 ASC 로 엄격 증가
-        JsonNode group = objectMapper.readTree(detail.getResponse().getContentAsString())
-                .at("/results/groupPhotos");
-        int o0 = group.get(0).get("orderIndex").asInt();
-        int o1 = group.get(1).get("orderIndex").asInt();
-        int o2 = group.get(2).get("orderIndex").asInt();
-        assertThat(o0).isLessThan(o1);
-        assertThat(o1).isLessThan(o2);
+        JsonNode imgs = objectMapper.readTree(detail.getResponse().getContentAsString())
+                .at("/results/images");
+        // imageOrderIndex 가 0, 1, 2 ASC.
+        assertThat(imgs.get(0).get("imageOrderIndex").asInt()).isEqualTo(0);
+        assertThat(imgs.get(1).get("imageOrderIndex").asInt()).isEqualTo(1);
+        assertThat(imgs.get(2).get("imageOrderIndex").asInt()).isEqualTo(2);
     }
 }
