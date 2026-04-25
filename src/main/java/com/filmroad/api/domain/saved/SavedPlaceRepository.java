@@ -38,5 +38,9 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
     @Query("DELETE FROM SavedPlace sp WHERE sp.user.id = :userId AND sp.place.id = :placeId")
     int deleteByUserIdAndPlaceId(@Param("userId") Long userId, @Param("placeId") Long placeId);
 
+    @Modifying
+    @Query("DELETE FROM SavedPlace sp WHERE sp.collection.id = :collectionId")
+    int deleteByCollectionId(@Param("collectionId") Long collectionId);
+
     long countByUserId(Long userId);
 }

@@ -58,3 +58,7 @@ db/
 ### 인증샷 업로드 디렉토리 (dev 기본값 ./uploads) ###
 # 파일은 `yyyy/MM/dd/<uuid>.<ext>` 로 쌓임. 운영은 UPLOAD_PATH override.
 /uploads/
+
+### 로컬 환경변수 (DB 비밀번호 등 평문 포함) ###
+/env
+/.env

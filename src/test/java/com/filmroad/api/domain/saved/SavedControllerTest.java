@@ -17,7 +17,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -242,6 +244,121 @@ class SavedControllerTest {
     @DisplayName("GET /api/saved/collections/{id} 비로그인 → 401")
     void getCollectionDetail_unauthenticated_returns401() throws Exception {
         mockMvc.perform(get("/api/saved/collections/2"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("PATCH /api/saved/collections/{id} 유효 name → 200 + 변경된 이름 반환")
+    void renameCollection_validName_returns200() throws Exception {
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", "새 이름");
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.id", is(1)))
+                .andExpect(jsonPath("$.results.name", is("새 이름")));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/saved/collections/{id} 빈 name → 400 REQUEST_ERROR")
+    void renameCollection_blankName_returns400() throws Exception {
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", "   ");
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(30001)));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/saved/collections/{id} 21자 → 400 REQUEST_ERROR")
+    void renameCollection_tooLong_returns400() throws Exception {
+        String tooLong = "가".repeat(21);
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", tooLong);
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(30001)));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/saved/collections/{id} 다른 유저 소유 → 404 (enumeration 방지)")
+    void renameCollection_foreign_returns404() throws Exception {
+        User user2 = userRepository.findById(2L).orElseThrow();
+        Collection foreign = collectionRepository.save(Collection.builder()
+                .user(user2).name("user2 collection").build());
+
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", "탈취 시도");
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/" + foreign.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))   // user=1 토큰
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40090)));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/saved/collections/{id} 비로그인 → 401")
+    void renameCollection_unauthenticated_returns401() throws Exception {
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", "비로그인 시도");
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/saved/collections/{id} → 200 + 컬렉션 + 안의 SavedPlace 모두 삭제")
+    void deleteCollection_cascadesSavedPlaces() throws Exception {
+        // collection 2 (도깨비 컴플리트) 안에 savedPlace=2 (place 14) 가 있음.
+        mockMvc.perform(delete("/api/saved/collections/2").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // GET /api/saved 에 collection 2 가 더 이상 안 나옴 + place 14 도 items 에서 빠짐.
+        mockMvc.perform(get("/api/saved").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.collections[?(@.id == 2)]", hasSize(0)))
+                .andExpect(jsonPath("$.results.items[?(@.placeId == 14)]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/saved/collections/{id} 다른 유저 소유 → 404")
+    void deleteCollection_foreign_returns404() throws Exception {
+        User user2 = userRepository.findById(2L).orElseThrow();
+        Collection foreign = collectionRepository.save(Collection.builder()
+                .user(user2).name("user2 collection").build());
+
+        mockMvc.perform(delete("/api/saved/collections/" + foreign.getId())
+                        .cookie(demoAccessCookie()))   // user=1 토큰
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40090)));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/saved/collections/{id} 비로그인 → 401")
+    void deleteCollection_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(delete("/api/saved/collections/1"))
                 .andExpect(status().isUnauthorized());
     }
 

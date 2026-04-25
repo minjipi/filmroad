@@ -250,11 +250,7 @@ public class SavedService {
 
     @Transactional
     public CollectionSummaryDto createCollection(String rawName) {
-        String name = rawName == null ? "" : rawName.trim();
-        if (name.isEmpty() || name.length() > 60) {
-            // @Valid 로 이미 걸러지지만 서비스 단 방어 (직접 호출 경로 대비).
-            throw new BaseException(BaseResponseStatus.REQUEST_ERROR, "컬렉션 이름을 입력해주세요.");
-        }
+        String name = normalizeName(rawName);
         Long userId = currentUser.currentUserId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.RESPONSE_NULL_ERROR));
@@ -272,6 +268,51 @@ public class SavedService {
                 .coverImageUrl(null)
                 .gradient(saved.getGradient())
                 .build();
+    }
+
+    @Transactional
+    public CollectionSummaryDto renameCollection(Long collectionId, String rawName) {
+        String name = normalizeName(rawName);
+        Long userId = currentUser.currentUserId();
+        Collection collection = collectionRepository.findById(collectionId)
+                .filter(c -> c.getUser().getId().equals(userId))
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.COLLECTION_NOT_FOUND));
+        collection.rename(name);
+        return CollectionSummaryDto.builder()
+                .id(collection.getId())
+                .name(collection.getName())
+                .count(collectionRepository.countSavedByCollectionId(collection.getId()))
+                .coverImageUrl(null)
+                .gradient(collection.getGradient())
+                .build();
+    }
+
+    /**
+     * 컬렉션 삭제. 안에 든 SavedPlace 까지 같이 삭제 (Phase 1 정책: 저장 자체 해제).
+     * 다른 컬렉션에도 같은 장소가 있을 가능성은 현재 데이터모델상 0 — SavedPlace 는 (user,place) 유니크.
+     */
+    @Transactional
+    public void deleteCollection(Long collectionId) {
+        Long userId = currentUser.currentUserId();
+        Collection collection = collectionRepository.findById(collectionId)
+                .filter(c -> c.getUser().getId().equals(userId))
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.COLLECTION_NOT_FOUND));
+        savedPlaceRepository.deleteByCollectionId(collection.getId());
+        collectionRepository.delete(collection);
+    }
+
+    /**
+     * Create / rename 공통 검증 — trim, 공백/길이 (서비스 단 방어, @Valid 우회 경로 대비).
+     */
+    private String normalizeName(String rawName) {
+        String name = rawName == null ? "" : rawName.trim();
+        if (name.isEmpty()) {
+            throw new BaseException(BaseResponseStatus.REQUEST_ERROR, "컬렉션 이름을 입력해주세요.");
+        }
+        if (name.length() > 20) {
+            throw new BaseException(BaseResponseStatus.REQUEST_ERROR, "컬렉션 이름은 20자 이하로 입력해주세요.");
+        }
+        return name;
     }
 
     @Transactional

@@ -7,12 +7,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * `POST /api/saved/collections` 요청. 중복 이름 허용·유저당 최대 개수 제한 없음 (브리핑 #26).
+ * `PATCH /api/saved/collections/{id}` 요청. 현재는 name 만 변경 가능.
  */
 @Getter
 @Setter
 @NoArgsConstructor
-public class CreateCollectionRequest {
+public class RenameCollectionRequest {
 
     @NotBlank(message = "컬렉션 이름을 입력해주세요.")
     @Size(max = 20, message = "컬렉션 이름은 20자 이하로 입력해주세요.")
