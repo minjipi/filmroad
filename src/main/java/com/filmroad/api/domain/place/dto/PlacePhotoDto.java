@@ -14,7 +14,7 @@ public class PlacePhotoDto {
     public static PlacePhotoDto from(PlacePhoto photo) {
         return PlacePhotoDto.builder()
                 .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
+                .imageUrl(photo.getPrimaryImageUrl())
                 .authorNickname(photo.getAuthorNickname())
                 .build();
     }

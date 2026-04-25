@@ -149,7 +149,7 @@ public class FeedService {
 
         return FeedPostDto.builder()
                 .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
+                .imageUrl(photo.getPrimaryImageUrl())
                 .caption(photo.getCaption())
                 .createdAt(photo.getCreatedAt())
                 .sceneCompare(sceneCompare)

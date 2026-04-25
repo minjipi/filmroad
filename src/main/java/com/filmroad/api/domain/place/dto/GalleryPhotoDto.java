@@ -26,7 +26,7 @@ public class GalleryPhotoDto {
         String handle = nickname == null || nickname.isBlank() ? null : "@" + nickname;
         return GalleryPhotoDto.builder()
                 .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
+                .imageUrl(photo.getPrimaryImageUrl())
                 .caption(photo.getCaption())
                 .authorNickname(nickname)
                 .authorHandle(handle)

@@ -102,26 +102,6 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     long countByPlaceId(Long placeId);
 
     /**
-     * 같은 업로드 batch(`groupKey` 공유) 의 photo 를 orderIndex 오름차순으로 반환.
-     * viewer 기준 visibility 필터(PUBLIC / 본인 / FOLLOWERS+follow) 를 적용해
-     * ShotDetailPage carousel 이 볼 권한 없는 사진을 노출하지 않게 한다.
-     */
-    @Query("""
-            SELECT p FROM PlacePhoto p
-            WHERE p.groupKey = :groupKey
-              AND (
-                p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
-                OR (:viewerId IS NOT NULL AND p.user.id = :viewerId)
-                OR (p.visibility = com.filmroad.api.domain.place.PhotoVisibility.FOLLOWERS
-                    AND :viewerId IS NOT NULL
-                    AND p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :viewerId))
-              )
-            ORDER BY p.orderIndex ASC, p.id ASC
-            """)
-    List<PlacePhoto> findAllByGroupKeyOrderByOrderIndexAsc(@Param("groupKey") String groupKey,
-                                                          @Param("viewerId") Long viewerId);
-
-    /**
      * 유저 본인 업로드 사진 목록 (ProfilePage 인증샷 grid 용). visibility 무관 — 본인은 전부 볼 수 있음.
      * `cursor` 보다 id 가 작은 것부터 — cursor 기반 페이지네이션 (null 이면 첫 페이지).
      * Place + Work JOIN FETCH 로 ProfilePage 에 필요한 workTitle/placeName 을 같이 로드.
