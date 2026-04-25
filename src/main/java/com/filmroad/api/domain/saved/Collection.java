@@ -28,7 +28,7 @@ public class Collection extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, length = 60)
+    @Column(nullable = false, length = 20)
     private String name;
 
     @Column(length = 200)
@@ -39,4 +39,8 @@ public class Collection extends BaseEntity {
 
     @Column(length = 40)
     private String gradient;
+
+    public void rename(String newName) {
+        this.name = newName;
+    }
 }

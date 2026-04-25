@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
+import { useToast } from '@/composables/useToast';
 
 export interface SavedCollection {
   id: number;
@@ -117,6 +118,74 @@ export const useSavedStore = defineStore('saved', {
         return null;
       }
     },
+    async renameCollection(id: number, name: string): Promise<boolean> {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        this.error = '컬렉션 이름을 입력해 주세요';
+        return false;
+      }
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('컬렉션 편집은 로그인 후 이용할 수 있어요.');
+        return false;
+      }
+      const target = this.collections.find((c) => c.id === id);
+      if (!target) {
+        this.error = '컬렉션을 찾을 수 없어요';
+        return false;
+      }
+      // Optimistic — 카드 라벨이 즉시 바뀌어야 사용자 체감이 빠르다. 실패 시 원래 이름으로 롤백.
+      const prevName = target.name;
+      target.name = trimmed;
+      try {
+        await api.patch<SavedCollection>(
+          `/api/saved/collections/${id}`,
+          { name: trimmed },
+        );
+        return true;
+      } catch (e) {
+        target.name = prevName;
+        this.error = e instanceof Error ? e.message : 'Failed to rename collection';
+        return false;
+      }
+    },
+    async deleteCollection(id: number): Promise<boolean> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('컬렉션 편집은 로그인 후 이용할 수 있어요.');
+        return false;
+      }
+      const target = this.collections.find((c) => c.id === id);
+      if (!target) {
+        this.error = '컬렉션을 찾을 수 없어요';
+        return false;
+      }
+      // Optimistic — 카드와 그 안의 SavedPlace 들을 먼저 뺀다. Phase 1 정책: 컬렉션 삭제 시
+      // 안의 저장 자체도 해제 (서버에서 cascade DELETE). items / savedPlaceIds / totalCount
+      // 모두 같이 갱신해야 PlaceDetail 등 다른 화면 북마크 아이콘도 즉시 회색으로 돌아옴.
+      const prevCollections = [...this.collections];
+      const prevItems = [...this.items];
+      const prevSavedPlaceIds = [...this.savedPlaceIds];
+      const prevTotalCount = this.totalCount;
+
+      const removedItems = this.items.filter((i) => i.collectionId === id);
+      const removedPlaceIds = new Set(removedItems.map((i) => i.placeId));
+
+      this.collections = this.collections.filter((c) => c.id !== id);
+      this.items = this.items.filter((i) => i.collectionId !== id);
+      this.savedPlaceIds = this.savedPlaceIds.filter((pid) => !removedPlaceIds.has(pid));
+      this.totalCount = Math.max(0, this.totalCount - removedItems.length);
+
+      try {
+        await api.delete(`/api/saved/collections/${id}`);
+        return true;
+      } catch (e) {
+        this.collections = prevCollections;
+        this.items = prevItems;
+        this.savedPlaceIds = prevSavedPlaceIds;
+        this.totalCount = prevTotalCount;
+        this.error = e instanceof Error ? e.message : 'Failed to delete collection';
+        return false;
+      }
+    },
     async toggleSave(
       placeId: number,
       collectionId?: number | null,
@@ -160,9 +229,13 @@ export const useSavedStore = defineStore('saved', {
           // this refetch, the item exists in savedPlaceIds but never shows
           // up in the list until the next manual page visit.
           await this.fetch();
+          // 빈번한 액션이라 중앙 카드 토스트(showInfo) 대신 하단 다크 알약
+          // (showQuick) 으로 가볍게 알린다 — 매번 화면 가리면 피로해서.
+          await useToast().showQuick('저장했어요');
         } else {
           this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
           this.items = this.items.filter((i) => i.placeId !== placeId);
+          await useToast().showQuick('저장을 해제했어요');
         }
       } catch (e) {
         // Rollback the optimistic update so the UI stays consistent with

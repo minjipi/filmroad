@@ -32,19 +32,25 @@
         <section class="section">
           <div class="section-h">
             <h2>컬렉션</h2>
-            <span class="sort-btn" @click="onEditCollections">편집</span>
+            <button
+              v-if="collections.length > 0 || editMode"
+              type="button"
+              class="sort-btn edit-toggle"
+              data-testid="coll-edit-toggle"
+              @click="onToggleEditMode"
+            >{{ editMode ? '완료' : '편집' }}</button>
           </div>
         </section>
 
-        <!-- 컬렉션 목록 — 서버 fetch 결과 직접 렌더. 비어 있으면 "새
-             컬렉션" 카드만 노출 (mock 3개는 task #26 에서 제거됨). -->
+        <!-- 컬렉션 목록 — 서버 fetch 결과 직접 렌더. 편집 모드에선 카드 우상단
+             "..." 버튼 노출, 카드 자체 탭은 막아 액션과 충돌 방지. -->
         <div class="collection-row no-scrollbar">
           <div
             v-for="c in collections"
             :key="c.id"
-            class="coll"
+            :class="['coll', editMode ? 'editing' : '']"
             data-testid="coll-card"
-            @click="onOpenCollection(c.id)"
+            @click="onCollectionCardTap(c)"
           >
             <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
             <div />
@@ -54,8 +60,19 @@
                 <ion-icon :icon="collectionIconFor(c)" class="ic-16" />{{ c.count }}곳
               </div>
             </div>
+            <button
+              v-if="editMode"
+              type="button"
+              class="coll-menu"
+              :aria-label="`${c.name} 컬렉션 옵션`"
+              data-testid="coll-menu"
+              @click.stop="onCollectionMenu(c)"
+            >
+              <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
+            </button>
           </div>
           <div
+            v-if="!editMode"
             class="coll new"
             data-testid="coll-new"
             @click="onCreateCollection"
@@ -141,8 +158,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { onMounted, ref } from 'vue';
+import {
+  IonPage,
+  IonContent,
+  IonIcon,
+  actionSheetController,
+  alertController,
+} from '@ionic/vue';
 import {
   searchOutline,
   swapVerticalOutline,
@@ -159,6 +182,9 @@ import {
   moonOutline,
   starOutline,
   trailSignOutline,
+  ellipsisHorizontal,
+  pencilOutline,
+  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -252,8 +278,78 @@ async function onSort(): Promise<void> {
   await showInfo('정렬 옵션은 곧 공개됩니다');
 }
 
-async function onEditCollections(): Promise<void> {
-  await showInfo('컬렉션 편집은 곧 공개됩니다');
+// 편집 모드: 컬렉션 카드 우상단 "..." 버튼이 노출되고, 카드 탭으로의 상세
+// 진입은 잠긴다. 편집/완료 토글로 진입/종료. 컬렉션이 0개가 되면 자동 종료.
+const editMode = ref(false);
+
+function onToggleEditMode(): void {
+  editMode.value = !editMode.value;
+}
+
+function onCollectionCardTap(c: SavedCollection): void {
+  if (editMode.value) {
+    // 편집 모드에선 "..." 메뉴를 명시적으로 눌러야만 액션 시트가 열린다.
+    // 카드 자체 탭은 무시 — 사용자가 메뉴 버튼을 노린 미스 탭을 막는다.
+    return;
+  }
+  void router.push(`/collection/${c.id}`);
+}
+
+async function onCollectionMenu(c: SavedCollection): Promise<void> {
+  const sheet = await actionSheetController.create({
+    header: c.name,
+    buttons: [
+      {
+        text: '이름 변경',
+        icon: pencilOutline,
+        handler: () => {
+          uiStore.openRenameCollectionModal({ id: c.id, name: c.name });
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDeleteCollection(c);
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+}
+
+async function confirmDeleteCollection(c: SavedCollection): Promise<void> {
+  const alert = await alertController.create({
+    header: '컬렉션 삭제',
+    message: `컬렉션 '${c.name}'을(를) 삭제할까요? 저장된 ${c.count}곳도 함께 삭제됩니다.`,
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      {
+        text: '삭제',
+        role: 'destructive',
+        handler: () => {
+          void handleDeleteCollection(c);
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+async function handleDeleteCollection(c: SavedCollection): Promise<void> {
+  const ok = await savedStore.deleteCollection(c.id);
+  if (!ok) {
+    if (error.value) await showError(error.value);
+    return;
+  }
+  await showInfo('컬렉션이 삭제되었어요');
+  // 마지막 컬렉션을 지웠으면 편집 모드를 자동 종료해 빈 상태에서 "편집" 버튼이
+  // 둥둥 떠있지 않게 한다.
+  if (savedStore.collections.length === 0) {
+    editMode.value = false;
+  }
 }
 
 // 새 컬렉션 모달은 task #29 에서 공통 컴포넌트로 빠졌다. 여기선 버튼
@@ -261,10 +357,6 @@ async function onEditCollections(): Promise<void> {
 // 대신 열린다. CollectionPicker 도 같은 진입점을 공유.
 function onCreateCollection(): void {
   uiStore.openNewCollectionModal();
-}
-
-async function onOpenCollection(id: number): Promise<void> {
-  await router.push(`/collection/${id}`);
 }
 
 async function onOpenSuggestion(): Promise<void> {
@@ -405,6 +497,36 @@ ion-content.sv-content {
   font-size: 12px;
 }
 .coll.new::before { display: none; }
+
+/* 편집 모드 카드: 살짝 들썩이는 효과로 "탭 가능"이 아니라 "옵션 노출 중"임을
+   시각적으로 구분. 카드 탭 자체는 비활성. */
+.coll.editing { cursor: default; }
+
+.coll-menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--fr-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.edit-toggle {
+  border: none;
+  background: transparent;
+  font: inherit;
+  padding: 4px 8px;
+  cursor: pointer;
+}
 
 .banner {
   margin: 0 16px 14px;

@@ -82,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IonIcon, toastController } from '@ionic/vue';
+import { IonIcon } from '@ionic/vue';
 import {
   closeOutline,
   bookmarkOutline,
@@ -93,11 +93,13 @@ import {
 import { storeToRefs } from 'pinia';
 import { useUiStore } from '@/stores/ui';
 import { useSavedStore, type SavedCollection } from '@/stores/saved';
+import { useToast } from '@/composables/useToast';
 
 const uiStore = useUiStore();
 const savedStore = useSavedStore();
 const { collectionPickerOpen, collectionPickerPlaceId } = storeToRefs(uiStore);
 const { collections } = storeToRefs(savedStore);
+const { showError } = useToast();
 
 const open = computed(() => collectionPickerOpen.value);
 
@@ -105,21 +107,12 @@ async function pick(collectionId: number | null): Promise<void> {
   const placeId = collectionPickerPlaceId.value;
   if (placeId == null) return;
   uiStore.closeCollectionPicker();
+  // 성공/실패 토스트는 savedStore.toggleSave 안쪽에서 일괄 띄우므로 여기서는
+  // 추가로 띄우지 않는다 (이전엔 store + picker 양쪽이 띄워서 "저장했어요" 가
+  // 화면 중앙 + 하단에 중복으로 떴음). 실패만 picker 가 자기 컨텍스트로
+  // 추가 안내해주면 충분.
   await savedStore.toggleSave(placeId, collectionId);
-  if (savedStore.error) {
-    const t = await toastController.create({
-      message: savedStore.error,
-      color: 'danger',
-      duration: 1600,
-    });
-    await t.present();
-    return;
-  }
-  const t = await toastController.create({
-    message: '컬렉션에 저장했어요',
-    duration: 1400,
-  });
-  await t.present();
+  if (savedStore.error) await showError(savedStore.error);
 }
 
 function onClose(): void {

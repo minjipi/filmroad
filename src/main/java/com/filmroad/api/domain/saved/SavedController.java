@@ -4,6 +4,7 @@ import com.filmroad.api.common.model.BaseResponse;
 import com.filmroad.api.domain.saved.dto.CollectionDetailResponse;
 import com.filmroad.api.domain.saved.dto.CollectionSummaryDto;
 import com.filmroad.api.domain.saved.dto.CreateCollectionRequest;
+import com.filmroad.api.domain.saved.dto.RenameCollectionRequest;
 import com.filmroad.api.domain.saved.dto.SavedResponse;
 import com.filmroad.api.domain.saved.dto.ToggleSaveRequest;
 import com.filmroad.api.domain.saved.dto.ToggleSaveResponse;
@@ -12,7 +13,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,11 +41,25 @@ public class SavedController {
 
     @GetMapping("/collections/{id}")
     public BaseResponse<CollectionDetailResponse> getCollection(
-            @org.springframework.web.bind.annotation.PathVariable("id") Long id,
+            @PathVariable("id") Long id,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng
     ) {
         return BaseResponse.success(savedService.getCollectionDetail(id, lat, lng));
+    }
+
+    @PatchMapping("/collections/{id}")
+    public BaseResponse<CollectionSummaryDto> renameCollection(
+            @PathVariable("id") Long id,
+            @RequestBody @Valid RenameCollectionRequest req
+    ) {
+        return BaseResponse.success(savedService.renameCollection(id, req.getName()));
+    }
+
+    @DeleteMapping("/collections/{id}")
+    public BaseResponse<Void> deleteCollection(@PathVariable("id") Long id) {
+        savedService.deleteCollection(id);
+        return BaseResponse.success(null);
     }
 
     @PostMapping("/toggle")

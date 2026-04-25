@@ -185,7 +185,7 @@ describe('HomePage.vue', () => {
     expect(toastCreateSpy).toHaveBeenCalledTimes(1);
     expect(toastCreateSpy).toHaveBeenCalledWith(expect.objectContaining({
       message: '네트워크 오류',
-      color: 'danger',
+      cssClass: expect.arrayContaining(['fr-toast--danger']),
     }));
   });
 

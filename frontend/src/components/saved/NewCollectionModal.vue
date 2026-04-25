@@ -13,10 +13,10 @@
         v-if="open"
         class="new-coll-sheet"
         role="dialog"
-        aria-label="새 컬렉션 만들기"
+        :aria-label="dialogLabel"
       >
         <header class="nc-head">
-          <h2>새 컬렉션</h2>
+          <h2>{{ headingText }}</h2>
           <button
             type="button"
             class="nc-close"
@@ -35,12 +35,12 @@
             type="text"
             class="nc-input"
             placeholder="예: 다음 여행 · 강릉"
-            maxlength="40"
+            maxlength="20"
             enterkeyhint="done"
             data-testid="new-coll-input"
             @keydown.enter.prevent="onSubmit"
           />
-          <p class="nc-hint">저장한 장소를 이 컬렉션으로 분류할 수 있어요.</p>
+          <p class="nc-hint">{{ hintText }}</p>
         </div>
         <div class="nc-actions">
           <button
@@ -53,11 +53,11 @@
           <button
             type="button"
             class="nc-btn primary"
-            :disabled="!canSubmit || creating"
+            :disabled="!canSubmit || submitting"
             data-testid="new-coll-submit"
             @click="onSubmit"
           >
-            {{ creating ? '만드는 중…' : '만들기' }}
+            {{ submitText }}
           </button>
         </div>
       </div>
@@ -70,55 +70,115 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useUiStore } from '@/stores/ui';
 import { useSavedStore, type SavedCollection } from '@/stores/saved';
 import { useToast } from '@/composables/useToast';
 
 // Emits `created(collection)` so consumers (e.g. CollectionPicker) can react
-// to a fresh collection — typically by auto-selecting it.
-const emit = defineEmits<{ created: [collection: SavedCollection] }>();
+// to a fresh collection — typically by auto-selecting it. `renamed` fires after
+// a successful rename so consumers can refresh their local view if needed.
+const emit = defineEmits<{
+  created: [collection: SavedCollection];
+  renamed: [collection: { id: number; name: string }];
+}>();
 
+const router = useRouter();
 const uiStore = useUiStore();
 const savedStore = useSavedStore();
-const { newCollectionModalOpen: open } = storeToRefs(uiStore);
+const {
+  newCollectionModalOpen: open,
+  newCollectionModalMode: mode,
+  newCollectionModalRenameTarget: renameTarget,
+} = storeToRefs(uiStore);
 const { showError, showInfo } = useToast();
 
 const name = ref('');
-const creating = ref(false);
+const submitting = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 
-const canSubmit = computed(() => name.value.trim().length > 0);
+const isRename = computed(() => mode.value === 'rename');
+const headingText = computed(() => (isRename.value ? '이름 변경' : '새 컬렉션'));
+const dialogLabel = computed(() =>
+  isRename.value ? '컬렉션 이름 변경' : '새 컬렉션 만들기',
+);
+const hintText = computed(() =>
+  isRename.value
+    ? '20자 이내로 변경할 수 있어요.'
+    : '저장한 장소를 이 컬렉션으로 분류할 수 있어요.',
+);
+const submitText = computed(() => {
+  if (submitting.value) return isRename.value ? '저장 중…' : '만드는 중…';
+  return isRename.value ? '저장' : '만들기';
+});
+
+const canSubmit = computed(() => {
+  const trimmed = name.value.trim();
+  if (trimmed.length === 0) return false;
+  // Rename 일 때, 동일 이름이면 의미 없으니 비활성화.
+  if (isRename.value && renameTarget.value && trimmed === renameTarget.value.name) {
+    return false;
+  }
+  return true;
+});
 
 // Autofocus when the modal opens; also reset state on close so the next open
-// starts clean regardless of the previous outcome.
+// starts clean regardless of the previous outcome. rename 모드면 기존 이름을
+// 미리 채워서 사용자가 일부만 수정할 수 있게 한다.
 watch(open, async (v) => {
   if (v) {
-    name.value = '';
-    creating.value = false;
+    name.value = isRename.value && renameTarget.value ? renameTarget.value.name : '';
+    submitting.value = false;
     await nextTick();
     inputRef.value?.focus();
+    inputRef.value?.select();
   }
 });
 
 function onClose(): void {
-  if (creating.value) return; // lock while POST is in flight
+  if (submitting.value) return; // lock while request is in flight
   uiStore.closeNewCollectionModal();
 }
 
 async function onSubmit(): Promise<void> {
-  if (!canSubmit.value || creating.value) return;
-  creating.value = true;
+  if (!canSubmit.value || submitting.value) return;
+  submitting.value = true;
   try {
+    if (isRename.value) {
+      const target = renameTarget.value;
+      if (!target) return;
+      const ok = await savedStore.renameCollection(target.id, name.value);
+      if (!ok) {
+        if (savedStore.error) await showError(savedStore.error);
+        return;
+      }
+      await showInfo('이름이 변경되었어요');
+      uiStore.closeNewCollectionModal();
+      emit('renamed', { id: target.id, name: name.value.trim() });
+      return;
+    }
+    // CollectionPicker 안에서 "새 컬렉션 만들기" 로 들어왔는지 여부에 따라
+    // 후속 흐름이 달라진다. picker 가 열려있으면 App.vue 가 created 이벤트를
+    // 받아 picker 의 onCollectionCreated 로 보내 새 컬렉션을 자동 선택한다
+    // (= 현재 보고 있는 장소를 그 컬렉션에 저장). picker 가 닫혀있으면 (=
+    // SavedPage "새 컬렉션" 카드 흐름) 사용자가 곧장 장소를 둘러볼 수 있게
+    // /feed 로 안내한다.
+    const fromPicker = uiStore.collectionPickerOpen;
     const created = await savedStore.createCollection(name.value);
     if (!created) {
       if (savedStore.error) await showError(savedStore.error);
       return;
     }
-    await showInfo('컬렉션이 추가되었어요');
     uiStore.closeNewCollectionModal();
     emit('created', created);
+    if (fromPicker) {
+      await showInfo('컬렉션이 추가되었어요');
+    } else {
+      await showInfo('새 컬렉션이 추가되었어요. 어떤 곳을 저장하러 가볼까?');
+      await router.push('/feed');
+    }
   } finally {
-    creating.value = false;
+    submitting.value = false;
   }
 }
 </script>

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 import api from '@/services/api';
@@ -12,6 +12,8 @@ import { signInForTest } from './__helpers__/auth';
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
+  patch: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
 };
 
 const fixture: SavedResponse = {
@@ -58,6 +60,8 @@ describe('saved store', () => {
     setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
+    mockApi.patch.mockReset();
+    mockApi.delete.mockReset();
   });
 
   it('fetch happy path populates collections/items/totalCount/suggestion and hits /api/saved', async () => {
@@ -334,6 +338,151 @@ describe('saved store', () => {
     expect(result).toBeNull();
     expect(promptSpy).toHaveBeenCalledTimes(1);
     expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it('renameCollection optimistically flips the card label before the PATCH resolves', async () => {
+    // Deep-clone so the optimistic mutation doesn't leak into the shared fixture.
+    mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
+    let resolvePatch: (v: { data: unknown }) => void = () => {};
+    mockApi.patch.mockImplementationOnce(
+      () => new Promise((r) => { resolvePatch = r; }),
+    );
+
+    const store = useSavedStore();
+    await store.fetch();
+
+    const p = store.renameCollection(1, '강릉 새이름');
+    await Promise.resolve();
+    // Before the PATCH resolves, optimistic update should already have flipped the name.
+    expect(store.collections.find((c) => c.id === 1)?.name).toBe('강릉 새이름');
+
+    resolvePatch({ data: { id: 1, name: '강릉 새이름', count: 8, coverImageUrl: null, gradient: null } });
+    await p;
+
+    expect(store.collections.find((c) => c.id === 1)?.name).toBe('강릉 새이름');
+    const [url, body] = mockApi.patch.mock.calls[0];
+    expect(url).toBe('/api/saved/collections/1');
+    expect(body).toEqual({ name: '강릉 새이름' });
+  });
+
+  it('renameCollection rolls back the card label when the PATCH fails', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
+    mockApi.patch.mockRejectedValueOnce(new Error('boom'));
+
+    const store = useSavedStore();
+    await store.fetch();
+
+    const ok = await store.renameCollection(1, '실패할 이름');
+
+    expect(ok).toBe(false);
+    expect(store.collections.find((c) => c.id === 1)?.name).toBe('다음 여행 · 강릉');
+    expect(store.error).toBe('boom');
+  });
+
+  it('renameCollection rejects empty name without hitting the server', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
+    const store = useSavedStore();
+    await store.fetch();
+
+    const ok = await store.renameCollection(1, '   ');
+
+    expect(ok).toBe(false);
+    expect(store.error).toBeTruthy();
+    expect(mockApi.patch).not.toHaveBeenCalled();
+  });
+
+  it('renameCollection on an anonymous visitor opens the login prompt and skips the PATCH', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    useAuthStore().user = null;
+    const uiMod = await import('@/stores/ui');
+    const promptSpy = vi.spyOn(uiMod.useUiStore(), 'showLoginPrompt');
+
+    const store = useSavedStore();
+    // Need a target in collections so the early "not found" branch doesn't fire.
+    store.collections = [{ id: 1, name: '강릉', coverImageUrl: null, count: 0, gradient: null }];
+
+    const ok = await store.renameCollection(1, '새 이름');
+
+    expect(ok).toBe(false);
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    expect(mockApi.patch).not.toHaveBeenCalled();
+  });
+
+  it('deleteCollection optimistically removes the card + its items + adjusts savedPlaceIds and totalCount', async () => {
+    // Hand-rolled fixture: one collection (id=1) holding two saved items.
+    const localFixture: SavedResponse = {
+      collections: [
+        { id: 1, name: '강릉', coverImageUrl: null, count: 2, gradient: null },
+        { id: 2, name: '서울', coverImageUrl: null, count: 1, gradient: null },
+      ],
+      totalCount: 3,
+      items: [
+        { placeId: 10, name: 'A', regionLabel: '', coverImageUrl: '', workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 11, name: 'B', regionLabel: '', coverImageUrl: '', workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 12, name: 'C', regionLabel: '', coverImageUrl: '', workId: 2, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 2 },
+      ],
+      nearbyRouteSuggestion: null,
+    };
+    mockApi.get.mockResolvedValueOnce({ data: localFixture });
+    let resolveDelete: (v: { data: unknown }) => void = () => {};
+    mockApi.delete.mockImplementationOnce(
+      () => new Promise((r) => { resolveDelete = r; }),
+    );
+
+    const store = useSavedStore();
+    await store.fetch();
+
+    const p = store.deleteCollection(1);
+    await Promise.resolve();
+    // Optimistic: collection 1 gone, its items removed, totalCount adjusted, savedPlaceIds in sync.
+    expect(store.collections.map((c) => c.id)).toEqual([2]);
+    expect(store.items.map((i) => i.placeId)).toEqual([12]);
+    expect(store.savedPlaceIds.sort()).toEqual([12]);
+    expect(store.totalCount).toBe(1);
+
+    resolveDelete({ data: null });
+    await p;
+
+    expect(mockApi.delete).toHaveBeenCalledWith('/api/saved/collections/1');
+  });
+
+  it('deleteCollection rolls back collections + items + savedPlaceIds + totalCount when DELETE fails', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: structuredClone(fixture) });
+    mockApi.delete.mockRejectedValueOnce(new Error('boom'));
+
+    const store = useSavedStore();
+    await store.fetch();
+    const before = {
+      collectionIds: store.collections.map((c) => c.id),
+      itemIds: store.items.map((i) => i.placeId),
+      savedIds: [...store.savedPlaceIds].sort(),
+      totalCount: store.totalCount,
+    };
+
+    const ok = await store.deleteCollection(1);
+
+    expect(ok).toBe(false);
+    expect(store.collections.map((c) => c.id)).toEqual(before.collectionIds);
+    expect(store.items.map((i) => i.placeId)).toEqual(before.itemIds);
+    expect([...store.savedPlaceIds].sort()).toEqual(before.savedIds);
+    expect(store.totalCount).toBe(before.totalCount);
+    expect(store.error).toBe('boom');
+  });
+
+  it('deleteCollection on an anonymous visitor opens the login prompt and skips the DELETE', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    useAuthStore().user = null;
+    const uiMod = await import('@/stores/ui');
+    const promptSpy = vi.spyOn(uiMod.useUiStore(), 'showLoginPrompt');
+
+    const store = useSavedStore();
+    store.collections = [{ id: 1, name: '강릉', coverImageUrl: null, count: 0, gradient: null }];
+
+    const ok = await store.deleteCollection(1);
+
+    expect(ok).toBe(false);
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    expect(mockApi.delete).not.toHaveBeenCalled();
   });
 
   it('toggleSave on an anonymous visitor opens the login prompt instead of hitting /api/saved/toggle', async () => {
