@@ -1,21 +1,21 @@
 package com.filmroad.api.domain.comment;
 
 import com.filmroad.api.common.model.BaseResponse;
-import com.filmroad.api.domain.comment.dto.CommentCreateRequest;
 import com.filmroad.api.domain.comment.dto.CommentDto;
 import com.filmroad.api.domain.comment.dto.CommentListResponse;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping
@@ -34,12 +34,21 @@ public class CommentController {
         return BaseResponse.success(commentService.listComments(photoId, cursor, limit));
     }
 
-    @PostMapping("/api/photos/{photoId}/comments")
+    /**
+     * 댓글 작성 — multipart/form-data.
+     * <ul>
+     *   <li>{@code content}: 텍스트 본문 (form field, 필수, 최대 500자)</li>
+     *   <li>{@code image}: 인증샷 이미지 (file part, 선택, 1장)</li>
+     * </ul>
+     * 인증샷 검증·저장은 {@link CommentService#createComment(Long, String, MultipartFile)} 참조.
+     */
+    @PostMapping(value = "/api/photos/{photoId}/comments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<CommentDto> create(
             @PathVariable Long photoId,
-            @RequestBody @Valid CommentCreateRequest req
+            @RequestParam("content") String content,
+            @RequestPart(value = "image", required = false) MultipartFile image
     ) {
-        return BaseResponse.success(commentService.createComment(photoId, req.getContent()));
+        return BaseResponse.success(commentService.createComment(photoId, content, image));
     }
 
     @DeleteMapping("/api/comments/{id}")
