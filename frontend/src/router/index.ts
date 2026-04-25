@@ -50,6 +50,16 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    // Public user profile (task #42). Endpoint is permitAll — anonymous
+    // viewers get { isMe: false, following: false } — so NO
+    // `meta.requiresAuth` gate here. If the viewer is the same user,
+    // the page internally redirects to /profile.
+    path: '/user/:id',
+    name: 'UserProfile',
+    component: () => import('../views/UserProfilePage.vue'),
+    props: true,
+  },
+  {
     path: '/profile/edit',
     name: 'ProfileEdit',
     component: () => import('../views/ProfileEditPage.vue'),
