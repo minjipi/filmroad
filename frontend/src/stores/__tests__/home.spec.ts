@@ -234,4 +234,48 @@ describe('home store', () => {
     expect(store.places.find((p) => p.id === 10)?.liked).toBe(false);
     expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(3200);
   });
+
+  it('toggleLike flips state optimistically BEFORE the API call resolves', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome();
+
+    // 응답을 직접 통제할 수 있는 deferred promise — POST 가 in-flight 인 동안
+    // 상태가 이미 뒤집혀 있어야 한다.
+    let resolvePost!: (v: { data: { liked: boolean; likeCount: number } }) => void;
+    mockApi.post.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolvePost = r;
+        }),
+    );
+    const inflight = store.toggleLike(10);
+
+    // 응답 오기 전: optimistic 으로 이미 liked=true, likeCount +1.
+    expect(store.places.find((p) => p.id === 10)?.liked).toBe(true);
+    expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(3201);
+
+    resolvePost({ data: { liked: true, likeCount: 3201 } });
+    await inflight;
+    // 서버 응답이 와도 같은 값이라 그대로.
+    expect(store.places.find((p) => p.id === 10)?.liked).toBe(true);
+    expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(3201);
+  });
+
+  it('toggleLike rolls back the optimistic flip when the API call fails and surfaces a Korean error', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useHomeStore();
+    await store.fetchHome();
+    const initialLiked = store.places.find((p) => p.id === 10)?.liked;
+    const initialCount = store.places.find((p) => p.id === 10)?.likeCount;
+
+    mockApi.post.mockRejectedValueOnce(new Error('network down'));
+    await store.toggleLike(10);
+
+    // 실패 → 원래 값으로 복원.
+    expect(store.places.find((p) => p.id === 10)?.liked).toBe(initialLiked);
+    expect(store.places.find((p) => p.id === 10)?.likeCount).toBe(initialCount);
+    // store.error 가 사용자에게 보여줄 메시지를 들고 있다.
+    expect(store.error).toBe('network down');
+  });
 });

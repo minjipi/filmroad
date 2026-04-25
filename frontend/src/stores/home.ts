@@ -127,17 +127,28 @@ export const useHomeStore = defineStore('home', {
         useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.');
         return;
       }
+      const place = this.places.find((p) => p.id === placeId);
+      if (!place) return;
+      // Optimistic flip — 사용자가 하트를 누르는 즉시 색이 바뀌어야 한다.
+      // 이전 버전은 API 응답을 기다린 뒤에야 상태를 바꿔서 느린 네트워크에선
+      // "눌렀는데 반응이 없네?" 하고 두 번 누르는 문제가 있었음.
+      const prevLiked = place.liked;
+      const prevLikeCount = place.likeCount;
+      place.liked = !prevLiked;
+      place.likeCount = prevLikeCount + (place.liked ? 1 : -1);
       try {
         const { data } = await api.post<{ liked: boolean; likeCount: number }>(
           `/api/places/${placeId}/like`,
         );
-        const place = this.places.find((p) => p.id === placeId);
-        if (place) {
-          place.liked = data.liked;
-          place.likeCount = data.likeCount;
-        }
+        // 서버 진실로 덮어쓰기 — 동시 토글 등으로 optimistic 값과 다를 수 있다.
+        place.liked = data.liked;
+        place.likeCount = data.likeCount;
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Failed to toggle like';
+        // 롤백 + 한국어 에러. 호출부 (HomePage onToggleLike) 가 store.error 를
+        // 토스트로 띄우므로 이 메시지가 사용자에게 그대로 보인다.
+        place.liked = prevLiked;
+        place.likeCount = prevLikeCount;
+        this.error = e instanceof Error ? e.message : '좋아요를 저장하지 못했어요';
       }
     },
   },
