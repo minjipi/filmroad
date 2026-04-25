@@ -1,36 +1,55 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getCurrentCoords } from '@/composables/useGeolocation';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import {
+  requestLocation,
+  peekPermission,
+} from '@/composables/useGeolocation';
 
 type Success = (pos: GeolocationPosition) => void;
 type Fail = (err: GeolocationPositionError) => void;
 
 function installGeolocation(impl: {
   getCurrentPosition: (s: Success, f: Fail, opts?: PositionOptions) => void;
-}) {
+}): void {
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: impl,
   });
 }
-function uninstallGeolocation() {
+function uninstallGeolocation(): void {
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: undefined,
   });
 }
 
-describe('useGeolocation', () => {
+function installPermissions(impl: { query: (descriptor: { name: string }) => Promise<{ state: string }> }): void {
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: impl,
+  });
+}
+function uninstallPermissions(): void {
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: undefined,
+  });
+}
+
+const ERR_CONST = { PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+
+describe('requestLocation', () => {
   afterEach(() => {
     uninstallGeolocation();
+    uninstallPermissions();
   });
 
-  it('returns null when navigator.geolocation is missing (older browsers / SSR)', async () => {
+  it('returns { ok: false, reason: "unavailable" } when navigator.geolocation is missing', async () => {
     uninstallGeolocation();
-    const coords = await getCurrentCoords();
-    expect(coords).toBeNull();
+    const result = await requestLocation();
+    expect(result).toEqual({ ok: false, reason: 'unavailable' });
   });
 
-  it('resolves {lat,lng} on a successful getCurrentPosition callback', async () => {
+  it('resolves { ok: true, coords } on a successful getCurrentPosition callback', async () => {
     installGeolocation({
       getCurrentPosition: (success) => {
         success({
@@ -48,28 +67,59 @@ describe('useGeolocation', () => {
       },
     });
 
-    const coords = await getCurrentCoords();
-    expect(coords).toEqual({ lat: 37.5665, lng: 126.978 });
+    const result = await requestLocation();
+    expect(result).toEqual({
+      ok: true,
+      coords: { lat: 37.5665, lng: 126.978 },
+    });
   });
 
-  it('returns null on PERMISSION_DENIED (code=1)', async () => {
+  it('maps PERMISSION_DENIED (code=1) to reason="denied"', async () => {
     installGeolocation({
       getCurrentPosition: (_s, fail) => {
         fail({
           code: 1,
           message: 'denied',
-          PERMISSION_DENIED: 1,
-          POSITION_UNAVAILABLE: 2,
-          TIMEOUT: 3,
+          ...ERR_CONST,
         } as GeolocationPositionError);
       },
     });
 
-    const coords = await getCurrentCoords();
-    expect(coords).toBeNull();
+    const result = await requestLocation();
+    expect(result).toEqual({ ok: false, reason: 'denied' });
   });
 
-  it('returns null when the platform never calls back (belt-and-suspenders timeout)', async () => {
+  it('maps POSITION_UNAVAILABLE (code=2) to reason="unavailable"', async () => {
+    installGeolocation({
+      getCurrentPosition: (_s, fail) => {
+        fail({
+          code: 2,
+          message: 'no signal',
+          ...ERR_CONST,
+        } as GeolocationPositionError);
+      },
+    });
+
+    const result = await requestLocation();
+    expect(result).toEqual({ ok: false, reason: 'unavailable' });
+  });
+
+  it('maps TIMEOUT (code=3) from the platform to reason="timeout"', async () => {
+    installGeolocation({
+      getCurrentPosition: (_s, fail) => {
+        fail({
+          code: 3,
+          message: 'timeout',
+          ...ERR_CONST,
+        } as GeolocationPositionError);
+      },
+    });
+
+    const result = await requestLocation();
+    expect(result).toEqual({ ok: false, reason: 'timeout' });
+  });
+
+  it('belt-and-suspenders timer: hung platform API resolves as timeout', async () => {
     vi.useFakeTimers();
     installGeolocation({
       // Intentionally do nothing — simulate a hung platform API.
@@ -77,23 +127,55 @@ describe('useGeolocation', () => {
     });
 
     try {
-      const pending = getCurrentCoords({ timeoutMs: 100 });
+      const pending = requestLocation({ timeoutMs: 100 });
       vi.advanceTimersByTime(200);
-      const coords = await pending;
-      expect(coords).toBeNull();
+      const result = await pending;
+      expect(result).toEqual({ ok: false, reason: 'timeout' });
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('swallows synchronous throws from navigator.geolocation and returns null', async () => {
+  it('synchronous throws from navigator.geolocation collapse to reason="unavailable"', async () => {
     installGeolocation({
       getCurrentPosition: () => {
         throw new Error('boom');
       },
     });
 
-    const coords = await getCurrentCoords();
-    expect(coords).toBeNull();
+    const result = await requestLocation();
+    expect(result).toEqual({ ok: false, reason: 'unavailable' });
+  });
+});
+
+describe('peekPermission', () => {
+  afterEach(() => {
+    uninstallPermissions();
+  });
+
+  it("returns 'unknown' when navigator.permissions is missing", async () => {
+    uninstallPermissions();
+    const state = await peekPermission();
+    expect(state).toBe('unknown');
+  });
+
+  it("proxies 'granted' / 'denied' / 'prompt' from Permissions.query", async () => {
+    for (const expected of ['granted', 'denied', 'prompt'] as const) {
+      installPermissions({
+        query: async () => ({ state: expected }),
+      });
+      const state = await peekPermission();
+      expect(state).toBe(expected);
+    }
+  });
+
+  it("returns 'unknown' when Permissions.query throws", async () => {
+    installPermissions({
+      query: async () => {
+        throw new Error('not supported');
+      },
+    });
+    const state = await peekPermission();
+    expect(state).toBe('unknown');
   });
 });
