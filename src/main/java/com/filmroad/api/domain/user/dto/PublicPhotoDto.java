@@ -22,7 +22,7 @@ public class PublicPhotoDto {
         String place = photo.getPlace() != null ? photo.getPlace().getName() : null;
         return PublicPhotoDto.builder()
                 .id(photo.getId())
-                .imageUrl(photo.getImageUrl())
+                .imageUrl(photo.getPrimaryImageUrl())
                 .workTitle(work)
                 .placeName(place)
                 .build();
