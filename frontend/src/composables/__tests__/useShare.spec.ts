@@ -13,15 +13,16 @@ vi.mock('@/services/kakaoShare', async () => {
   return { ...actual, shareKakao: shareKakaoMock };
 });
 
-const { showInfoMock, showErrorMock } = vi.hoisted(() => ({
-  showInfoMock: vi.fn().mockResolvedValue(undefined),
+const { showQuickMock, showErrorMock } = vi.hoisted(() => ({
+  showQuickMock: vi.fn().mockResolvedValue(undefined),
   showErrorMock: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
-    showInfo: showInfoMock,
+    showQuick: showQuickMock,
     showError: showErrorMock,
     show: vi.fn(),
+    showInfo: vi.fn(),
     showCenter: vi.fn(),
   }),
 }));
@@ -40,7 +41,7 @@ describe('useShare', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     shareKakaoMock.mockReset();
-    showInfoMock.mockClear();
+    showQuickMock.mockClear();
     showErrorMock.mockClear();
   });
 
@@ -58,7 +59,7 @@ describe('useShare', () => {
         linkUrl: SAMPLE.url,
       });
       // success 시엔 카카오톡 앱이 뜨므로 추가 토스트 없음.
-      expect(showInfoMock).not.toHaveBeenCalled();
+      expect(showQuickMock).not.toHaveBeenCalled();
       expect(showErrorMock).not.toHaveBeenCalled();
     });
 
@@ -108,7 +109,7 @@ describe('useShare', () => {
       await copyLink(SAMPLE.url);
 
       expect(writeText).toHaveBeenCalledWith(SAMPLE.url);
-      expect(showInfoMock).toHaveBeenCalledWith('링크가 복사됐어요');
+      expect(showQuickMock).toHaveBeenCalledWith('링크가 복사됐어요');
     });
 
     it('falls back to execCommand when clipboard API is missing', async () => {
@@ -124,7 +125,7 @@ describe('useShare', () => {
       await copyLink(SAMPLE.url);
 
       expect(execSpy).toHaveBeenCalledWith('copy');
-      expect(showInfoMock).toHaveBeenCalledWith('링크가 복사됐어요');
+      expect(showQuickMock).toHaveBeenCalledWith('링크가 복사됐어요');
 
       document.execCommand = original;
     });
@@ -190,7 +191,7 @@ describe('useShare', () => {
 
       // 폴백 = copyLink 라 클립보드 호출 + 안내 토스트.
       expect(writeText).toHaveBeenCalledWith(SAMPLE.url);
-      expect(showInfoMock).toHaveBeenCalledWith('링크가 복사됐어요');
+      expect(showQuickMock).toHaveBeenCalledWith('링크가 복사됐어요');
     });
   });
 });

@@ -8,7 +8,9 @@ import { useToast } from '@/composables/useToast';
  * 호출부(ShareSheet) 는 어떤 채널이 동작했는지 신경쓰지 않고 await 만 하면 됨.
  */
 export function useShare() {
-  const { showInfo, showError } = useToast();
+  // showQuick = 하단 다크 알약 (한국 모바일 표준 패턴) — "링크 복사됐어요"는
+  // 빈번한 confirm 액션이라 정중앙 카드보다 절제된 톤이 어울림.
+  const { showQuick, showError } = useToast();
 
   async function shareToKakao(data: ShareData): Promise<void> {
     try {
@@ -53,7 +55,7 @@ export function useShare() {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      await showInfo('링크가 복사됐어요');
+      await showQuick('링크가 복사됐어요');
     } catch {
       await showError('링크 복사에 실패했어요');
     }
