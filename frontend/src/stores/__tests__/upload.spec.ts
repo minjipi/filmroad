@@ -38,7 +38,7 @@ const fakeResponse: PhotoResponse = {
   tags: ['도깨비', '강릉'],
   visibility: 'PUBLIC',
   createdAt: '2026-04-22T00:00:00Z',
-  groupPhotos: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', orderIndex: 0 }],
+  images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
 };
 
 describe('upload store', () => {

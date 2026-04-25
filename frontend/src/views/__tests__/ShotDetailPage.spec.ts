@@ -66,7 +66,7 @@ const fixture: ShotDetail = {
     episode: '1회',
     sceneTimestamp: '00:15:24',
   },
-  groupPhotos: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 }],
+  images: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', imageOrderIndex: 0 }],
   topComments: [
     {
       id: 1,
@@ -204,13 +204,13 @@ describe('ShotDetailPage.vue', () => {
     expect(imgs[1].attributes('src')).toBe('https://cdn/p/77.jpg');
   });
 
-  it('renders the multi-image carousel when groupPhotos.length > 1 (task #44)', async () => {
+  it('renders the multi-image carousel when images.length > 1 (task #44/#45)', async () => {
     const multi = {
       ...fixture,
-      groupPhotos: [
-        { id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 },
-        { id: 78, imageUrl: 'https://cdn/p/78.jpg', orderIndex: 1 },
-        { id: 79, imageUrl: 'https://cdn/p/79.jpg', orderIndex: 2 },
+      images: [
+        { id: 77, imageUrl: 'https://cdn/p/77.jpg', imageOrderIndex: 0 },
+        { id: 78, imageUrl: 'https://cdn/p/78.jpg', imageOrderIndex: 1 },
+        { id: 79, imageUrl: 'https://cdn/p/79.jpg', imageOrderIndex: 2 },
       ],
     };
     mockApi.get.mockResolvedValueOnce({ data: multi });
@@ -225,7 +225,7 @@ describe('ShotDetailPage.vue', () => {
     expect(wrapper.find('[data-testid="sd-count"]').text()).toContain('1 / 3');
   });
 
-  it('renders the plain compare hero when groupPhotos.length === 1 (single-image post)', async () => {
+  it('renders the plain compare hero when images.length === 1 (single-image post)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
     expect(wrapper.find('[data-testid="sd-carousel"]').exists()).toBe(false);

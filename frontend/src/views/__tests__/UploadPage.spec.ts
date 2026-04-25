@@ -232,7 +232,7 @@ describe('UploadPage.vue', () => {
       tags: [],
       visibility: 'PUBLIC',
       createdAt: '2026-04-22T00:00:00Z',
-      groupPhotos: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', orderIndex: 0 }],
+      images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
     };
     const submitSpy = vi.spyOn(store, 'submit').mockResolvedValue(fakeRes);
 
@@ -267,7 +267,7 @@ describe('UploadPage.vue', () => {
       tags: [],
       visibility: 'PUBLIC',
       createdAt: '2026-04-23T00:00:00Z',
-      groupPhotos: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', orderIndex: 0 }],
+      images: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', imageOrderIndex: 0 }],
     };
     const retrySpy = vi.spyOn(store, 'retry').mockResolvedValue(fakeRes);
 
