@@ -96,7 +96,7 @@
 
         <template v-else>
           <div
-            v-if="scope === 'NEAR' && geoStatus === 'denied'"
+            v-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'denied'"
             class="geo-banner"
             data-testid="geo-denied-banner"
           >
@@ -105,6 +105,42 @@
               <b>위치 사용을 허용하면 내 근처 장소를 볼 수 있어요</b>
               <span>주소창 자물쇠 아이콘 → 권한 설정 → 위치 허용</span>
             </div>
+          </div>
+
+          <div
+            v-else-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'unavailable'"
+            class="geo-banner"
+            data-testid="geo-unavailable-banner"
+          >
+            <ion-icon :icon="locationOutline" class="ic-20" />
+            <div class="txt">
+              <b>위치를 받지 못했어요</b>
+              <span>GPS 또는 네트워크 연결을 확인해 주세요</span>
+            </div>
+            <button
+              type="button"
+              class="retry"
+              data-testid="geo-retry"
+              @click="onRetryLocation"
+            >다시 시도</button>
+          </div>
+
+          <div
+            v-else-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'timeout'"
+            class="geo-banner"
+            data-testid="geo-timeout-banner"
+          >
+            <ion-icon :icon="locationOutline" class="ic-20" />
+            <div class="txt">
+              <b>위치 확인이 지연됐어요</b>
+              <span>실내에선 오래 걸릴 수 있어요. 잠시 후 다시 시도해 보세요</span>
+            </div>
+            <button
+              type="button"
+              class="retry"
+              data-testid="geo-retry"
+              @click="onRetryLocation"
+            >다시 시도</button>
           </div>
 
           <div class="home-grid">
@@ -135,7 +171,7 @@
           </div>
 
           <div
-            v-if="scope === 'NEAR' && geoStatus === 'granted' && places.length === 0"
+            v-if="scope === 'NEAR' && geo.status === 'granted' && places.length === 0"
             class="nearby-empty"
             data-testid="nearby-empty"
           >
@@ -220,16 +256,30 @@ import { useHomeStore, type HomeScope } from '@/stores/home';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
-import { useGeolocation } from '@/composables/useGeolocation';
+import {
+  requestLocation,
+  peekPermission,
+  type Coords,
+  type LocationFailReason,
+} from '@/composables/useGeolocation';
 
 const homeStore = useHomeStore();
 const { hero, works, places, popularWorks, loading, error, selectedWorkId, scope } =
   storeToRefs(homeStore);
-const { showError, showInfo } = useToast();
+const { showError } = useToast();
 const router = useRouter();
 
-const geo = useGeolocation();
-const { coords: geoCoords, status: geoStatus } = geo;
+// 위치 요청 결과 상태. 'idle' / 'pending' 은 아직 결과가 없는 UI 상태이고,
+// 'granted' + coords 나 'fail' + reason 이 확정된 결과를 들고 있다. 실패
+// 원인(denied/unavailable/timeout)별로 배너·CTA 가 달라지므로 flat string
+// 대신 reason 을 그대로 저장한다.
+type GeoState =
+  | { status: 'idle' }
+  | { status: 'pending' }
+  | { status: 'granted'; coords: Coords }
+  | { status: 'fail'; reason: LocationFailReason };
+
+const geo = ref<GeoState>({ status: 'idle' });
 
 // 반경 토글. NEAR 결과 0개일 때 노출되며, 사용자가 직접 30→50→100 km 로 넓힐 수 있다.
 const radiusKm = ref<number>(30);
@@ -261,37 +311,62 @@ async function onSelectWork(id: number | null): Promise<void> {
 }
 
 async function loadNearWithRadius(km: number): Promise<void> {
-  // 이미 권한 받아둔 좌표가 있으면 그걸로, 없으면 지금 요청.
-  const c = geoCoords.value ?? (await geo.request());
-  if (!c) {
-    // 차단/타임아웃/비지원 — NEAR 시맨틱은 유지하되 데이터는 TRENDING 으로 폴백.
-    // 배너는 scope=NEAR + status=denied 컨디션으로 뜨므로 UX 연속성 유지.
-    homeStore.scope = 'NEAR';
-    await homeStore.fetchHome();
-    if (geoStatus.value === 'unavailable') {
-      await showInfo('위치 정보를 사용할 수 없어 전국 트렌드로 보여드려요');
+  // 이미 granted 상태로 받아둔 좌표가 있으면 그걸로, 없으면 지금 요청.
+  let coords: Coords | null =
+    geo.value.status === 'granted' ? geo.value.coords : null;
+
+  if (!coords) {
+    geo.value = { status: 'pending' };
+    const result = await requestLocation();
+    if (result.ok) {
+      coords = result.coords;
+      geo.value = { status: 'granted', coords: result.coords };
+    } else {
+      // 차단/비지원/타임아웃 — 원인별로 배너/CTA 가 달라지므로 reason 그대로
+      // 저장. 데이터는 기본 센터로 폴백해 화면이 비지 않게 한다.
+      geo.value = { status: 'fail', reason: result.reason };
+      homeStore.scope = 'NEAR';
+      await homeStore.fetchHome();
+      return;
     }
-    return;
   }
   await homeStore.setScope('NEAR', {
-    lat: c.latitude,
-    lng: c.longitude,
+    lat: coords.lat,
+    lng: coords.lng,
     radiusKm: km,
   });
 }
 
 async function onSelectScope(s: HomeScope): Promise<void> {
   if (s === 'NEAR') {
-    // 첫 탭이면 priming sheet 를 먼저. 수락/거부 후 flow 가 이어짐.
-    if (!hasBeenPrimed() && geoStatus.value === 'idle') {
-      showPrimingSheet.value = true;
-      return;
+    // 첫 탭이면 priming sheet 를 먼저. 단, 브라우저가 이미 permission 상태를
+    // 알고 있으면 (granted/denied) priming 은 무의미하니 스킵하고 바로 흐름을
+    // 태운다. peekPermission 이 'unknown' 을 반환하는 구형 브라우저는 안전
+    // 쪽으로 기존 priming 유지.
+    if (!hasBeenPrimed() && geo.value.status === 'idle') {
+      const state = await peekPermission();
+      if (state === 'granted' || state === 'denied') {
+        markPrimed();
+      } else {
+        showPrimingSheet.value = true;
+        return;
+      }
     }
     await loadNearWithRadius(radiusKm.value);
     if (error.value) await showError(error.value);
     return;
   }
   await homeStore.setScope(s);
+  if (error.value) await showError(error.value);
+}
+
+async function onRetryLocation(): Promise<void> {
+  // timeout / unavailable 케이스에서 "다시 시도" 버튼이 부르는 핸들러.
+  // geo 를 idle 로 리셋해 loadNearWithRadius 가 requestLocation 을 다시 호출하게
+  // 한다. denied 는 여기서 해소 안 됨 — 사용자가 브라우저 설정에서 권한을 풀어야
+  // 하고, 배너 카피가 그걸 안내한다.
+  geo.value = { status: 'idle' };
+  await loadNearWithRadius(radiusKm.value);
   if (error.value) await showError(error.value);
 }
 
@@ -559,6 +634,22 @@ ion-content {
   color: #9a3412;
   opacity: 0.9;
 }
+.geo-banner .retry {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #7c2d12;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.geo-banner .retry:active { opacity: 0.85; }
 
 /* ---------- NEAR 0개 empty state + 반경 토글 ---------- */
 .nearby-empty {

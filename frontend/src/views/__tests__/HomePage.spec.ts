@@ -25,28 +25,15 @@ vi.mock('@ionic/vue', async () => {
   return { ...actual, toastController: { create: toastCreateSpy } };
 });
 
-// useGeolocation 은 모듈 싱글톤이라 테스트마다 상태가 누적되면 flaky 해진다.
-// 제어 가능한 refs + spy 로 아예 모듈을 mock out.
-const { geoRequestSpy, geoCoordsRef, geoStatusRef } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { ref } = require('vue');
-  return {
-    geoRequestSpy: vi.fn(),
-    geoCoordsRef: ref(null),
-    geoStatusRef: ref('idle'),
-  };
-});
+// useGeolocation 의 두 export 를 spy 로 교체. 테스트별로 분기 동작을 다르게
+// 심을 수 있게 하려는 의도.
+const { requestLocationSpy, peekPermissionSpy } = vi.hoisted(() => ({
+  requestLocationSpy: vi.fn(),
+  peekPermissionSpy: vi.fn(),
+}));
 vi.mock('@/composables/useGeolocation', () => ({
-  useGeolocation: () => ({
-    coords: geoCoordsRef,
-    status: geoStatusRef,
-    error: { value: null },
-    request: geoRequestSpy,
-    reset: () => {
-      geoCoordsRef.value = null;
-      geoStatusRef.value = 'idle';
-    },
-  }),
+  requestLocation: requestLocationSpy,
+  peekPermission: peekPermissionSpy,
 }));
 
 import HomePage from '@/views/HomePage.vue';
@@ -136,9 +123,11 @@ describe('HomePage.vue', () => {
     toastCreateSpy.mockClear();
     pushSpy.mockClear();
     backSpy.mockClear();
-    geoRequestSpy.mockReset();
-    geoCoordsRef.value = null;
-    geoStatusRef.value = 'idle';
+    requestLocationSpy.mockReset();
+    peekPermissionSpy.mockReset();
+    // 기본은 'unknown' — peekPermission 가 정보 없다고 답해 priming sheet
+    // 경로가 동작하도록. 특정 테스트는 mockResolvedValueOnce 로 덮어씀.
+    peekPermissionSpy.mockResolvedValue('unknown');
     localStorage.clear();
   });
 
@@ -271,25 +260,21 @@ describe('HomePage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.places[0].id}`);
   });
 
-  it('tapping "내 위치 근처" (first time) opens the priming sheet instead of firing geolocation', async () => {
+  it('tapping "내 위치 근처" (first time, unknown permission) opens the priming sheet', async () => {
     const { wrapper } = mountHomePage({ scope: 'TRENDING' });
     await flushPromises();
 
     const segs = wrapper.findAll('[data-testid="home-segmented"] .seg');
-    await segs[0].trigger('click'); // "내 위치 근처"
+    await segs[0].trigger('click');
     await flushPromises();
 
-    // Teleport("body") 로 올라가서 wrapper 바깥에 있으므로 document 에서 조회.
+    // Teleport("body") 로 올라가 있어 document 쪽에서 조회.
     expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).not.toBeNull();
-    expect(geoRequestSpy).not.toHaveBeenCalled();
+    expect(requestLocationSpy).not.toHaveBeenCalled();
   });
 
-  it('priming accept → calls geolocation.request → setScope NEAR with coords + default radius 30', async () => {
-    geoRequestSpy.mockImplementation(async () => {
-      geoCoordsRef.value = { latitude: 37.5665, longitude: 126.978, accuracy: 10 };
-      geoStatusRef.value = 'granted';
-      return geoCoordsRef.value;
-    });
+  it('priming accept → calls requestLocation → setScope NEAR with coords + default radius 30', async () => {
+    requestLocationSpy.mockResolvedValueOnce({ ok: true, coords: { lat: 37.5665, lng: 126.978 } });
 
     const { wrapper, store } = mountHomePage({ scope: 'TRENDING' });
     await flushPromises();
@@ -304,7 +289,7 @@ describe('HomePage.vue', () => {
     acceptBtn!.click();
     await flushPromises();
 
-    expect(geoRequestSpy).toHaveBeenCalledTimes(1);
+    expect(requestLocationSpy).toHaveBeenCalledTimes(1);
     expect(setScopeSpy).toHaveBeenCalledWith('NEAR', {
       lat: 37.5665,
       lng: 126.978,
@@ -326,18 +311,14 @@ describe('HomePage.vue', () => {
     dismissBtn!.click();
     await flushPromises();
 
-    expect(geoRequestSpy).not.toHaveBeenCalled();
+    expect(requestLocationSpy).not.toHaveBeenCalled();
     expect(localStorage.getItem('filmroad.geo-primed')).toBe('yes');
     expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).toBeNull();
   });
 
   it('second NEAR tap after primed skips the sheet and requests location directly', async () => {
     localStorage.setItem('filmroad.geo-primed', 'yes');
-    geoRequestSpy.mockImplementation(async () => {
-      geoCoordsRef.value = { latitude: 35.18, longitude: 129.08, accuracy: 20 };
-      geoStatusRef.value = 'granted';
-      return geoCoordsRef.value;
-    });
+    requestLocationSpy.mockResolvedValueOnce({ ok: true, coords: { lat: 35.18, lng: 129.08 } });
     const { wrapper } = mountHomePage({ scope: 'TRENDING' });
     await flushPromises();
 
@@ -345,23 +326,82 @@ describe('HomePage.vue', () => {
     await flushPromises();
 
     expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).toBeNull();
-    expect(geoRequestSpy).toHaveBeenCalledTimes(1);
+    expect(requestLocationSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('denied status renders the re-enable banner on the NEAR scope', async () => {
-    geoStatusRef.value = 'denied';
-    const { wrapper } = mountHomePage({ scope: 'NEAR' });
+  it('peekPermission=granted auto-skips priming on the first NEAR tap', async () => {
+    peekPermissionSpy.mockResolvedValueOnce('granted');
+    requestLocationSpy.mockResolvedValueOnce({ ok: true, coords: { lat: 37.5, lng: 127 } });
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
     await flushPromises();
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="geo-priming-sheet"]')).toBeNull();
+    expect(requestLocationSpy).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('filmroad.geo-primed')).toBe('yes');
+  });
+
+  it('reason="denied" renders the permission-recovery banner (no retry button)', async () => {
+    localStorage.setItem('filmroad.geo-primed', 'yes');
+    requestLocationSpy.mockResolvedValueOnce({ ok: false, reason: 'denied' });
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+
     expect(wrapper.find('[data-testid="geo-denied-banner"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="geo-unavailable-banner"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="geo-timeout-banner"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="geo-retry"]').exists()).toBe(false);
+  });
+
+  it('reason="unavailable" renders the GPS-hint banner with a retry button', async () => {
+    localStorage.setItem('filmroad.geo-primed', 'yes');
+    requestLocationSpy.mockResolvedValueOnce({ ok: false, reason: 'unavailable' });
+    const { wrapper } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="geo-unavailable-banner"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="geo-retry"]').exists()).toBe(true);
+  });
+
+  it('reason="timeout" retry button calls requestLocation again and renders coords on success', async () => {
+    localStorage.setItem('filmroad.geo-primed', 'yes');
+    requestLocationSpy
+      .mockResolvedValueOnce({ ok: false, reason: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, coords: { lat: 37, lng: 127 } });
+    const { wrapper, store } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+    const setScopeSpy = vi.spyOn(store, 'setScope');
+
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="geo-timeout-banner"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="geo-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(requestLocationSpy).toHaveBeenCalledTimes(2);
+    expect(setScopeSpy).toHaveBeenCalledWith('NEAR', { lat: 37, lng: 127, radiusKm: 30 });
   });
 
   it('empty NEAR results with granted location renders the radius-expand toggle', async () => {
-    geoStatusRef.value = 'granted';
-    geoCoordsRef.value = { latitude: 37.5665, longitude: 126.978, accuracy: 10 };
+    localStorage.setItem('filmroad.geo-primed', 'yes');
+    requestLocationSpy.mockResolvedValue({ ok: true, coords: { lat: 37.5665, lng: 126.978 } });
 
-    const { wrapper } = mountHomePage({ scope: 'NEAR' });
-    // Empty the places list on the (already-hydrated) store.
-    const store = useHomeStore();
+    const { wrapper, store } = mountHomePage({ scope: 'TRENDING' });
+    await flushPromises();
+
+    // Promote to NEAR with granted location, then empty out the place grid so
+    // the empty-state block renders.
+    await wrapper.findAll('[data-testid="home-segmented"] .seg')[0].trigger('click');
+    await flushPromises();
     store.places = [];
     await flushPromises();
 
