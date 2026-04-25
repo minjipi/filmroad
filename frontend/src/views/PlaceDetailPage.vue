@@ -10,7 +10,13 @@
               <ion-icon :icon="chevronBack" class="ic-22" />
             </button>
             <div class="hero-top-right">
-              <button class="round-btn" type="button" aria-label="share">
+              <button
+                class="round-btn"
+                type="button"
+                aria-label="share"
+                data-testid="pd-share"
+                @click="onShare"
+              >
                 <ion-icon :icon="shareSocialOutline" class="ic-20" />
               </button>
               <button class="round-btn" type="button" aria-label="more">
@@ -239,6 +245,17 @@ const galleryCells = computed<GalleryCell[]>(() => {
 
 function onBack(): void {
   router.back();
+}
+
+function onShare(): void {
+  const p = place.value;
+  if (!p) return;
+  uiStore.openShareSheet({
+    title: p.name,
+    description: `${p.workTitle} · ${p.regionLabel}`,
+    imageUrl: p.coverImageUrl,
+    url: typeof window !== 'undefined' ? window.location.href : `/place/${p.id}`,
+  });
 }
 
 async function onToggleLike(): Promise<void> {

@@ -81,7 +81,7 @@
                 <ion-icon :icon="chatbubbleOutline" class="ic-22" />
                 {{ formatCount(p.commentCount) }}
               </span>
-              <span class="a" @click="onShare">
+              <span class="a" data-testid="feed-share" @click="onShare(p)">
                 <ion-icon :icon="paperPlaneOutline" class="ic-22" />
               </span>
               <span class="spacer" />
@@ -256,8 +256,16 @@ function onCommentCreated(): void {
   if (post) post.commentCount += 1;
 }
 
-async function onShare(): Promise<void> {
-  await showInfo('공유는 곧 공개됩니다');
+function onShare(p: FeedPost): void {
+  // 인증샷 공유 — 사진 + 장소 + 작품을 카드 콘텐츠로. URL 은 deep link 가능한
+  // /shot/{id} 로 보내 외부에서 열어도 같은 사진을 볼 수 있게.
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  uiStore.openShareSheet({
+    title: `${p.author.nickname}의 인증샷`,
+    description: `${p.work.title} · ${p.place.name}`,
+    imageUrl: p.imageUrl,
+    url: `${origin}/shot/${p.id}`,
+  });
 }
 
 async function onMore(): Promise<void> {

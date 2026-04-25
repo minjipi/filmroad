@@ -5,6 +5,18 @@ interface RenameTarget {
   name: string;
 }
 
+/**
+ * 공유 시트가 한 번에 들고 다니는 데이터. 카카오톡 카드(title/description/
+ * imageUrl)와 시스템 공유 / 링크 복사 모두 같은 dto 로 동작 — 호출부는 한 번만
+ * 빌드해서 openShareSheet(data) 로 던지면 된다.
+ */
+export interface ShareData {
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  url: string;
+}
+
 interface State {
   loginPromptOpen: boolean;
   loginPromptReason: string | null;
@@ -19,6 +31,10 @@ interface State {
   newCollectionModalOpen: boolean;
   newCollectionModalMode: 'create' | 'rename';
   newCollectionModalRenameTarget: RenameTarget | null;
+  // Share sheet — globally mounted bottom sheet. 4개 페이지(PlaceDetail /
+  // CollectionDetail / FeedDetail / ShotDetail)가 같은 시트를 트리거한다.
+  shareSheetOpen: boolean;
+  shareData: ShareData | null;
 }
 
 export const useUiStore = defineStore('ui', {
@@ -30,6 +46,8 @@ export const useUiStore = defineStore('ui', {
     newCollectionModalOpen: false,
     newCollectionModalMode: 'create',
     newCollectionModalRenameTarget: null,
+    shareSheetOpen: false,
+    shareData: null,
   }),
   actions: {
     showLoginPrompt(reason?: string): void {
@@ -62,6 +80,15 @@ export const useUiStore = defineStore('ui', {
       this.newCollectionModalOpen = false;
       this.newCollectionModalRenameTarget = null;
       this.newCollectionModalMode = 'create';
+    },
+    openShareSheet(data: ShareData): void {
+      this.shareData = { ...data };
+      this.shareSheetOpen = true;
+    },
+    closeShareSheet(): void {
+      this.shareSheetOpen = false;
+      // shareData 는 시트가 슬라이드 아웃 되는 동안 라벨이 바뀌지 않게 유지.
+      // 다음 open 때 어차피 덮어쓴다.
     },
   },
 });

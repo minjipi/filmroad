@@ -312,6 +312,7 @@ import { storeToRefs } from 'pinia';
 import { useCollectionStore, type CollectionPlace } from '@/stores/collection';
 import { useUploadStore } from '@/stores/upload';
 import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import type { MapMarker } from '@/stores/map';
@@ -325,6 +326,7 @@ const router = useRouter();
 const collectionStore = useCollectionStore();
 const uploadStore = useUploadStore();
 const authStore = useAuthStore();
+const uiStore = useUiStore();
 const { detail, loading, error } = storeToRefs(collectionStore);
 const progressPercent = computed(() => collectionStore.progressPercent);
 const remainingCount = computed(() => collectionStore.remainingCount);
@@ -422,28 +424,17 @@ function onBack(): void {
   }
 }
 
-async function onShare(): Promise<void> {
-  // Web Share API is a progressive enhancement — fall back to toast when the
-  // device doesn't expose it (most desktops / PWA-less mobile browsers).
-  if (!detail.value) return;
-  const shareData = {
-    title: detail.value.name,
-    text: detail.value.subtitle ?? detail.value.name,
-    url: typeof window !== 'undefined' ? window.location.href : '',
-  };
-  if (typeof navigator !== 'undefined' && 'share' in navigator) {
-    try {
-      await (navigator as Navigator & { share: (d: ShareData) => Promise<void> })
-        .share(shareData);
-      return;
-    } catch {
-      // user cancelled — swallow. Fall through to toast for truly-unsupported
-      // paths below, but cancellation shouldn't trigger the "곧 공개됩니다"
-      // copy so we return here.
-      return;
-    }
-  }
-  await showInfo('공유 기능은 곧 공개됩니다');
+function onShare(): void {
+  const d = detail.value;
+  if (!d) return;
+  // 4개 공유 진입점 모두 글로벌 ShareSheet 로 위임 — 카카오톡 / 링크복사 /
+  // 시스템공유 3채널은 sheet 안에서 분기. 컬렉션은 owner 닉네임 + N곳을 부제로.
+  uiStore.openShareSheet({
+    title: d.name,
+    description: `${d.owner.nickname} · ${d.totalPlaces}곳`,
+    imageUrl: d.coverImageUrl,
+    url: typeof window !== 'undefined' ? window.location.href : `/collection/${d.id}`,
+  });
 }
 
 async function onMore(): Promise<void> {
