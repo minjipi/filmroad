@@ -21,9 +21,10 @@ public class HomeController {
     public BaseResponse<HomeResponse> getHome(
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) Double radiusKm,
             @RequestParam(required = false) Long workId,
             @RequestParam(required = false) HomeScope scope
     ) {
-        return BaseResponse.success(homeService.getHome(lat, lng, workId, scope));
+        return BaseResponse.success(homeService.getHome(lat, lng, radiusKm, workId, scope));
     }
 }

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
-import { getCurrentCoords, type Coords } from '@/composables/useGeolocation';
+import { requestLocation, type Coords, type LocationFailReason } from '@/composables/useGeolocation';
 import { useToast } from '@/composables/useToast';
 
 // RECENT = time-sorted feed (task #33, the new default). POPULAR keeps the
@@ -95,6 +95,19 @@ interface State {
 }
 
 const DEFAULT_LIMIT = 5;
+
+function nearbyFailMessage(reason: LocationFailReason): string {
+  // reason 별 한국어 UX 카피. Toast 한 줄에 들어갈 길이로 제한.
+  switch (reason) {
+    case 'denied':
+      return '위치 권한이 차단되어 있어요. 주소창 자물쇠 → 권한 설정에서 허용해 주세요';
+    case 'timeout':
+      return '위치 확인이 지연됐어요. 잠시 후 다시 시도해 주세요';
+    case 'unavailable':
+    default:
+      return 'GPS 또는 네트워크를 사용할 수 없어요';
+  }
+}
 
 export const useFeedStore = defineStore('feed', {
   state: (): State => ({
@@ -191,11 +204,13 @@ export const useFeedStore = defineStore('feed', {
       // fetch with no lat/lng (backend returns [] for NEARBY without coords)
       // and surface a polite toast so the user knows why the list is empty.
       if (tab === 'NEARBY' && this.nearbyCoords == null) {
-        const coords = await getCurrentCoords();
-        if (coords) {
-          this.nearbyCoords = coords;
+        const result = await requestLocation();
+        if (result.ok) {
+          this.nearbyCoords = result.coords;
         } else {
-          await useToast().showError('위치 정보를 가져올 수 없어요');
+          // reason 별로 안내 메시지가 달라 — 'denied' 는 권한 설정 안내,
+          // 'unavailable' 은 GPS/네트워크, 'timeout' 은 재시도 유도.
+          await useToast().showError(nearbyFailMessage(result.reason));
         }
       }
       await this.fetch();
@@ -205,8 +220,8 @@ export const useFeedStore = defineStore('feed', {
     // after the initial denial.
     async refreshNearbyCoords(): Promise<void> {
       this.nearbyCoords = null;
-      const coords = await getCurrentCoords();
-      if (coords) this.nearbyCoords = coords;
+      const result = await requestLocation();
+      if (result.ok) this.nearbyCoords = result.coords;
     },
     async toggleLikePost(photoId: number): Promise<void> {
       if (!useAuthStore().isAuthenticated) {

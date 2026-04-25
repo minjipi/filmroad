@@ -38,13 +38,18 @@ public class HomeService {
     static final double DEFAULT_LAT = 37.8928;
     static final double DEFAULT_LNG = 128.8347;
 
+    // "내 위치 근처"의 기본 반경. 프런트에서 명시적으로 radiusKm 을 보내지 않으면
+    // 이 값을 적용해 너무 먼 장소는 잘라낸다. 이전엔 정렬만 하고 전국 장소를 그대로
+    // 돌려줘서 "가장 가까운 것이지만 200km 밖" 같은 결과가 섞여 있었음.
+    static final double DEFAULT_RADIUS_KM = 30.0;
+
     private final PlaceRepository placeRepository;
     private final WorkRepository workRepository;
     private final PlaceLikeRepository placeLikeRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public HomeResponse getHome(Double lat, Double lng, Long workId, HomeScope scope) {
+    public HomeResponse getHome(Double lat, Double lng, Double radiusKm, Long workId, HomeScope scope) {
         HomeScope effectiveScope = scope == null ? HomeScope.NEAR : scope;
 
         List<Place> places;
@@ -53,10 +58,16 @@ public class HomeService {
             // fall back to a default center instead of silently switching to TRENDING.
             double effectiveLat = lat != null ? lat : DEFAULT_LAT;
             double effectiveLng = lng != null ? lng : DEFAULT_LNG;
-            // Sort entirely in-memory; dataset is small and DB-agnostic (MariaDB has no haversine built-in).
+            // 반경을 넘어선 장소를 잘라내지 않으면 "가장 가까운 것" 이어도 수백km
+            // 떨어져 있을 수 있다. radius 는 정렬 전에 적용 — 필드 두 번 계산하지
+            // 않도록 (Place, 거리) 쌍으로 한 번에 처리.
+            double effectiveRadius = radiusKm != null && radiusKm > 0 ? radiusKm : DEFAULT_RADIUS_KM;
             places = placeRepository.findAllWithWork(workId).stream()
-                    .sorted(Comparator.comparingDouble(p -> GeoUtils.haversineKm(effectiveLat, effectiveLng, p.getLatitude(), p.getLongitude())))
+                    .map(p -> new PlaceWithDistance(p, GeoUtils.haversineKm(effectiveLat, effectiveLng, p.getLatitude(), p.getLongitude())))
+                    .filter(pd -> pd.distanceKm <= effectiveRadius)
+                    .sorted(Comparator.comparingDouble(PlaceWithDistance::distanceKm))
                     .limit(PLACE_LIMIT)
+                    .map(PlaceWithDistance::place)
                     .toList();
         } else {
             places = placeRepository.findTrending(workId).stream()
@@ -149,5 +160,8 @@ public class HomeService {
         }
         return last;
     }
+
+    // (Place, haversine distance) 쌍 — 스트림에서 거리 중복 계산을 피하기 위한 내부 record.
+    private record PlaceWithDistance(Place place, double distanceKm) {}
 
 }

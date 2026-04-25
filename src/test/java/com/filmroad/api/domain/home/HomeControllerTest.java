@@ -82,6 +82,54 @@ class HomeControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/home?scope=NEAR with tight radius filters far places out")
+    void getHome_nearScope_withTightRadius_filtersFarPlaces() throws Exception {
+        // 강릉 주문진 영진해변(id=10) 좌표에서 반경 0.1km 안엔 자기 자신 한 곳 정도만
+        // 남는 게 맞다. 서울/부산 시드 장소는 모두 걸러져야 함.
+        mockMvc.perform(get("/api/home")
+                        .param("lat", "37.8928")
+                        .param("lng", "128.8347")
+                        .param("radiusKm", "0.1")
+                        .param("scope", "NEAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.places", hasSize(lessThanOrEqualTo(3))))
+                .andExpect(jsonPath("$.results.places[?(@.id == 10)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("GET /api/home?scope=NEAR with huge radius returns full seed list sorted by distance")
+    void getHome_nearScope_withHugeRadius_returnsAll() throws Exception {
+        // 반경 5000km 이면 한국 전체는 물론이고 시드 장소 전부가 포함된다.
+        // 이전 동작(radius 없이 전국 정렬)과 동일한 결과가 나와야 함.
+        mockMvc.perform(get("/api/home")
+                        .param("lat", "37.5665")
+                        .param("lng", "126.9780")
+                        .param("radiusKm", "5000")
+                        .param("scope", "NEAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.places", hasSize(greaterThanOrEqualTo(4))));
+    }
+
+    @Test
+    @DisplayName("GET /api/home?scope=NEAR with radius far from any seed returns empty places")
+    void getHome_nearScope_farFromSeeds_returnsEmpty() throws Exception {
+        // 태평양 한가운데 좌표 + 기본 반경 → 근처 시드 0 개. places 는 빈 리스트,
+        // 그 외 응답 구조(works, hero) 는 유지.
+        mockMvc.perform(get("/api/home")
+                        .param("lat", "0")
+                        .param("lng", "-160")
+                        .param("radiusKm", "30")
+                        .param("scope", "NEAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.places", hasSize(0)))
+                .andExpect(jsonPath("$.results.works", hasSize(greaterThanOrEqualTo(4))))
+                .andExpect(jsonPath("$.results.hero.title", notNullValue()));
+    }
+
+    @Test
     @DisplayName("GET /api/home?scope=NEAR without lat/lng falls back to default center (non-empty places)")
     void getHome_nearScope_withoutCoords_usesDefaultCenter() throws Exception {
         // Regression: previously, scope=NEAR + missing coords silently routed to
