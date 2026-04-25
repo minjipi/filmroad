@@ -270,7 +270,14 @@
         </section>
       </div>
 
-      <div v-if="shot" class="cmt-input-wrap">
+      <button
+        v-if="shot"
+        type="button"
+        class="cmt-input-wrap"
+        data-testid="sd-cmt-trigger"
+        aria-label="댓글 작성"
+        @click="onOpenComments"
+      >
         <div class="me-av">
           <img
             v-if="meAvatarUrl"
@@ -279,11 +286,17 @@
           />
         </div>
         <div class="box">댓글을 남겨보세요…</div>
-        <button type="button" class="send" aria-label="send">
+        <span class="send" aria-hidden="true">
           <ion-icon :icon="paperPlaneOutline" class="ic-18" />
-        </button>
-      </div>
+        </span>
+      </button>
     </ion-content>
+    <CommentSheet
+      :photo-id="commentSheetOpen ? shot?.id ?? null : null"
+      :open="commentSheetOpen"
+      @close="commentSheetOpen = false"
+      @created="onCommentCreated"
+    />
   </ion-page>
 </template>
 
@@ -317,6 +330,7 @@ import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
+import CommentSheet from '@/components/comment/CommentSheet.vue';
 import {
   formatRelativeTime,
   formatVisitDate,
@@ -335,6 +349,7 @@ const { shot, loading, error } = storeToRefs(shotStore);
 const commentsRef = ref<HTMLElement | null>(null);
 const carouselEl = ref<HTMLElement | null>(null);
 const currentSlide = ref(0);
+const commentSheetOpen = ref(false);
 
 // Always fall back to the lead frame as a length-1 list so the template can
 // treat `images` as non-empty regardless of how old the backend response is.
@@ -429,6 +444,15 @@ async function onToggleBookmark(): Promise<void> {
 
 function onScrollToComments(): void {
   commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function onOpenComments(): void {
+  if (!shot.value) return;
+  commentSheetOpen.value = true;
+}
+
+function onCommentCreated(): void {
+  if (shot.value) shot.value.commentCount += 1;
 }
 
 async function onOpenPlace(): Promise<void> {
@@ -997,7 +1021,8 @@ ion-content.sd-content {
   cursor: pointer;
 }
 
-/* Sticky comment input */
+/* Sticky comment input — entire bar is the trigger that opens the
+   CommentSheet (mirrors FeedDetail/Gallery comment-icon flow). */
 .cmt-input-wrap {
   position: absolute;
   left: 0;
@@ -1008,9 +1033,19 @@ ion-content.sd-content {
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--fr-line);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .cmt-input-wrap .me-av {
   width: 32px;

@@ -107,6 +107,12 @@ const mockApi = api as unknown as {
   post: ReturnType<typeof vi.fn>;
 };
 
+const COMMENT_SHEET_STUB = {
+  props: ['photoId', 'open'],
+  template:
+    '<div class="comment-sheet-stub" :data-photo-id="photoId ?? \'\'" :data-open="open"></div>',
+};
+
 function mountPage(id: string | number = '77') {
   return mountWithStubs(ShotDetailPage, {
     props: { id },
@@ -117,6 +123,9 @@ function mountPage(id: string | number = '77') {
       auth: {
         user: { id: 1, nickname: 'me', handle: 'me', avatarUrl: null },
       },
+    },
+    stubs: {
+      CommentSheet: COMMENT_SHEET_STUB,
     },
   });
 }
@@ -302,6 +311,24 @@ describe('ShotDetailPage.vue', () => {
     await wrapper.find('.loc-card').trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/place/10');
+  });
+
+  it('clicking the sticky comment trigger opens the CommentSheet for this shot', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    // Initially the sheet stays closed (open=false, photoId=null).
+    let stub = wrapper.find('.comment-sheet-stub');
+    expect(stub.exists()).toBe(true);
+    expect(stub.attributes('data-open')).toBe('false');
+    expect(stub.attributes('data-photo-id')).toBe('');
+
+    await wrapper.find('[data-testid="sd-cmt-trigger"]').trigger('click');
+    await flushPromises();
+
+    stub = wrapper.find('.comment-sheet-stub');
+    expect(stub.attributes('data-open')).toBe('true');
+    expect(stub.attributes('data-photo-id')).toBe('77');
   });
 
   it('back button calls router.back()', async () => {
