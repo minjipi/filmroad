@@ -42,4 +42,18 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
             """)
     List<Object[]> aggregateUserStampCount(@Param("workId") Long workId,
                                            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * 특정 유저의 stamp 를 작품별로 집계. 공개 프로필 "스탬프 북" highlight 용.
+     * 반환: `[[Work w, Long count], ...]`. count DESC, tie-break title ASC.
+     */
+    @Query("""
+            SELECT w, COUNT(s)
+            FROM Stamp s JOIN s.place p JOIN p.work w
+            WHERE s.user.id = :userId
+            GROUP BY w
+            ORDER BY COUNT(s) DESC, w.title ASC
+            """)
+    List<Object[]> aggregateWorksByUserId(@Param("userId") Long userId,
+                                          org.springframework.data.domain.Pageable pageable);
 }

@@ -123,4 +123,70 @@ class UserControllerTest {
         mockMvc.perform(get("/api/users/me/photos"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("GET /api/users/2 (auth) — 타 유저 공개 프로필: flat 필드 + stats + topPhotos + recentCollectedWorks + following=true")
+    void getPublicProfile_otherUser_returnsProfile() throws Exception {
+        // 시드 user=2 (이서준). user=1 은 data.sql 의 user_follow 에서 user=2 를 팔로우 중.
+        mockMvc.perform(get("/api/users/2").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.id", is(2)))
+                .andExpect(jsonPath("$.results.nickname", is("이서준")))
+                .andExpect(jsonPath("$.results.handle", is("@seojun")))
+                .andExpect(jsonPath("$.results.levelName", notNullValue()))
+                .andExpect(jsonPath("$.results.points", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.streakDays", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.stats.visitedCount", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.stats.photoCount", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.stats.collectedWorksCount", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.following", is(true)))
+                .andExpect(jsonPath("$.results.isMe", is(false)))
+                .andExpect(jsonPath("$.results.topPhotos", notNullValue()))
+                .andExpect(jsonPath("$.results.recentCollectedWorks", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/1 (auth) — 본인 프로필: isMe=true, following=false + stats 수치 검증")
+    void getPublicProfile_self_isMeTrue() throws Exception {
+        mockMvc.perform(get("/api/users/1").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.id", is(1)))
+                .andExpect(jsonPath("$.results.isMe", is(true)))
+                .andExpect(jsonPath("$.results.following", is(false)))
+                // 시드상 user=1 stamp 8개 (place 10,11,12,13,14,15,16,17 전부), 4개 작품 수집.
+                .andExpect(jsonPath("$.results.stats.visitedCount", is(8)))
+                .andExpect(jsonPath("$.results.stats.collectedWorksCount", is(4)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/2 (비로그인) — permitAll, isMe=false, following=false")
+    void getPublicProfile_anonymous_returnsPublicView() throws Exception {
+        mockMvc.perform(get("/api/users/2"))  // ATOKEN 쿠키 없음
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.id", is(2)))
+                .andExpect(jsonPath("$.results.isMe", is(false)))
+                .andExpect(jsonPath("$.results.following", is(false)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/99999 — 없는 유저 → 404 USER_NOT_FOUND(40081)")
+    void getPublicProfile_unknown_returns404() throws Exception {
+        mockMvc.perform(get("/api/users/99999").cookie(demoAccessCookie()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40081)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/1 — recentCollectedWorks 엔트리에 collectedCount/totalCount 진행률 포함")
+    void getPublicProfile_recentCollectedWorks_hasProgress() throws Exception {
+        // 시드 user=1 의 stamp 는 작품별 2건씩 → collectedCount=2, totalCount=2 (각 작품 place 2개).
+        mockMvc.perform(get("/api/users/1").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.recentCollectedWorks", not(empty())))
+                .andExpect(jsonPath("$.results.recentCollectedWorks[0].id", notNullValue()))
+                .andExpect(jsonPath("$.results.recentCollectedWorks[0].title", notNullValue()))
+                .andExpect(jsonPath("$.results.recentCollectedWorks[0].collectedCount", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.results.recentCollectedWorks[0].totalCount", greaterThanOrEqualTo(1)));
+    }
 }

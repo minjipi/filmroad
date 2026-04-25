@@ -21,4 +21,16 @@ public class CurrentUser {
         }
         return DEMO_USER_ID;
     }
+
+    /**
+     * 실제 로그인 유저 id 만 반환. 인증 없으면 null — 데모 fallback 미적용.
+     * 공개 엔드포인트에서 "viewer 있으면 ~, 없으면 ~" 분기할 때 사용.
+     */
+    public Long currentUserIdOrNull() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof JwtPrincipal p) {
+            return p.userId();
+        }
+        return null;
+    }
 }
