@@ -153,6 +153,31 @@ class HomeControllerTest {
     }
 
     @Test
+    @DisplayName("Hero subtitle: lat/lng 제공 시 실제 거리 ('내 위치에서 약 …') 로 채워짐")
+    void getHome_heroSubtitle_includesActualDistance_whenCoordsProvided() throws Exception {
+        // 주문진 영진해변(id=10) 좌표에서 시작 — 가장 가까운 시드 위에서.
+        mockMvc.perform(get("/api/home")
+                        .param("lat", "37.8928")
+                        .param("lng", "128.8347")
+                        .param("scope", "NEAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.hero.subtitle", containsString("내 위치에서 약")))
+                // "차로 12분" 같은 하드코딩 카피가 더 이상 등장하면 안 됨.
+                .andExpect(jsonPath("$.results.hero.subtitle", not(containsString("차로 12분"))));
+    }
+
+    @Test
+    @DisplayName("Hero subtitle: lat/lng 미제공 시 거리 대신 중립 카피 ('주변 N곳의 성지')")
+    void getHome_heroSubtitle_neutralCopy_whenNoCoords() throws Exception {
+        // 좌표 없이 호출 — 폴백 센터로 "약 12km" 같은 거짓 거리 카피를 만들면 안 됨.
+        mockMvc.perform(get("/api/home"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.hero.subtitle", not(containsString("내 위치에서"))))
+                .andExpect(jsonPath("$.results.hero.subtitle", not(containsString("차로 12분"))))
+                .andExpect(jsonPath("$.results.hero.subtitle", containsString("성지")));
+    }
+
+    @Test
     @DisplayName("GET /api/home → popularWorks 는 place trendingScore 합 DESC 정렬")
     void getHome_popularWorks_orderedByAggregatedTrendingScore() throws Exception {
         // 시드 기준 작품별 trendingScore 합:

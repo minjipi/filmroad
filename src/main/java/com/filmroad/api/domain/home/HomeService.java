@@ -91,7 +91,10 @@ public class HomeService {
 
         List<WorkSummaryDto> popularWorks = buildPopularWorks();
 
-        HeroDto hero = buildHero(places);
+        // Hero 거리 표시는 사용자가 실제로 보낸 좌표가 있을 때만 — 폴백 센터로
+        // 만든 가짜 거리 ("내 위치에서 약 12km" 같은) 를 보여주지 않기 위해
+        // effectiveLat/Lng 가 아닌 원본 lat/lng 를 그대로 넘긴다.
+        HeroDto hero = buildHero(places, lat, lng);
 
         return HomeResponse.builder()
                 .hero(hero)
@@ -113,7 +116,7 @@ public class HomeService {
                 .toList();
     }
 
-    private HeroDto buildHero(List<Place> places) {
+    private HeroDto buildHero(List<Place> places, Double userLat, Double userLng) {
         String monthLabel = LocalDate.now()
                 .getMonth()
                 .getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH)
@@ -136,7 +139,7 @@ public class HomeService {
         String title = String.format("오늘은 '%s'의\n%s을 걸어볼까요?",
                 primary.getWork().getTitle(),
                 shortenRegion(primary.getRegionLabel()));
-        String subtitle = String.format("내 위치에서 차로 12분 · %d곳의 성지", sameWorkCount);
+        String subtitle = buildHeroSubtitle(primary, sameWorkCount, userLat, userLng);
 
         return HeroDto.builder()
                 .monthLabel(monthLabel)
@@ -146,6 +149,40 @@ public class HomeService {
                 .workId(primary.getWork().getId())
                 .primaryPlaceId(primary.getId())
                 .build();
+    }
+
+    private String buildHeroSubtitle(Place primary, long sameWorkCount, Double userLat, Double userLng) {
+        // 좌표가 모두 있을 때만 실제 haversine 거리 표시. 하나라도 없으면
+        // "내 위치에서 약 N km" 같은 거짓 정보를 만들지 않고 중립 카피로 폴백.
+        // (이전 버전은 좌표 유무와 무관하게 "차로 12분" 을 하드코딩해서
+        // 부산 사용자가 강릉 hero 보면서 "12분" 을 보는 일이 있었음.)
+        if (userLat != null && userLng != null
+                && primary.getLatitude() != null && primary.getLongitude() != null) {
+            double km = GeoUtils.haversineKm(userLat, userLng, primary.getLatitude(), primary.getLongitude());
+            return String.format("내 위치에서 약 %s · %d곳의 성지", formatDistance(km), sameWorkCount);
+        }
+        return String.format("주변 %d곳의 성지", sameWorkCount);
+    }
+
+    private String formatDistance(double km) {
+        // GPS 정확도와 haversine 자체의 직선거리 가정을 감안해 일부러 거칠게 표시.
+        //  < 1km   → 100m 단위 ("800m")
+        //  < 10km  → 소수 한 자리 ("3.4km")
+        //  < 100km → 정수 ("23km")
+        //  >= 100km → "100km+"
+        if (km < 1.0) {
+            int meters = (int) Math.round(km * 10) * 100;
+            // 0m 로 떨어지는 극단 (사용자가 그 장소 위에 서 있는 경우) 은 100m 로 보정.
+            if (meters <= 0) meters = 100;
+            return meters + "m";
+        }
+        if (km < 10.0) {
+            return String.format("%.1fkm", km);
+        }
+        if (km < 100.0) {
+            return Math.round(km) + "km";
+        }
+        return "100km+";
     }
 
     private String shortenRegion(String regionLabel) {
