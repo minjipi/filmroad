@@ -48,16 +48,18 @@ ion-toast.fr-toast {
   --border-radius: 14px;
   --box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12),
                 0 2px 6px rgba(15, 23, 42, 0.06);
-  --min-width: 220px;
+  /* 카드 폭은 콘텐츠 길이에 맞춰 줄어들게 — 220px 최소 너비를 풀어두면
+     짧은 글("저장했어요") 도 카드가 그만큼 작아지면서 자연스럽게 가운데로
+     앉는다. max-width 만으로 가로 폭 폭주 방지. */
+  --min-width: auto;
   --max-width: min(420px, calc(100vw - 48px));
   font-weight: 700;
   letter-spacing: -0.01em;
   text-align: center;
 }
 
-/* 컨테이너 — 기본은 아이콘+메시지를 좌측 정렬한 채 메시지가 flex:1 로
-   퍼져서 짧은 글이면 카드 안에서 왼쪽에 붙어 보였다. justify-content:center
-   로 묶어 카드 가운데로 붙이고, 메시지는 더 이상 늘어나지 않게 한다. */
+/* 컨테이너 — 아이콘+메시지를 묶음으로 카드 가운데 정렬 + 두 줄 이상이
+   되면 message 가 자연스럽게 wrap. */
 ion-toast.fr-toast::part(container) {
   justify-content: center;
 }
