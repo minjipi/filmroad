@@ -229,11 +229,13 @@ export const useSavedStore = defineStore('saved', {
           // this refetch, the item exists in savedPlaceIds but never shows
           // up in the list until the next manual page visit.
           await this.fetch();
-          await useToast().showInfo('저장했어요');
+          // 빈번한 액션이라 중앙 카드 토스트(showInfo) 대신 하단 다크 알약
+          // (showQuick) 으로 가볍게 알린다 — 매번 화면 가리면 피로해서.
+          await useToast().showQuick('저장했어요');
         } else {
           this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
           this.items = this.items.filter((i) => i.placeId !== placeId);
-          await useToast().showInfo('저장을 해제했어요');
+          await useToast().showQuick('저장을 해제했어요');
         }
       } catch (e) {
         // Rollback the optimistic update so the UI stays consistent with

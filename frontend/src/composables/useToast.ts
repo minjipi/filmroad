@@ -50,5 +50,19 @@ export function useToast() {
   async function showCenter(msg: string): Promise<void> {
     return show({ msg, variant: 'info' });
   }
-  return { show, showError, showInfo, showCenter };
+  /**
+   * 빈번한 confirm용 미니 토스트. 하단에 짧게 뜨는 다크 알약 스타일 — "저장했어요",
+   * "복사됐어요", "메시지 보냈어요" 처럼 사용자가 자주 트리거하는 액션 피드백에 쓴다.
+   * 중앙 카드(showInfo/showError) 보다 절제된 톤. 카카오톡/인스타/네이버 표준 패턴.
+   */
+  async function showQuick(msg: string): Promise<void> {
+    const t = await toastController.create({
+      message: msg,
+      duration: 1500,
+      position: 'bottom',
+      cssClass: ['fr-toast-quick'],
+    });
+    await t.present();
+  }
+  return { show, showError, showInfo, showCenter, showQuick };
 }

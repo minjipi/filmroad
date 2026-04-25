@@ -95,3 +95,40 @@ ion-toast.fr-toast--info::part(icon)    { color: var(--fr-primary); }
   }
 }
 
+/* ─── Quick Toast (.fr-toast-quick) ──────────────────────────────────────
+   useToast.showQuick 가 사용. "저장했어요" 처럼 자주 트리거되는 액션의
+   즉각 피드백용 — 화면을 가리지 않게 하단에 짧게 뜨는 다크 알약 스타일.
+   카카오톡/인스타/네이버 등 한국 모바일 앱의 일반 패턴.
+
+   탭바(FrTabBar)가 하단 ~84px + safe-area 를 차지하므로 transform 으로
+   그 위까지 끌어올린다. host 에 걸린 transform 은 shadow DOM 안의
+   .toast-wrapper(fixed) 의 containing block 까지 바꿔서 같이 움직인다. */
+ion-toast.fr-toast-quick {
+  --background: rgba(15, 23, 42, 0.92);
+  --color: #ffffff;
+  --border-radius: 999px;
+  --border-width: 0;
+  --box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+  --min-width: auto;
+  --max-width: min(320px, calc(100vw - 48px));
+  --start: 0;
+  --end: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  transform: translateY(calc(-1 * (84px + env(safe-area-inset-bottom))));
+}
+
+ion-toast.fr-toast-quick::part(container) {
+  justify-content: center;
+  padding: 4px 4px;
+}
+
+ion-toast.fr-toast-quick::part(message) {
+  font-size: 13px;
+  line-height: 1.35;
+  flex: 0 1 auto;
+  text-align: center;
+  word-break: keep-all;
+}
+
