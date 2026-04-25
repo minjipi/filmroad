@@ -389,8 +389,16 @@ function onBack(): void {
   router.back();
 }
 
-async function onShare(): Promise<void> {
-  await showInfo('공유는 곧 공개됩니다');
+function onShare(): void {
+  const s = shot.value;
+  if (!s) return;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  uiStore.openShareSheet({
+    title: `${s.author.nickname}의 인증샷`,
+    description: `${s.work.title} · ${s.place.name}`,
+    imageUrl: s.imageUrl,
+    url: `${origin}/shot/${s.id}`,
+  });
 }
 
 async function onMore(): Promise<void> {

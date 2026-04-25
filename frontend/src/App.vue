@@ -4,6 +4,7 @@
     <LoginPromptModal />
     <CollectionPicker ref="pickerRef" />
     <NewCollectionModal @created="onCollectionCreated" />
+    <ShareSheet />
   </ion-app>
 </template>
 
@@ -17,6 +18,7 @@ import { markOnboarded } from '@/composables/useOnboarding';
 import LoginPromptModal from '@/components/auth/LoginPromptModal.vue';
 import CollectionPicker from '@/components/saved/CollectionPicker.vue';
 import NewCollectionModal from '@/components/saved/NewCollectionModal.vue';
+import ShareSheet from '@/components/share/ShareSheet.vue';
 
 // Bridge between the two globally-mounted modals: when the user creates a
 // collection *from inside the picker* we auto-select it for the pending
