@@ -30,7 +30,11 @@ vi.mock('@ionic/vue', async () => {
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useCommentStore, type Comment } from '@/stores/comment';
 
-function makeComment(id: number, authorId: number): Comment {
+function makeComment(
+  id: number,
+  authorId: number,
+  imageUrl: string | null = null,
+): Comment {
   return {
     id,
     content: `c-${id}`,
@@ -42,6 +46,7 @@ function makeComment(id: number, authorId: number): Comment {
       avatarUrl: null,
       verified: false,
     },
+    imageUrl,
   };
 }
 
@@ -150,8 +155,9 @@ describe('CommentSheet.vue', () => {
     await wrapper.find('button.cs-send').trigger('click');
     await flushPromises();
 
-    // onSubmit trims before dispatching create.
-    expect(createSpy).toHaveBeenCalledWith(10, 'hi there');
+    // onSubmit trims before dispatching create. 이미지 미첨부 케이스는
+    // 세 번째 인자가 undefined 로 들어간다.
+    expect(createSpy).toHaveBeenCalledWith(10, 'hi there', undefined);
   });
 
   it('clicking delete on my own comment dispatches commentStore.remove', async () => {
@@ -165,5 +171,111 @@ describe('CommentSheet.vue', () => {
     await flushPromises();
 
     expect(removeSpy).toHaveBeenCalledWith(11, 10);
+  });
+
+  it('renders the image attach button in the footer when authenticated', async () => {
+    const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7 });
+    await flushPromises();
+    const btn = wrapper.find('[data-testid="cs-attach-btn"]');
+    expect(btn.exists()).toBe(true);
+    expect((btn.element as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('picking a file shows the preview and clearing it removes the preview', async () => {
+    // jsdom 에 URL.createObjectURL 이 기본 없을 수 있어서 stub.
+    const createSpy = vi.fn(() => 'blob:mock-url');
+    const revokeSpy = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createSpy as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = revokeSpy as unknown as typeof URL.revokeObjectURL;
+
+    try {
+      const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7 });
+      await flushPromises();
+
+      // 처음엔 프리뷰 없음.
+      expect(wrapper.find('[data-testid="cs-attach-preview"]').exists()).toBe(false);
+
+      const fileInput = wrapper.find('[data-testid="cs-file-input"]');
+      const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+      // jsdom 엔 DataTransfer 가 없어서 input.files 를 defineProperty 로 직접
+      // 박는다. 실제 브라우저에서는 사용자 인터랙션을 통해서만 세팅되는 영역.
+      Object.defineProperty(fileInput.element, 'files', {
+        value: [file],
+        configurable: true,
+      });
+      await fileInput.trigger('change');
+      await flushPromises();
+
+      expect(createSpy).toHaveBeenCalledWith(file);
+      const preview = wrapper.find('[data-testid="cs-attach-preview"]');
+      expect(preview.exists()).toBe(true);
+      expect(preview.find('img').attributes('src')).toBe('blob:mock-url');
+
+      // X 버튼으로 첨부 취소 → 프리뷰 사라지고 revokeObjectURL 호출.
+      await wrapper.find('[data-testid="cs-attach-clear"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-testid="cs-attach-preview"]').exists()).toBe(false);
+      expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url');
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it('passes the picked File as the third argument to commentStore.create', async () => {
+    const createSpy2 = vi.fn(() => 'blob:mock-url');
+    const revokeSpy2 = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createSpy2 as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = revokeSpy2 as unknown as typeof URL.revokeObjectURL;
+
+    try {
+      const { wrapper, store } = mountSheet({ open: true, photoId: 10, userId: 7 });
+      await flushPromises();
+
+      const createSpy = store.create as unknown as ReturnType<typeof vi.fn>;
+      createSpy.mockResolvedValue(makeComment(99, 7, '/uploads/comments/x.jpg'));
+
+      // 첨부 + 텍스트 입력.
+      const fileInput = wrapper.find('[data-testid="cs-file-input"]');
+      const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(fileInput.element, 'files', {
+        value: [file],
+        configurable: true,
+      });
+      await fileInput.trigger('change');
+      await flushPromises();
+
+      await wrapper.find('input.cs-input').setValue('인증샷');
+      await wrapper.find('button.cs-send').trigger('click');
+      await flushPromises();
+
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      const args = createSpy.mock.calls[0];
+      expect(args[0]).toBe(10);
+      expect(args[1]).toBe('인증샷');
+      expect(args[2]).toBeInstanceOf(File);
+      expect((args[2] as File).name).toBe('shot.jpg');
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it('renders the attach thumbnail on a comment whose imageUrl is set', async () => {
+    const items = [
+      makeComment(1, 7, '/uploads/comments/abc.jpg'),
+      makeComment(2, 7, null),
+    ];
+    const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7, items });
+    await flushPromises();
+
+    const thumbs = wrapper.findAll('[data-testid="cs-attach-thumb"]');
+    // imageUrl 이 있는 항목 1건에만 썸네일이 노출.
+    expect(thumbs.length).toBe(1);
+    expect(thumbs[0].find('img').attributes('src')).toBe('/uploads/comments/abc.jpg');
   });
 });

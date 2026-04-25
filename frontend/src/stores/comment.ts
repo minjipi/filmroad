@@ -16,6 +16,9 @@ export interface Comment {
   content: string;
   createdAt: string;
   author: CommentAuthor;
+  // 인증샷 댓글의 첨부 이미지 정적 경로(`/uploads/comments/...`).
+  // 첨부 없는 댓글은 null.
+  imageUrl: string | null;
 }
 
 interface CommentListResponse {
@@ -101,8 +104,13 @@ export const useCommentStore = defineStore('comment', {
         s.loading = false;
       }
     },
-    async create(photoId: number, content: string): Promise<Comment | null> {
+    async create(
+      photoId: number,
+      content: string,
+      image?: File | null,
+    ): Promise<Comment | null> {
       const trimmed = content.trim();
+      // 백엔드 contract: content 는 NotBlank. 이미지만 보내는 케이스는 막아야 한다.
       if (trimmed.length === 0) return null;
       if (!useAuthStore().isAuthenticated) {
         useUiStore().showLoginPrompt('댓글 작성은 로그인 후 이용할 수 있어요.');
@@ -111,9 +119,14 @@ export const useCommentStore = defineStore('comment', {
       const s = ensure(this, photoId);
       s.error = null;
       try {
+        // 항상 multipart/form-data 로 전송. Content-Type 은 직접 세팅하지 않고
+        // 브라우저가 boundary 까지 채우도록 둔다(axios 가 FormData 를 자동 감지).
+        const form = new FormData();
+        form.append('content', trimmed);
+        if (image) form.append('image', image);
         const { data } = await api.post<Comment>(
           `/api/photos/${photoId}/comments`,
-          { content: trimmed },
+          form,
         );
         s.items.push(data);
         return data;

@@ -35,6 +35,16 @@
               <span class="time">{{ formatRelativeTime(c.createdAt) }}</span>
             </div>
             <div class="content">{{ c.content }}</div>
+            <button
+              v-if="c.imageUrl"
+              type="button"
+              class="cs-attach"
+              data-testid="cs-attach-thumb"
+              :aria-label="`인증샷 보기 — ${c.author.handle}`"
+              @click="onOpenAttach(c.imageUrl)"
+            >
+              <img :src="c.imageUrl" :alt="`${c.author.handle} 인증샷`" />
+            </button>
           </div>
           <button
             v-if="isOwn(c)"
@@ -57,36 +67,102 @@
       </div>
 
       <footer class="cs-foot">
-        <input
-          v-model="draft"
-          class="cs-input"
-          type="text"
-          :placeholder="authReady ? '댓글을 입력하세요...' : '로그인 후 댓글을 작성할 수 있어요'"
-          :disabled="!authReady"
-          enterkeyhint="send"
-          @keyup.enter="onSubmit"
-        />
-        <button
-          class="cs-send"
-          type="button"
-          :disabled="!authReady || draft.trim().length === 0"
-          @click="onSubmit"
-        >
-          <ion-icon :icon="paperPlaneOutline" class="ic-20" />
-        </button>
+        <!--
+          첨부 프리뷰: input 위에 행으로 노출. 첨부가 없으면 통째로 숨겨서
+          기본 푸터 높이가 변하지 않게 한다(키보드 인터랙션 깨지면 안 됨).
+        -->
+        <div v-if="attachPreview" class="cs-attach-preview" data-testid="cs-attach-preview">
+          <img :src="attachPreview" alt="attach preview" />
+          <button
+            type="button"
+            class="cs-attach-clear"
+            data-testid="cs-attach-clear"
+            aria-label="첨부 취소"
+            @click="onClearAttach"
+          >
+            <ion-icon :icon="closeOutline" class="ic-16" />
+          </button>
+        </div>
+
+        <div class="cs-foot-row">
+          <button
+            type="button"
+            class="cs-attach-btn"
+            data-testid="cs-attach-btn"
+            :disabled="!authReady || submitting"
+            aria-label="이미지 첨부"
+            @click="onPickImage"
+          >
+            <ion-icon :icon="imageOutline" class="ic-22" />
+          </button>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            class="cs-file-input"
+            data-testid="cs-file-input"
+            @change="onFilePicked"
+          />
+          <input
+            v-model="draft"
+            class="cs-input"
+            type="text"
+            :placeholder="authReady ? '댓글을 입력하세요...' : '로그인 후 댓글을 작성할 수 있어요'"
+            :disabled="!authReady || submitting"
+            enterkeyhint="send"
+            @keyup.enter="onSubmit"
+          />
+          <button
+            class="cs-send"
+            type="button"
+            :disabled="!authReady || !canSend || submitting"
+            @click="onSubmit"
+          >
+            <ion-icon :icon="paperPlaneOutline" class="ic-20" />
+          </button>
+        </div>
       </footer>
+    </div>
+  </ion-modal>
+
+  <!--
+    첨부 이미지 풀스크린 뷰어. 별도 라우트 없이 같은 컴포넌트에서 ion-modal
+    하나 더 띄우는 패턴(UploadPage 의 picker 처럼). 백드롭 탭으로 닫힌다.
+  -->
+  <ion-modal
+    :is-open="viewerSrc !== null"
+    @did-dismiss="onCloseViewer"
+  >
+    <div
+      v-if="viewerSrc"
+      class="cs-viewer"
+      role="dialog"
+      aria-label="인증샷 보기"
+      @click.self="onCloseViewer"
+    >
+      <button
+        type="button"
+        class="cs-viewer-close"
+        aria-label="닫기"
+        data-testid="cs-viewer-close"
+        @click="onCloseViewer"
+      >
+        <ion-icon :icon="closeOutline" class="ic-22" />
+      </button>
+      <img :src="viewerSrc" alt="인증샷 원본" />
     </div>
   </ion-modal>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { IonModal, IonIcon } from '@ionic/vue';
 import {
   closeOutline,
   checkmarkCircle,
   trashOutline,
   paperPlaneOutline,
+  imageOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
@@ -107,6 +183,14 @@ const { user } = storeToRefs(authStore);
 const { showError } = useToast();
 
 const draft = ref('');
+const attachFile = ref<File | null>(null);
+const attachPreview = ref<string | null>(null);
+const submitting = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+const viewerSrc = ref<string | null>(null);
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
 
 const items = computed<Comment[]>(() =>
   props.photoId != null ? commentStore.itemsFor(props.photoId) : [],
@@ -118,18 +202,17 @@ const loading = computed<boolean>(() =>
   props.photoId != null ? commentStore.loadingFor(props.photoId) : false,
 );
 const authReady = computed<boolean>(() => user.value !== null);
+// 텍스트가 있을 때만 전송 가능. 이미지만 첨부하고 텍스트 비어있는 케이스는
+// 백엔드가 NotBlank 로 reject 하므로 클라에서도 같이 막는다.
+const canSend = computed<boolean>(() => draft.value.trim().length > 0);
 
 function isOwn(c: Comment): boolean {
   return user.value !== null && c.author.userId === user.value.id;
 }
 
-// task #42: tapping a comment author (avatar or handle) opens their
-// public profile. Route to /profile when the signed-in viewer taps
-// their own comment instead of the public view.
 const router = useRouter();
 async function onOpenAuthor(userId: number): Promise<void> {
-  // Close the sheet so the transition doesn't fight the navigation
-  // animation — Ionic keeps the sheet modal in the DOM otherwise.
+  // sheet 가 DOM 에 남아 navigation 과 충돌하는 걸 막기 위해 먼저 close.
   emit('close');
   if (user.value?.id === userId) {
     await router.push('/profile');
@@ -153,18 +236,74 @@ async function onLoadMore(): Promise<void> {
   if (err) await showError(err);
 }
 
-async function onSubmit(): Promise<void> {
-  if (props.photoId == null) return;
-  const text = draft.value.trim();
-  if (text.length === 0) return;
-  const created = await commentStore.create(props.photoId, text);
-  if (!created) {
-    const err = commentStore.errorFor(props.photoId);
-    if (err) await showError(err);
+function revokePreview(): void {
+  if (attachPreview.value && attachPreview.value.startsWith('blob:')) {
+    URL.revokeObjectURL(attachPreview.value);
+  }
+  attachPreview.value = null;
+}
+
+function onPickImage(): void {
+  if (!authReady.value || submitting.value) return;
+  fileInput.value?.click();
+}
+
+async function onFilePicked(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  // 같은 파일 다시 고르는 케이스 대비해서 input value 는 항상 reset.
+  input.value = '';
+  if (!file) return;
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    await showError('jpg, png, webp 형식만 첨부할 수 있어요');
     return;
   }
-  draft.value = '';
-  emit('created');
+  if (file.size > MAX_ATTACH_BYTES) {
+    const mb = (file.size / (1024 * 1024)).toFixed(1);
+    await showError(`이미지가 너무 커요 (${mb}MB). 10MB 이하 파일만 첨부할 수 있어요.`);
+    return;
+  }
+  revokePreview();
+  attachFile.value = file;
+  attachPreview.value = URL.createObjectURL(file);
+}
+
+function onClearAttach(): void {
+  attachFile.value = null;
+  revokePreview();
+}
+
+async function onSubmit(): Promise<void> {
+  if (props.photoId == null) return;
+  if (submitting.value) return;
+  const text = draft.value.trim();
+  if (text.length === 0) {
+    if (attachFile.value) {
+      // 이미지만 첨부하고 텍스트 비운 케이스 — 백엔드는 NotBlank 로 reject 하니
+      // 사용자에게 명확히 안내.
+      await showError('내용을 입력해 주세요');
+    }
+    return;
+  }
+  submitting.value = true;
+  try {
+    const created = await commentStore.create(
+      props.photoId,
+      text,
+      attachFile.value ?? undefined,
+    );
+    if (!created) {
+      const err = commentStore.errorFor(props.photoId);
+      if (err) await showError(err);
+      return;
+    }
+    draft.value = '';
+    attachFile.value = null;
+    revokePreview();
+    emit('created');
+  } finally {
+    submitting.value = false;
+  }
 }
 
 async function onDelete(c: Comment): Promise<void> {
@@ -176,6 +315,14 @@ async function onDelete(c: Comment): Promise<void> {
   }
 }
 
+function onOpenAttach(src: string): void {
+  viewerSrc.value = src;
+}
+
+function onCloseViewer(): void {
+  viewerSrc.value = null;
+}
+
 watch(
   () => [props.open, props.photoId] as const,
   async ([isOpen, id]) => {
@@ -185,10 +332,18 @@ watch(
       if (err) await showError(err);
     } else if (!isOpen) {
       draft.value = '';
+      attachFile.value = null;
+      revokePreview();
+      viewerSrc.value = null;
     }
   },
   { immediate: true },
 );
+
+// 컴포넌트 언마운트 시 blob: URL 누수 방지.
+onBeforeUnmount(() => {
+  revokePreview();
+});
 </script>
 
 <style scoped>
@@ -274,6 +429,26 @@ watch(
   letter-spacing: -0.01em;
   word-break: break-word;
 }
+/* 인증샷 첨부 썸네일 — content 아래에 정사각 ~120px. 라운드 + 테두리로
+   본문과 시각적으로 분리. 탭 시 풀스크린 viewer 띄움. */
+.cs-attach {
+  margin-top: 6px;
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--fr-line);
+  background: var(--fr-bg-muted);
+  padding: 0;
+  cursor: pointer;
+  display: block;
+}
+.cs-attach img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .cs-item .del {
   flex-shrink: 0;
   border: none;
@@ -304,9 +479,63 @@ watch(
   border-top: 1px solid var(--fr-line);
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   background: #ffffff;
+}
+.cs-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 첨부 프리뷰 — 푸터 input 위 행. 썸네일 + 우상단 X. */
+.cs-attach-preview {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--fr-bg-muted);
+  border: 1px solid var(--fr-line);
+}
+.cs-attach-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cs-attach-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.7);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.cs-attach-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-2);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cs-attach-btn[disabled] { opacity: 0.4; cursor: default; }
+.cs-file-input {
+  display: none;
 }
 .cs-input {
   flex: 1;
@@ -319,6 +548,7 @@ watch(
   font: inherit;
   font-size: 14px;
   color: var(--fr-ink);
+  min-width: 0;
 }
 .cs-input::placeholder { color: var(--fr-ink-3); }
 .cs-input[disabled] { opacity: 0.6; }
@@ -333,6 +563,40 @@ watch(
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .cs-send[disabled] { opacity: 0.4; cursor: default; }
+
+/* 풀스크린 인증샷 뷰어 — 별도 라우트 없이 같은 sheet 위에 띄운다. */
+.cs-viewer {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+}
+.cs-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.cs-viewer-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+}
 </style>
