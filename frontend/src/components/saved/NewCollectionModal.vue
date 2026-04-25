@@ -70,6 +70,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
 import { useUiStore } from '@/stores/ui';
 import { useSavedStore, type SavedCollection } from '@/stores/saved';
 import { useToast } from '@/composables/useToast';
@@ -82,6 +83,7 @@ const emit = defineEmits<{
   renamed: [collection: { id: number; name: string }];
 }>();
 
+const router = useRouter();
 const uiStore = useUiStore();
 const savedStore = useSavedStore();
 const {
@@ -155,14 +157,26 @@ async function onSubmit(): Promise<void> {
       emit('renamed', { id: target.id, name: name.value.trim() });
       return;
     }
+    // CollectionPicker 안에서 "새 컬렉션 만들기" 로 들어왔는지 여부에 따라
+    // 후속 흐름이 달라진다. picker 가 열려있으면 App.vue 가 created 이벤트를
+    // 받아 picker 의 onCollectionCreated 로 보내 새 컬렉션을 자동 선택한다
+    // (= 현재 보고 있는 장소를 그 컬렉션에 저장). picker 가 닫혀있으면 (=
+    // SavedPage "새 컬렉션" 카드 흐름) 사용자가 곧장 장소를 둘러볼 수 있게
+    // /feed 로 안내한다.
+    const fromPicker = uiStore.collectionPickerOpen;
     const created = await savedStore.createCollection(name.value);
     if (!created) {
       if (savedStore.error) await showError(savedStore.error);
       return;
     }
-    await showInfo('컬렉션이 추가되었어요');
     uiStore.closeNewCollectionModal();
     emit('created', created);
+    if (fromPicker) {
+      await showInfo('컬렉션이 추가되었어요');
+    } else {
+      await showInfo('새 컬렉션이 추가되었어요. 어떤 곳을 저장하러 가볼까?');
+      await router.push('/feed');
+    }
   } finally {
     submitting.value = false;
   }

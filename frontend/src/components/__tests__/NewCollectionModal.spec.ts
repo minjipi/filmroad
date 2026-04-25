@@ -5,6 +5,13 @@ vi.mock('@/services/api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
+const { pushSpy } = vi.hoisted(() => ({
+  pushSpy: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: pushSpy }),
+}));
+
 const { toastCreateSpy } = vi.hoisted(() => ({
   toastCreateSpy: vi
     .fn()
@@ -35,6 +42,7 @@ function mountModal() {
 describe('NewCollectionModal.vue', () => {
   beforeEach(() => {
     toastCreateSpy.mockClear();
+    pushSpy.mockClear();
     // Strip any teleported modal content from prior tests.
     document.body
       .querySelectorAll('[data-testid^="new-coll-"]')
@@ -91,6 +99,62 @@ describe('NewCollectionModal.vue', () => {
     expect(createSpy).toHaveBeenCalledWith('새 여름');
     expect(ui.newCollectionModalOpen).toBe(false);
     expect(toastCreateSpy).toHaveBeenCalled();
+  });
+
+  it('SavedPage 흐름(picker 닫혀있음): 생성 후 안내 토스트 + /feed 로 이동', async () => {
+    mountModal();
+    await flushPromises();
+    const saved = useSavedStore();
+    vi.spyOn(saved, 'createCollection').mockResolvedValue({
+      id: 99,
+      name: '새 여름',
+      coverImageUrl: null,
+      count: 0,
+      gradient: null,
+    });
+    const ui = useUiStore();
+    ui.openNewCollectionModal();
+    await flushPromises();
+
+    setInputValue(qsBody<HTMLInputElement>('[data-testid="new-coll-input"]')!, '새 여름');
+    await flushPromises();
+    qsBody<HTMLButtonElement>('[data-testid="new-coll-submit"]')!.click();
+    await flushPromises();
+
+    expect(toastCreateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '새 컬렉션이 추가되었어요. 어떤 곳을 저장하러 가볼까?',
+      }),
+    );
+    expect(pushSpy).toHaveBeenCalledWith('/feed');
+  });
+
+  it('CollectionPicker 흐름(picker 열려있음): 생성 후 짧은 토스트만, 라우팅 없음', async () => {
+    mountModal();
+    await flushPromises();
+    const saved = useSavedStore();
+    vi.spyOn(saved, 'createCollection').mockResolvedValue({
+      id: 99,
+      name: '새 여름',
+      coverImageUrl: null,
+      count: 0,
+      gradient: null,
+    });
+    const ui = useUiStore();
+    // picker 가 열린 상태 시뮬레이트.
+    ui.openCollectionPicker(123);
+    ui.openNewCollectionModal();
+    await flushPromises();
+
+    setInputValue(qsBody<HTMLInputElement>('[data-testid="new-coll-input"]')!, '새 여름');
+    await flushPromises();
+    qsBody<HTMLButtonElement>('[data-testid="new-coll-submit"]')!.click();
+    await flushPromises();
+
+    expect(toastCreateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '컬렉션이 추가되었어요' }),
+    );
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it('createCollection returning null → modal stays open + error toast surfaces', async () => {
