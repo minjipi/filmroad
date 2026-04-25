@@ -38,4 +38,11 @@ public class PostComment extends BaseEntity {
 
     @Column(nullable = false, length = 500)
     private String content;
+
+    /**
+     * 인증샷 댓글 이미지의 정적 URL (예: "/uploads/comments/2026/04/26/{uuid}.jpg").
+     * 텍스트-only 댓글이면 null. 댓글 1건당 최대 1장.
+     */
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
 }

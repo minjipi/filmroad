@@ -11,6 +11,8 @@ import java.util.Date;
 public class CommentDto {
     private Long id;
     private String content;
+    /** 인증샷 댓글 이미지 URL. 첨부 없으면 null. */
+    private String imageUrl;
     private Date createdAt;
     private CommentAuthorDto author;
 
@@ -18,6 +20,7 @@ public class CommentDto {
         return CommentDto.builder()
                 .id(comment.getId())
                 .content(comment.getContent())
+                .imageUrl(comment.getImageUrl())
                 .createdAt(comment.getCreatedAt())
                 .author(CommentAuthorDto.from(comment.getUser()))
                 .build();
