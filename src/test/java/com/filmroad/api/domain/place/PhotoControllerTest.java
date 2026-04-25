@@ -8,6 +8,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -16,6 +17,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -46,6 +51,15 @@ class PhotoControllerTest {
     @Autowired
     private PlacePhotoRepository placePhotoRepository;
 
+    @Autowired
+    private PlaceRepository placeRepository;
+
+    @Autowired
+    private com.filmroad.api.domain.user.UserRepository userRepository;
+
+    @Value("${project.upload.path}")
+    private String uploadPath;
+
     private Cookie demoAccessCookie() {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
     }
@@ -65,7 +79,12 @@ class PhotoControllerTest {
 
     private MockMultipartFile buildImage() {
         return new MockMultipartFile(
-                "file", "test.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG_BYTES);
+                "files", "test.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG_BYTES);
+    }
+
+    private MockMultipartFile buildImage(String name) {
+        return new MockMultipartFile(
+                "files", name, MediaType.IMAGE_JPEG_VALUE, JPEG_BYTES);
     }
 
     @Test
@@ -87,6 +106,33 @@ class PhotoControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/photos — imageUrl 은 `/uploads/yyyy/MM/dd/<uuid>.<ext>` 날짜 폴더 경로 (task #43)")
+    void upload_storesInDateBucketedPath() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+
+        MvcResult result = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage())
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                // 형식 검증: /uploads/YYYY/MM/DD/<uuid>.<ext>. regex 는 json-path matcher 로 직접 걸기 어려우므로
+                // startsWith + 추가 패턴 분리.
+                .andExpect(jsonPath("$.results.imageUrl", startsWith("/uploads/")))
+                .andExpect(jsonPath("$.results.imageUrl",
+                        matchesPattern("^/uploads/\\d{4}/\\d{2}/\\d{2}/[0-9a-fA-F-]+\\.(jpg|jpeg|png|webp)$")))
+                .andReturn();
+
+        // imageUrl 에서 `/uploads/` 접두를 떼서 실제 파일 시스템에도 써졌는지 확인 (날짜 디렉토리 자동 생성 포함).
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        String imageUrl = body.at("/results/imageUrl").asText();
+        String relative = imageUrl.substring("/uploads/".length());
+        Path written = Paths.get(uploadPath).resolve(relative).normalize();
+        assertThat(Files.exists(written))
+                .as("파일이 날짜 서브폴더에 실제로 써졌는지")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("POST /api/photos with unknown placeId returns PLACE_NOT_FOUND")
     void upload_unknownPlace_returnsNotFound() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(99999L, null, null, PhotoVisibility.PUBLIC, false);
@@ -105,7 +151,7 @@ class PhotoControllerTest {
     void upload_invalidExtension_returnsValidationError() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
         MockMultipartFile badFile = new MockMultipartFile(
-                "file", "bad.txt", MediaType.TEXT_PLAIN_VALUE, "hello".getBytes());
+                "files", "bad.txt", MediaType.TEXT_PLAIN_VALUE, "hello".getBytes());
 
         mockMvc.perform(multipart("/api/photos")
                         .file(badFile)
@@ -137,7 +183,7 @@ class PhotoControllerTest {
     void upload_contentTypeBypass_returnsValidationError() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
         MockMultipartFile suspicious = new MockMultipartFile(
-                "file", "evil.jsp.jpg", MediaType.TEXT_PLAIN_VALUE, JPEG_BYTES);
+                "files", "evil.jsp.jpg", MediaType.TEXT_PLAIN_VALUE, JPEG_BYTES);
 
         mockMvc.perform(multipart("/api/photos")
                         .file(suspicious)
@@ -152,7 +198,7 @@ class PhotoControllerTest {
     void upload_badMagicBytes_returnsValidationError() throws Exception {
         PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
         MockMultipartFile fakeImage = new MockMultipartFile(
-                "file", "fake.jpg", MediaType.IMAGE_JPEG_VALUE,
+                "files", "fake.jpg", MediaType.IMAGE_JPEG_VALUE,
                 new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
 
         mockMvc.perform(multipart("/api/photos")
@@ -161,6 +207,100 @@ class PhotoControllerTest {
                         .cookie(demoAccessCookie()))
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40060)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진: place/work/author/topComments 블록 + viewer-specific liked/saved")
+    void getPhoto_publicSeed_returnsDetail() throws Exception {
+        // 시드 photo 100 = place 10(주문진 영진해변), work 1(도깨비, tvN), user_id=1, visibility=PUBLIC.
+        // user=1 토큰 → isMe=true, photo_like(photo=100)/place_like(place=10)/saved_place(place=10) 전부 시드에 있어 liked=saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.id", is(100)))
+                .andExpect(jsonPath("$.results.imageUrl", notNullValue()))
+                .andExpect(jsonPath("$.results.visibility", is("PUBLIC")))
+                .andExpect(jsonPath("$.results.liked", is(true)))
+                .andExpect(jsonPath("$.results.saved", is(true)))
+                .andExpect(jsonPath("$.results.place.id", is(10)))
+                .andExpect(jsonPath("$.results.place.name", is("주문진 영진해변 방파제")))
+                .andExpect(jsonPath("$.results.work.id", is(1)))
+                .andExpect(jsonPath("$.results.work.title", is("도깨비")))
+                .andExpect(jsonPath("$.results.work.type", is("DRAMA")))
+                .andExpect(jsonPath("$.results.work.network", is("tvN")))
+                .andExpect(jsonPath("$.results.author.id", is(1)))
+                .andExpect(jsonPath("$.results.author.isMe", is(true)))
+                .andExpect(jsonPath("$.results.topComments", notNullValue()))
+                .andExpect(jsonPath("$.results.moreCommentsCount", greaterThanOrEqualTo(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 타 유저 PUBLIC 사진: isMe=false, liked/saved 는 viewer 에 없으면 false")
+    void getPhoto_foreignPublic_isMeFalseAndViewerSpecificFlags() throws Exception {
+        // photo 101 = place 10, user_id=2 (이서준), visibility=PUBLIC. user=1 토큰으로 조회.
+        // user=1 은 photo 101 에 대한 photo_like 없음 → liked=false.
+        // place 10 은 user=1 saved_place(place=10) 있음 → saved=true.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/101")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.author.id", is(2)))
+                .andExpect(jsonPath("$.results.author.isMe", is(false)))
+                .andExpect(jsonPath("$.results.liked", is(false)))
+                .andExpect(jsonPath("$.results.saved", is(true)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 내 PRIVATE 사진은 owner 본인에게 200")
+    void getPhoto_ownPrivate_allowedForOwner() throws Exception {
+        // 직접 user=1 소유 PRIVATE 사진을 저장.
+        com.filmroad.api.domain.user.User u1 = userRepository.findById(1L).orElseThrow();
+        Place p = placeRepository.findById(10L).orElseThrow();
+        int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
+        PlacePhoto own = placePhotoRepository.save(PlacePhoto.builder()
+                .place(p).user(u1)
+                .imageUrl("/uploads/own-private.jpg")
+                .orderIndex(nextOrder)
+                .visibility(PhotoVisibility.PRIVATE)
+                .groupKey(java.util.UUID.randomUUID().toString())
+                .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/photos/" + own.getId())
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.visibility", is("PRIVATE")))
+                .andExpect(jsonPath("$.results.author.isMe", is(true)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 다른 유저의 PRIVATE 사진은 404 로 숨김 (enumeration 방지)")
+    void getPhoto_foreignPrivate_returns404() throws Exception {
+        // user=2 가 올린 PRIVATE 사진 1건.
+        com.filmroad.api.domain.user.User u2 = userRepository.findById(2L).orElseThrow();
+        Place p = placeRepository.findById(10L).orElseThrow();
+        int nextOrder = placePhotoRepository.findMaxOrderIndexByPlaceId(10L) + 1;
+        PlacePhoto foreign = placePhotoRepository.save(PlacePhoto.builder()
+                .place(p).user(u2)
+                .imageUrl("/uploads/u2-private.jpg")
+                .orderIndex(nextOrder)
+                .visibility(PhotoVisibility.PRIVATE)
+                .groupKey(java.util.UUID.randomUUID().toString())
+                .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/photos/" + foreign.getId())
+                        .cookie(demoAccessCookie()))   // user=1 토큰
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40070)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/99999 (없음) → 404 PHOTO_NOT_FOUND")
+    void getPhoto_unknownId_returns404() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/99999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40070)));
     }
 
     @Test
@@ -203,5 +343,147 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.reward.pointsEarned", is(50)))
                 .andExpect(jsonPath("$.results.reward.levelName", notNullValue()))
                 .andExpect(jsonPath("$.results.reward.newBadges", notNullValue()));
+    }
+
+    // ---- task #44a · 멀티 파일 업로드 + groupPhotos ----
+
+    @Test
+    @DisplayName("POST /api/photos — 3장 업로드: 같은 groupKey, orderIndex 순차, groupPhotos.size()==3")
+    void upload_storesMultipleFilesUnderSameGroupKey() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, "세 장짜리 배치", null, PhotoVisibility.PUBLIC, false);
+
+        MvcResult result = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage("a.jpg"))
+                        .file(buildImage("b.jpg"))
+                        .file(buildImage("c.jpg"))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.groupPhotos", hasSize(3)))
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        java.util.List<Long> ids = new java.util.ArrayList<>();
+        java.util.List<Integer> orderIndexes = new java.util.ArrayList<>();
+        body.at("/results/groupPhotos").forEach(n -> {
+            ids.add(n.get("id").asLong());
+            orderIndexes.add(n.get("orderIndex").asInt());
+        });
+        assertThat(ids).hasSize(3);
+        // orderIndex 는 순차 증가
+        assertThat(orderIndexes.get(0)).isLessThan(orderIndexes.get(1));
+        assertThat(orderIndexes.get(1)).isLessThan(orderIndexes.get(2));
+        // 3장 모두 같은 groupKey
+        java.util.Set<String> groupKeys = new java.util.HashSet<>();
+        for (Long id : ids) {
+            groupKeys.add(placePhotoRepository.findById(id).orElseThrow().getGroupKey());
+        }
+        assertThat(groupKeys)
+                .as("같은 batch 는 단일 groupKey")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 6장 초과 → 400 INVALID_FILE_TYPE")
+    void upload_rejectsWhenOverFiveFiles() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+        var builder = multipart("/api/photos")
+                .file(buildImage("1.jpg"))
+                .file(buildImage("2.jpg"))
+                .file(buildImage("3.jpg"))
+                .file(buildImage("4.jpg"))
+                .file(buildImage("5.jpg"))
+                .file(buildImage("6.jpg"))
+                .file(buildMeta(req))
+                .cookie(demoAccessCookie());
+
+        mockMvc.perform(builder)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(40060)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 2장 정상 + 1장 magic-byte 위조 → 400 + 아무 row 도 저장 안 됨")
+    void upload_rollsBackAllOnMagicByteFailure() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+        MockMultipartFile fake = new MockMultipartFile(
+                "files", "fake.jpg", MediaType.IMAGE_JPEG_VALUE,
+                new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+
+        long before = placePhotoRepository.count();
+
+        mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage("ok1.jpg"))
+                        .file(buildImage("ok2.jpg"))
+                        .file(fake)
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(40060)));
+
+        // 선 검증 단계에서 거부됐으므로 DB 에는 추가된 row 가 없어야 한다.
+        assertThat(placePhotoRepository.count())
+                .as("배치 중 하나라도 실패하면 전체 롤백 — 부분 저장 금지")
+                .isEqualTo(before);
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 3장 업로드해도 points 는 한 batch 당 +50 한 번만")
+    void upload_grantsRewardOnlyOnceForBatch() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false);
+
+        com.filmroad.api.domain.user.User before = userRepository.findById(1L).orElseThrow();
+        int pointsBefore = before.getPoints();
+
+        mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage("a.jpg"))
+                        .file(buildImage("b.jpg"))
+                        .file(buildImage("c.jpg"))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.reward.pointsEarned", is(50)));
+
+        com.filmroad.api.domain.user.User after = userRepository.findById(1L).orElseThrow();
+        assertThat(after.getPoints())
+                .as("멀티 업로드에서도 points 는 +50 한 번만")
+                .isEqualTo(pointsBefore + 50);
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 그룹 3장 업로드 후 상세: groupPhotos orderIndex ASC")
+    void getPhotoDetail_returnsGroupPhotosAscending() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, "batch", null, PhotoVisibility.PUBLIC, false);
+        MvcResult uploaded = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage("x1.jpg"))
+                        .file(buildImage("x2.jpg"))
+                        .file(buildImage("x3.jpg"))
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        long firstId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
+                .at("/results/id").asLong();
+
+        // 2번째 장의 id 로 상세 조회해도 groupPhotos 에는 같은 batch 3장이 orderIndex ASC 로 전부 반환.
+        long secondId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
+                .at("/results/groupPhotos/1/id").asLong();
+
+        MvcResult detail = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/" + secondId)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.groupPhotos", hasSize(3)))
+                .andExpect(jsonPath("$.results.groupPhotos[0].id", is((int) firstId)))
+                .andReturn();
+
+        // orderIndex 가 ASC 로 엄격 증가
+        JsonNode group = objectMapper.readTree(detail.getResponse().getContentAsString())
+                .at("/results/groupPhotos");
+        int o0 = group.get(0).get("orderIndex").asInt();
+        int o1 = group.get(1).get("orderIndex").asInt();
+        int o2 = group.get(2).get("orderIndex").asInt();
+        assertThat(o0).isLessThan(o1);
+        assertThat(o1).isLessThan(o2);
     }
 }

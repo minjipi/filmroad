@@ -38,6 +38,7 @@ const fakeResponse: PhotoResponse = {
   tags: ['도깨비', '강릉'],
   visibility: 'PUBLIC',
   createdAt: '2026-04-22T00:00:00Z',
+  groupPhotos: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', orderIndex: 0 }],
 };
 
 describe('upload store', () => {
@@ -149,9 +150,12 @@ describe('upload store', () => {
     expect(url).toBe('/api/photos');
     expect(form).toBeInstanceOf(FormData);
 
-    const fileEntry = (form as FormData).get('file');
-    expect(fileEntry).toBeInstanceOf(Blob);
-    expect((fileEntry as Blob).type).toBe('image/jpeg');
+    // task #44: the payload uses `files` (plural) and one form-entry per
+    // photo so multi-image posts go up in a single request.
+    const fileEntries = (form as FormData).getAll('files');
+    expect(fileEntries).toHaveLength(1);
+    expect(fileEntries[0]).toBeInstanceOf(Blob);
+    expect((fileEntries[0] as Blob).type).toBe('image/jpeg');
 
     const metaEntry = (form as FormData).get('meta');
     expect(metaEntry).toBeInstanceOf(Blob);
@@ -170,6 +174,38 @@ describe('upload store', () => {
       visibility: 'FOLLOWERS',
       addToStampbook: false,
     });
+  });
+
+  it('submit sends one `files` form-entry per photo for multi-image posts (task #44)', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+    store.addPhoto(JPEG_DATA_URL);
+    store.addPhoto(JPEG_DATA_URL);
+
+    await store.submit();
+
+    const [, form] = mockApi.post.mock.calls[0];
+    const fileEntries = (form as FormData).getAll('files');
+    expect(fileEntries).toHaveLength(3);
+    for (const entry of fileEntries) {
+      expect(entry).toBeInstanceOf(Blob);
+    }
+    // Meta is still one part.
+    expect((form as FormData).getAll('meta')).toHaveLength(1);
+  });
+
+  it('addPhoto rejects an added frame once the 5-photo per-post cap is hit', () => {
+    const store = useUploadStore();
+    store.beginCapture(target);
+    for (let i = 0; i < 5; i += 1) {
+      expect(store.addPhoto(JPEG_DATA_URL)).toBe(true);
+    }
+    expect(store.addPhoto(JPEG_DATA_URL)).toBe(false);
+    expect(store.photos).toHaveLength(5);
+    expect(store.error).toMatch(/최대.*5.*장/);
   });
 
   it('submit success stores the response in lastResult (for the reward screen)', async () => {

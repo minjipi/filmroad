@@ -15,50 +15,145 @@
         </div>
       </header>
 
-      <div class="sd-scroll no-scrollbar">
-        <section class="compare">
-          <img :src="shot.originalImageUrl" alt="드라마 원본" />
-          <img :src="shot.userImageUrl" class="top-img" alt="내 인증샷" />
+      <!-- Loading placeholder — shown while the first /api/photos/:id fetch
+           is in flight. Error placeholder handles 404/network failure. -->
+      <div
+        v-if="loading && !shot"
+        class="sd-placeholder"
+        data-testid="sd-loading"
+      >
+        불러오는 중…
+      </div>
+      <div
+        v-else-if="!shot && error"
+        class="sd-placeholder error"
+        data-testid="sd-error"
+      >
+        {{ error }}
+      </div>
+
+      <div v-else-if="shot" class="sd-scroll no-scrollbar" data-testid="sd-loaded">
+        <!-- Multi-image post (task #44): horizontal carousel of all photos
+             in the upload group. Scene-compare overlay lives only on the
+             first slide; follow-up photos render as plain images. -->
+        <section
+          v-if="groupPhotos.length > 1"
+          class="sd-carousel"
+          data-testid="sd-carousel"
+        >
+          <div
+            ref="carouselEl"
+            class="carousel-track no-scrollbar"
+            @scroll="onCarouselScroll"
+          >
+            <div class="carousel-slide" data-testid="sd-slide">
+              <div class="compare">
+                <img
+                  v-if="shot.sceneImageUrl"
+                  :src="shot.sceneImageUrl"
+                  alt="드라마 원본"
+                />
+                <img :src="groupPhotos[0].imageUrl" class="top-img" :alt="shot.place.name" />
+                <div class="divider">
+                  <span class="divider-handle">
+                    <ion-icon :icon="swapHorizontal" class="ic-16" />
+                  </span>
+                </div>
+                <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
+                <span class="lbl-chip r">
+                  <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
+                </span>
+                <div class="scene-meta">
+                  <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
+                  <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
+                  <template v-if="shot.work.sceneTimestamp">
+                    <span class="sep" />
+                    <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
+                  </template>
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="p in groupPhotos.slice(1)"
+              :key="p.id"
+              class="carousel-slide"
+              data-testid="sd-slide"
+            >
+              <img :src="p.imageUrl" :alt="shot.place.name" />
+            </div>
+          </div>
+          <div class="carousel-dots" data-testid="sd-dots">
+            <span
+              v-for="(_, i) in groupPhotos"
+              :key="i"
+              :class="['dot', i === currentSlide ? 'active' : '']"
+            />
+          </div>
+          <span class="carousel-count" data-testid="sd-count">
+            {{ currentSlide + 1 }} / {{ groupPhotos.length }}
+          </span>
+        </section>
+
+        <!-- Single-image post (existing behavior). -->
+        <section v-else class="compare">
+          <img
+            v-if="shot.sceneImageUrl"
+            :src="shot.sceneImageUrl"
+            alt="드라마 원본"
+          />
+          <img :src="shot.imageUrl" class="top-img" :alt="shot.place.name" />
           <div class="divider">
             <span class="divider-handle">
               <ion-icon :icon="swapHorizontal" class="ic-16" />
             </span>
           </div>
-          <span class="lbl-chip l">드라마 원본</span>
+          <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
           <span class="lbl-chip r">
             <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
           </span>
           <div class="scene-meta">
-            <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.sceneWork }} · {{ shot.sceneEpisode }}
-            <span class="sep" />
-            <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.sceneTimestamp }}
+            <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
+            <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
+            <template v-if="shot.work.sceneTimestamp">
+              <span class="sep" />
+              <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
+            </template>
           </div>
         </section>
 
         <section class="sd-user">
-          <div class="avatar"><img :src="shot.authorAvatarUrl" :alt="shot.authorName" /></div>
+          <div class="avatar">
+            <img
+              v-if="shot.author.avatarUrl"
+              :src="shot.author.avatarUrl"
+              :alt="shot.author.nickname"
+            />
+          </div>
           <div class="meta">
             <div class="nm">
-              {{ shot.authorName }}
-              <ion-icon v-if="shot.authorVerified" :icon="checkmarkCircle" class="verified" />
+              {{ shot.author.nickname }}
+              <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="verified" />
             </div>
             <div class="sub">
               <ion-icon :icon="locationOutline" class="ic-16" />
-              {{ shot.placeName }} · {{ shot.takenAtLabel }}
+              {{ shot.place.name }} · {{ takenAtLabel }}
             </div>
           </div>
-          <button type="button" class="follow" @click="onAuthorAction">{{ authorActionLabel }}</button>
+          <button type="button" class="follow" @click="onAuthorAction">
+            {{ authorActionLabel }}
+          </button>
         </section>
 
         <section class="sd-stats">
           <button
             type="button"
-            :class="['sd-stat-btn', liked ? 'liked' : '']"
+            :class="['sd-stat-btn', shot.liked ? 'liked' : '']"
+            data-testid="sd-like-btn"
             @click="onToggleLike"
           >
             <span class="stat-inner">
-              <ion-icon :icon="liked ? heart : heartOutline" class="ic-22" />
-              <span class="n">{{ formatCount(likeCount) }}</span>
+              <ion-icon :icon="shot.liked ? heart : heartOutline" class="ic-22" />
+              <span class="n">{{ formatCount(shot.likeCount) }}</span>
               <span class="l">좋아요</span>
             </span>
           </button>
@@ -71,60 +166,70 @@
           </button>
           <button
             type="button"
-            :class="['sd-stat-btn', bookmarked ? 'saved' : '']"
+            :class="['sd-stat-btn', placeSaved ? 'saved' : '']"
+            data-testid="sd-save-btn"
             @click="onToggleBookmark"
           >
             <span class="stat-inner">
-              <ion-icon :icon="bookmarked ? bookmark : bookmarkOutline" class="ic-22" />
-              <span class="n">{{ formatCount(bookmarkCount) }}</span>
+              <ion-icon :icon="placeSaved ? bookmark : bookmarkOutline" class="ic-22" />
               <span class="l">저장</span>
             </span>
           </button>
           <button type="button" class="sd-stat-btn" @click="onShare">
             <span class="stat-inner">
               <ion-icon :icon="paperPlaneOutline" class="ic-22" />
-              <span class="n">{{ formatCount(shot.shareCount) }}</span>
               <span class="l">공유</span>
             </span>
           </button>
         </section>
 
         <section class="sd-caption">
-          <p class="body" v-html="shot.captionHtml" />
-          <div class="tags">
+          <p v-if="shot.caption" class="body">{{ shot.caption }}</p>
+          <div v-if="shot.tags.length > 0" class="tags">
             <span v-for="t in shot.tags" :key="t" class="tag">#{{ t }}</span>
           </div>
-          <div class="date">{{ shot.takenAtFullLabel }}</div>
+          <div class="date">{{ takenAtFullLabel }}</div>
         </section>
 
         <section class="loc-card" @click="onOpenPlace">
           <div class="loc-map-thumb" />
           <div class="meta">
-            <div class="pl">{{ shot.placeName }}</div>
-            <div class="ad">{{ shot.placeAddress }}</div>
+            <div class="pl">{{ shot.place.name }}</div>
+            <div class="ad">{{ shot.place.address ?? shot.place.regionLabel }}</div>
           </div>
           <button type="button" class="go" aria-label="open-place">
             <ion-icon :icon="arrowForward" class="ic-20" />
           </button>
         </section>
 
-        <section class="scene-card" @click="onOpenScene">
+        <section
+          v-if="shot.sceneImageUrl"
+          class="scene-card"
+          @click="onOpenScene"
+        >
           <div class="head">
             <span class="drama-ic">
               <ion-icon :icon="filmOutline" class="ic-18" />
             </span>
             <div class="title-block">
               <div class="t">원본 장면 보기</div>
-              <div class="s">{{ shot.sceneWork }} {{ shot.sceneEpisode }} · {{ shot.sceneTimestamp }} · {{ shot.sceneNetwork }}</div>
+              <div class="s">
+                {{ shot.work.title }}
+                <template v-if="shot.work.episode"> {{ shot.work.episode }}</template>
+                <template v-if="shot.work.sceneTimestamp"> · {{ shot.work.sceneTimestamp }}</template>
+                <template v-if="shot.work.network"> · {{ shot.work.network }}</template>
+              </div>
             </div>
             <ion-icon :icon="chevronForwardOutline" class="ic-18 chev" />
           </div>
           <div class="body play">
-            <img :src="shot.originalImageUrl" :alt="shot.sceneWork" />
+            <img :src="shot.sceneImageUrl" :alt="shot.work.title" />
             <button type="button" class="play-btn" aria-label="play">
               <ion-icon :icon="play" class="ic-20" />
             </button>
-            <span class="play-time">{{ shot.sceneTimestamp }}</span>
+            <span v-if="shot.work.sceneTimestamp" class="play-time">
+              {{ shot.work.sceneTimestamp }}
+            </span>
           </div>
         </section>
 
@@ -133,17 +238,24 @@
             댓글 <span class="cnt">{{ formatCount(shot.commentCount) }}개</span>
           </h4>
           <div
-            v-for="c in shot.comments"
+            v-for="c in shot.topComments"
             :key="c.id"
-            :class="['cmt', c.isReply ? 'is-reply' : '']"
+            :class="['cmt', c.parentId != null ? 'is-reply' : '']"
+            data-testid="sd-comment"
           >
-            <div class="av"><img :src="c.avatarUrl" :alt="c.handle" /></div>
+            <div class="av">
+              <img
+                v-if="c.author.avatarUrl"
+                :src="c.author.avatarUrl"
+                :alt="c.author.handle"
+              />
+            </div>
             <div class="body">
               <div class="top">
-                <span class="nm">{{ c.handle }}</span>
-                <span class="dt">· {{ c.timeLabel }}</span>
+                <span class="nm">{{ c.author.handle }}</span>
+                <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
               </div>
-              <div class="txt">{{ c.text }}</div>
+              <div class="txt">{{ c.content }}</div>
               <div class="act-row">
                 <span :class="['like-btn', c.liked ? 'on' : '']">
                   <ion-icon :icon="heart" class="ic-16" />{{ c.likeCount }}
@@ -158,8 +270,14 @@
         </section>
       </div>
 
-      <div class="cmt-input-wrap">
-        <div class="me-av"><img :src="shot.meAvatarUrl" alt="me" /></div>
+      <div v-if="shot" class="cmt-input-wrap">
+        <div class="me-av">
+          <img
+            v-if="meAvatarUrl"
+            :src="meAvatarUrl"
+            alt="me"
+          />
+        </div>
         <div class="box">댓글을 남겨보세요…</div>
         <button type="button" class="send" aria-label="send">
           <ion-icon :icon="paperPlaneOutline" class="ic-18" />
@@ -170,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -193,133 +311,73 @@ import {
   play,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
+import { useShotDetailStore } from '@/stores/shotDetail';
+import { useSavedStore } from '@/stores/saved';
+import { useUiStore } from '@/stores/ui';
+import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
+import {
+  formatRelativeTime,
+  formatVisitDate,
+} from '@/utils/formatRelativeTime';
 
-defineProps<{ id: string | number }>();
+const props = defineProps<{ id: string | number }>();
 
 const router = useRouter();
 const { showInfo } = useToast();
+const shotStore = useShotDetailStore();
+const savedStore = useSavedStore();
+const uiStore = useUiStore();
+const authStore = useAuthStore();
+const { shot, loading, error } = storeToRefs(shotStore);
 
-interface ShotComment {
-  id: number;
-  handle: string;
-  avatarUrl: string;
-  timeLabel: string;
-  text: string;
-  likeCount: number;
-  liked: boolean;
-  isReply: boolean;
-}
-
-interface ShotDetail {
-  originalImageUrl: string;
-  userImageUrl: string;
-  sceneWork: string;
-  sceneEpisode: string;
-  sceneTimestamp: string;
-  sceneNetwork: string;
-  authorName: string;
-  authorVerified: boolean;
-  authorAvatarUrl: string;
-  isMine: boolean;
-  placeName: string;
-  placeAddress: string;
-  takenAtLabel: string;
-  takenAtFullLabel: string;
-  likeCount: number;
-  commentCount: number;
-  bookmarkCount: number;
-  shareCount: number;
-  captionHtml: string;
-  tags: string[];
-  comments: ShotComment[];
-  moreCommentsCount: number;
-  meAvatarUrl: string;
-}
-
-const shot: ShotDetail = {
-  originalImageUrl:
-    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80',
-  userImageUrl:
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80',
-  sceneWork: '도깨비',
-  sceneEpisode: '1회',
-  sceneTimestamp: '00:15:24',
-  sceneNetwork: 'tvN',
-  authorName: '김소연',
-  authorVerified: true,
-  authorAvatarUrl:
-    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-  isMine: true,
-  placeName: '주문진 영진해변 방파제',
-  placeAddress: '강원 강릉시 주문진읍 교항리 산51-2',
-  takenAtLabel: '2025.10.14',
-  takenAtFullLabel: '2025.10.14 · 오후 6시 24분',
-  likeCount: 1248,
-  commentCount: 89,
-  bookmarkCount: 264,
-  shareCount: 42,
-  captionHtml:
-    '메밀꽃 한 다발 들고 기다렸어요 🌾<br/>진짜 김신 나올 뻔... 석양 지는 타이밍 완벽했던 날.',
-  tags: ['도깨비', '성지순례', '주문진', '메밀꽃'],
-  comments: [
-    {
-      id: 1,
-      handle: 'trip_hj',
-      avatarUrl:
-        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-      timeLabel: '1시간 전',
-      text: '와 이 구도 대박… 저도 다음주에 가려고요! 메밀꽃은 어디서 샀어요?',
-      likeCount: 24,
-      liked: true,
-      isReply: false,
-    },
-    {
-      id: 2,
-      handle: 'soyeon_film',
-      avatarUrl:
-        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-      timeLabel: '42분 전',
-      text: '@trip_hj 영진해변 편의점에 3천원에 팔아요! 해 지기 30분 전이 베스트 🌅',
-      likeCount: 12,
-      liked: false,
-      isReply: true,
-    },
-    {
-      id: 3,
-      handle: 'dokkaebi.love',
-      avatarUrl:
-        'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80',
-      timeLabel: '3시간 전',
-      text: '원본 장면이랑 나란히 보니까 소름 돋아요… 사진 진짜 잘 찍으셨어요 🥹',
-      likeCount: 18,
-      liked: false,
-      isReply: false,
-    },
-    {
-      id: 4,
-      handle: 'eunbyul_',
-      avatarUrl:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      timeLabel: '5시간 전',
-      text: '저장해둘게요! 이번 강릉 여행 루트에 추가 📍',
-      likeCount: 7,
-      liked: false,
-      isReply: false,
-    },
-  ],
-  moreCommentsCount: 85,
-  meAvatarUrl:
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-};
-
-const liked = ref(true);
-const bookmarked = ref(false);
-const likeCount = ref(shot.likeCount);
-const bookmarkCount = ref(shot.bookmarkCount);
 const commentsRef = ref<HTMLElement | null>(null);
+const carouselEl = ref<HTMLElement | null>(null);
+const currentSlide = ref(0);
 
-const authorActionLabel = computed(() => (shot.isMine ? '내 기록' : '팔로우'));
+// Group photos always fall back to the primary photo (length-1 list) so the
+// template can treat `groupPhotos` as non-empty regardless of how old the
+// backend response is. Pre-task-#44 responses that lack `groupPhotos` still
+// render as a single-image post.
+const groupPhotos = computed(() => {
+  if (!shot.value) return [] as { id: number; imageUrl: string; orderIndex: number }[];
+  if (shot.value.groupPhotos && shot.value.groupPhotos.length > 0) {
+    return shot.value.groupPhotos;
+  }
+  return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, orderIndex: 0 }];
+});
+
+function onCarouselScroll(e: Event): void {
+  const el = e.target as HTMLElement;
+  if (el.clientWidth === 0) return;
+  const idx = Math.round(el.scrollLeft / el.clientWidth);
+  if (idx !== currentSlide.value) currentSlide.value = idx;
+}
+
+// Place-level save reuses the global savedStore contract so the bookmark
+// state stays in sync with every other bookmark site (Feed / Place detail /
+// Map / Saved). No dedicated "photo bookmark" concept.
+const placeSaved = computed(() =>
+  shot.value ? savedStore.isSaved(shot.value.place.id) : false,
+);
+
+const meAvatarUrl = computed(() => authStore.user?.avatarUrl ?? null);
+
+const authorActionLabel = computed(() =>
+  shot.value?.author.isMe ? '내 기록' : '팔로우',
+);
+
+// Short "YYYY.MM.DD" for the user-meta line + a longer label for the caption
+// footer. Backend only ships `createdAt` (ISO); the design's "오후 6시 24분"
+// long form is dropped — showing the relative-time marker instead keeps the
+// copy short and consistent with FeedPage.
+const takenAtLabel = computed(() =>
+  shot.value ? formatVisitDate(shot.value.createdAt) : '',
+);
+const takenAtFullLabel = computed(() =>
+  shot.value ? formatRelativeTime(shot.value.createdAt) : '',
+);
 
 function formatCount(n: number): string {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}만`;
@@ -340,27 +398,25 @@ async function onMore(): Promise<void> {
 }
 
 async function onAuthorAction(): Promise<void> {
-  await showInfo(shot.isMine ? '내 기록 화면은 곧 공개됩니다' : '팔로우는 곧 공개됩니다');
+  await showInfo(
+    shot.value?.author.isMe ? '내 기록 화면은 곧 공개됩니다' : '팔로우는 곧 공개됩니다',
+  );
 }
 
-function onToggleLike(): void {
-  if (liked.value) {
-    liked.value = false;
-    likeCount.value -= 1;
-  } else {
-    liked.value = true;
-    likeCount.value += 1;
-  }
+async function onToggleLike(): Promise<void> {
+  await shotStore.toggleLike();
 }
 
-function onToggleBookmark(): void {
-  if (bookmarked.value) {
-    bookmarked.value = false;
-    bookmarkCount.value -= 1;
-  } else {
-    bookmarked.value = true;
-    bookmarkCount.value += 1;
+async function onToggleBookmark(): Promise<void> {
+  if (!shot.value) return;
+  const placeId = shot.value.place.id;
+  // Save flow mirrors Feed/Place/Map: unsaved → collection picker; already
+  // saved → one-shot unsave via savedStore.
+  if (savedStore.isSaved(placeId)) {
+    await savedStore.toggleSave(placeId);
+    return;
   }
+  uiStore.openCollectionPicker(placeId);
 }
 
 function onScrollToComments(): void {
@@ -368,12 +424,41 @@ function onScrollToComments(): void {
 }
 
 async function onOpenPlace(): Promise<void> {
-  await showInfo('촬영지 상세는 곧 공개됩니다');
+  if (!shot.value) return;
+  await router.push(`/place/${shot.value.place.id}`);
 }
 
 async function onOpenScene(): Promise<void> {
   await showInfo('원본 장면 재생은 곧 공개됩니다');
 }
+
+async function loadDetail(): Promise<void> {
+  const id = Number(props.id);
+  if (!Number.isFinite(id)) return;
+  await shotStore.fetchShot(id);
+}
+
+onMounted(loadDetail);
+onUnmounted(() => shotStore.reset());
+
+// Re-fetch on route-level param change — ion-router may reuse the same
+// component instance when navigating between /shot/:id URLs.
+watch(
+  () => props.id,
+  (newId, oldId) => {
+    if (newId !== oldId) void loadDetail();
+  },
+);
+
+// Reset the carousel to the first slide whenever a new shot lands, so
+// navigating between posts doesn't keep the old index.
+watch(
+  () => shot.value?.id,
+  () => {
+    currentSlide.value = 0;
+    if (carouselEl.value) carouselEl.value.scrollLeft = 0;
+  },
+);
 </script>
 
 <style scoped>
@@ -412,6 +497,68 @@ ion-content.sd-content {
   cursor: pointer;
 }
 .sd-top .right { display: flex; gap: 8px; }
+
+/* Multi-image carousel hero */
+.sd-carousel {
+  position: relative;
+  width: 100%;
+}
+.sd-carousel .carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.sd-carousel .carousel-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  aspect-ratio: 4 / 5;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+.sd-carousel .carousel-slide > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sd-carousel .carousel-slide .compare {
+  width: 100%;
+  height: 100%;
+}
+.sd-carousel .carousel-dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+.sd-carousel .carousel-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+}
+.sd-carousel .carousel-dots .dot.active {
+  background: #ffffff;
+  width: 18px;
+  border-radius: 3px;
+}
+.sd-carousel .carousel-count {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  pointer-events: none;
+}
 
 /* Compare hero */
 .compare {
@@ -886,5 +1033,18 @@ ion-content.sd-content {
   justify-content: center;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+/* Loading / error placeholders (task #39). Kept minimal — the design
+   doesn't specify a skeleton shape, so plain centered copy keeps the
+   page quiet while the fetch is in flight or fails. */
+.sd-placeholder {
+  padding: 120px 24px;
+  text-align: center;
+  color: var(--fr-ink-3);
+  font-size: 14px;
+}
+.sd-placeholder.error {
+  color: var(--fr-coral);
 }
 </style>

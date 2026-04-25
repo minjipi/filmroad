@@ -118,7 +118,7 @@ import {
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useUploadStore } from '@/stores/upload';
+import { MAX_PHOTOS_PER_POST, useUploadStore } from '@/stores/upload';
 import { useToast } from '@/composables/useToast';
 
 type Mode = 'compare' | 'overlay' | 'plain';
@@ -203,6 +203,10 @@ async function onGalleryFile(e: Event): Promise<void> {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
+  if (uploadStore.photos.length >= MAX_PHOTOS_PER_POST) {
+    await showError(`최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`);
+    return;
+  }
   const allowed = ['image/jpeg', 'image/png', 'image/webp'];
   if (!allowed.includes(file.type)) {
     await showError('jpg, png, webp 형식만 사용할 수 있어요');
@@ -292,6 +296,10 @@ async function captureDataUrl(): Promise<string | null> {
 }
 
 async function onShutter(): Promise<void> {
+  if (uploadStore.photos.length >= MAX_PHOTOS_PER_POST) {
+    await showError(`최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`);
+    return;
+  }
   const dataUrl = await captureDataUrl();
   if (!dataUrl) {
     await showError('촬영에 실패했어요');

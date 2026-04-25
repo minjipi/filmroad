@@ -78,12 +78,13 @@
           >
             <img :src="p" :alt="`thumb-${i}`" />
           </div>
-          <label class="plus">
+          <label v-if="canAddMore" class="plus" data-testid="add-photo-btn">
             <ion-icon :icon="addOutline" class="ic-22" />
             <input
               ref="fileInput"
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              multiple
               class="file-input"
               @change="onFilePick"
             />
@@ -258,7 +259,7 @@ import {
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useUploadStore } from '@/stores/upload';
+import { MAX_PHOTOS_PER_POST, useUploadStore } from '@/stores/upload';
 import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useToast } from '@/composables/useToast';
 import { useOnline } from '@/composables/useOnline';
@@ -289,8 +290,11 @@ const canShare = computed(
     !loading.value &&
     targetPlace.value !== null &&
     photos.value.length > 0 &&
+    photos.value.length <= MAX_PHOTOS_PER_POST &&
     online.value,
 );
+
+const canAddMore = computed(() => photos.value.length < MAX_PHOTOS_PER_POST);
 
 // ---------- Place picker ----------
 const pickerOpen = ref(false);
@@ -357,16 +361,22 @@ function onToggleVisibility(): void {
 
 async function onFilePick(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = Array.from(input.files ?? []);
   input.value = '';
-  if (!file) return;
+  if (files.length === 0) return;
   const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-  if (!allowed.includes(file.type)) {
-    await showError('jpg, png, webp 형식만 올릴 수 있어요');
-    return;
+  for (const file of files) {
+    if (photos.value.length >= MAX_PHOTOS_PER_POST) {
+      await showError(`최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`);
+      return;
+    }
+    if (!allowed.includes(file.type)) {
+      await showError('jpg, png, webp 형식만 올릴 수 있어요');
+      continue;
+    }
+    const dataUrl = await fileToDataUrl(file);
+    uploadStore.addPhoto(dataUrl);
   }
-  const dataUrl = await fileToDataUrl(file);
-  uploadStore.addPhoto(dataUrl);
 }
 
 function fileToDataUrl(file: File): Promise<string> {
