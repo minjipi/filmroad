@@ -2,6 +2,14 @@
 -- INSERT IGNORE + explicit IDs so re-running is a no-op; trailing UPDATEs keep
 -- columns added in later migrations in sync with existing rows in dev DBs.
 
+-- Migration (task #45a): legacy `image_url` / `group_key` columns moved to the
+-- new `place_photo_image` 1:N table. Hibernate's `ddl-auto=update` won't drop
+-- NOT NULL columns on its own, so dev DBs that pre-date the refactor still
+-- have them and reject INSERTs from the new shape. IF EXISTS guards make this
+-- a no-op once the columns are gone.
+ALTER TABLE place_photo DROP COLUMN IF EXISTS image_url;
+ALTER TABLE place_photo DROP COLUMN IF EXISTS group_key;
+
 INSERT IGNORE INTO work (id, title, poster_url, type, CREATE_DATE, UPDATE_DATE) VALUES
   (1, '도깨비', NULL, 'DRAMA', NOW(), NOW()),
   (2, '이태원 클라쓰', NULL, 'DRAMA', NOW(), NOW()),
