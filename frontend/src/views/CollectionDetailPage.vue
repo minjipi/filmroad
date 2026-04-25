@@ -1,8 +1,10 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="cd-content">
-      <!-- Hero -->
-      <header class="coll-hero">
+      <!-- Hero. detail 로드 전엔 fallback 그라디언트가 보이도록 클래스 분기 —
+           이전엔 빈 영역 + 다크 그라디언트 ::after 가 흰 배경 위에 떠서 진입
+           transition 중 이전 페이지가 비쳐 보이는 듯한 인상을 줬다. -->
+      <header :class="['coll-hero', !detail?.coverImageUrl ? 'coll-hero--placeholder' : '']">
         <img
           v-if="detail?.coverImageUrl"
           :src="detail.coverImageUrl"
@@ -515,6 +517,10 @@ ion-content.cd-content {
   position: relative;
   height: 260px;
   overflow: hidden;
+  /* 기본 솔리드 배경 — 이미지 로드 전이나 cover 가 없을 때도 헤더가 시각적으로
+     "고정"돼야 transition 중 이전 페이지가 비쳐 보이지 않는다. 이미지가 들어오면
+     그 위로 가려진다. */
+  background: var(--fr-ink);
 }
 .coll-hero img {
   position: absolute;
@@ -532,6 +538,19 @@ ion-content.cd-content {
     rgba(15, 23, 42, 0.15) 0%,
     rgba(15, 23, 42, 0.35) 55%,
     rgba(15, 23, 42, 0.9) 100%
+  );
+}
+/* coverImageUrl 이 없는 컬렉션 (또는 로딩 중) 용 placeholder — 다크 그라디언트로
+   기본 톤을 채워 빈 헤더처럼 보이지 않게 한다. */
+.coll-hero--placeholder {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #14213d 100%);
+}
+.coll-hero--placeholder::after {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.0) 0%,
+    rgba(15, 23, 42, 0.4) 60%,
+    rgba(15, 23, 42, 0.85) 100%
   );
 }
 .coll-top {

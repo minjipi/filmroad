@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
+import { useToast } from '@/composables/useToast';
 
 export interface SavedCollection {
   id: number;
@@ -228,9 +229,11 @@ export const useSavedStore = defineStore('saved', {
           // this refetch, the item exists in savedPlaceIds but never shows
           // up in the list until the next manual page visit.
           await this.fetch();
+          await useToast().showInfo('저장했어요');
         } else {
           this.savedPlaceIds = this.savedPlaceIds.filter((id) => id !== placeId);
           this.items = this.items.filter((i) => i.placeId !== placeId);
+          await useToast().showInfo('저장을 해제했어요');
         }
       } catch (e) {
         // Rollback the optimistic update so the UI stays consistent with
