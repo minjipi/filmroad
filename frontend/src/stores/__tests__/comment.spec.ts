@@ -19,7 +19,7 @@ const mockApi = api as unknown as {
   delete: ReturnType<typeof vi.fn>;
 };
 
-function makeComment(id: number): Comment {
+function makeComment(id: number, imageUrl: string | null = null): Comment {
   return {
     id,
     content: `comment-${id}`,
@@ -31,6 +31,7 @@ function makeComment(id: number): Comment {
       avatarUrl: null,
       verified: false,
     },
+    imageUrl,
   };
 }
 
@@ -81,7 +82,7 @@ describe('comment store', () => {
     expect(opts?.params).toMatchObject({ cursor: 2 });
   });
 
-  it('create trims content, posts, and pushes the new comment into items', async () => {
+  it('create trims content, posts as FormData with content field, and pushes the new comment', async () => {
     const created = makeComment(99);
     mockApi.post.mockResolvedValueOnce({ data: created });
     const store = useCommentStore();
@@ -89,14 +90,63 @@ describe('comment store', () => {
 
     const [url, body] = mockApi.post.mock.calls[0];
     expect(url).toBe('/api/photos/10/comments');
-    expect(body).toEqual({ content: 'hello' });
+    expect(body).toBeInstanceOf(FormData);
+    const form = body as FormData;
+    expect(form.get('content')).toBe('hello');
+    // 첨부 없는 케이스에서는 image 필드를 아예 보내지 않는다.
+    expect(form.has('image')).toBe(false);
     expect(store.itemsFor(10).at(-1)?.id).toBe(99);
+  });
+
+  it('create attaches the image File as the `image` part when provided', async () => {
+    const created = makeComment(100, '/uploads/comments/abc.jpg');
+    mockApi.post.mockResolvedValueOnce({ data: created });
+    const store = useCommentStore();
+    const image = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    await store.create(10, '인증샷이에요', image);
+
+    const [url, body] = mockApi.post.mock.calls[0];
+    expect(url).toBe('/api/photos/10/comments');
+    expect(body).toBeInstanceOf(FormData);
+    const form = body as FormData;
+    expect(form.get('content')).toBe('인증샷이에요');
+    const sent = form.get('image');
+    expect(sent).toBeInstanceOf(File);
+    expect((sent as File).name).toBe('shot.jpg');
+    expect((sent as File).type).toBe('image/jpeg');
+    // 응답의 imageUrl 이 store 에 그대로 반영되어야 한다.
+    expect(store.itemsFor(10).at(-1)?.imageUrl).toBe('/uploads/comments/abc.jpg');
+  });
+
+  it('create does NOT set Content-Type — axios derives multipart boundary from FormData', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: makeComment(101) });
+    const store = useCommentStore();
+    await store.create(10, 'hi');
+
+    const opts = mockApi.post.mock.calls[0][2];
+    // Content-Type 을 직접 박지 말 것 — boundary 가 누락되어 서버가 파싱 실패한다.
+    if (opts && typeof opts === 'object' && 'headers' in opts) {
+      const headers = (opts as { headers?: Record<string, string> }).headers;
+      if (headers) {
+        expect(headers['Content-Type']).toBeUndefined();
+        expect(headers['content-type']).toBeUndefined();
+      }
+    }
   });
 
   it('create returns null and skips post when content is empty/whitespace', async () => {
     const store = useCommentStore();
     const result = await store.create(10, '   ');
     expect(result).toBeNull();
+    expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it('create rejects image-only submission (content empty) without calling the API', async () => {
+    const store = useCommentStore();
+    const image = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    const result = await store.create(10, '   ', image);
+    expect(result).toBeNull();
+    // 백엔드 NotBlank 와 일관 — 클라에서도 이미지만으로는 보내지 않는다.
     expect(mockApi.post).not.toHaveBeenCalled();
   });
 
