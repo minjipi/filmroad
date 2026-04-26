@@ -28,6 +28,26 @@
           >
             {{ heroSlide + 1 }} / {{ place.coverImageUrls.length }}
           </span>
+          <button
+            v-if="place.coverImageUrls.length > 1"
+            type="button"
+            class="hero-nav prev"
+            data-testid="pd-hero-prev"
+            aria-label="이전 커버"
+            @click="onHeroPrev"
+          >
+            <ion-icon :icon="chevronBack" class="ic-22" />
+          </button>
+          <button
+            v-if="place.coverImageUrls.length > 1"
+            type="button"
+            class="hero-nav next"
+            data-testid="pd-hero-next"
+            aria-label="다음 커버"
+            @click="onHeroNext"
+          >
+            <ion-icon :icon="chevronForward" class="ic-22" />
+          </button>
           <div
             v-if="place.coverImageUrls.length > 1"
             class="hero-dots"
@@ -202,6 +222,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
+  chevronForward,
   shareSocialOutline,
   ellipsisHorizontal,
   locationOutline,
@@ -256,9 +277,33 @@ function onHeroCarouselScroll(e: Event): void {
 }
 
 function onHeroDotClick(i: number): void {
+  goHeroSlide(i);
+}
+
+function onHeroPrev(): void {
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return;
+  goHeroSlide((heroSlide.value - 1 + len) % len);
+}
+
+function onHeroNext(): void {
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return;
+  goHeroSlide((heroSlide.value + 1) % len);
+}
+
+// dot/arrow 클릭 공통 진입점. 사용자가 수동으로 슬라이드를 옮기면 auto-advance
+// 타이머도 재시작 — 그렇지 않으면 막 본 슬라이드가 1~2초만에 자동으로 다시
+// 넘어가서 사용자 인터랙션이 의미 없어진다. heroSlide 를 즉시 갱신하고
+// scrollTo 는 부드럽게.
+function goHeroSlide(i: number): void {
+  heroSlide.value = i;
   const el = heroCarouselEl.value;
-  if (!el) return;
-  el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+  if (el && el.clientWidth > 0) {
+    el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+  }
+  // 길이가 1 이하면 startHeroAutoAdvance 가 알아서 no-op 한다.
+  startHeroAutoAdvance();
 }
 
 // 일정 시간마다 다음 사진으로 자동 전환 — Instagram stories / 광고 배너와 같은
@@ -552,6 +597,35 @@ ion-content.pd-content {
   border-radius: 3px;
   background: #ffffff;
 }
+/* 좌/우 화살표 — 데스크톱/마우스 사용자가 swipe 없이 넘기는 표준 carousel 어포던스.
+   모바일에서도 탭 가능. 한 장만 있을 때는 v-if 로 숨김. round-btn 톤(반투명 검정 +
+   흰 아이콘)으로 hero 의 다른 round 버튼들과 시각 통일. */
+.hero-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  transition: background 160ms ease;
+}
+.hero-nav:hover { background: rgba(0, 0, 0, 0.55); }
+.hero-nav:active { background: rgba(0, 0, 0, 0.7); }
+.hero-nav.prev { left: 12px; }
+.hero-nav.next { right: 12px; }
+
 /* 우상단 페이지 카운터 ("1 / 3") — 한 장만 있을 때는 숨겨 단일 이미지 화면이
    이전과 동일하게 보이도록 한다. ShotDetail 의 carousel-count 와 동일 톤. */
 .hero-counter {

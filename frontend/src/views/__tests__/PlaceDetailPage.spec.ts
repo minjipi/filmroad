@@ -284,6 +284,101 @@ describe('PlaceDetailPage.vue', () => {
     );
   });
 
+  it('shows prev/next arrows for a multi-cover place and hides them for a single-cover one', async () => {
+    const single = mountPlaceDetailPage();
+    await flushPromises();
+    expect(single.wrapper.find('[data-testid="pd-hero-prev"]').exists()).toBe(false);
+    expect(single.wrapper.find('[data-testid="pd-hero-next"]').exists()).toBe(false);
+    single.wrapper.unmount();
+
+    const multi = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+    expect(multi.wrapper.find('[data-testid="pd-hero-prev"]').exists()).toBe(true);
+    expect(multi.wrapper.find('[data-testid="pd-hero-next"]').exists()).toBe(true);
+  });
+
+  it('next button advances to the following slide and wraps from the last back to the first', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+
+    const nextBtn = wrapper.find('[data-testid="pd-hero-next"]');
+    const dotsActive = (): number =>
+      wrapper
+        .findAll('[data-testid="pd-hero-dots"] .hero-dot')
+        .findIndex((d) => d.classes().includes('active'));
+
+    expect(dotsActive()).toBe(0);
+    await nextBtn.trigger('click');
+    expect(dotsActive()).toBe(1);
+    await nextBtn.trigger('click');
+    expect(dotsActive()).toBe(2);
+    // wrap last → first
+    await nextBtn.trigger('click');
+    expect(dotsActive()).toBe(0);
+  });
+
+  it('prev button moves backward and wraps from the first back to the last', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+
+    const prevBtn = wrapper.find('[data-testid="pd-hero-prev"]');
+    const dotsActive = (): number =>
+      wrapper
+        .findAll('[data-testid="pd-hero-dots"] .hero-dot')
+        .findIndex((d) => d.classes().includes('active'));
+
+    // From slide 0 prev wraps back to the last (length-1 = 2).
+    expect(dotsActive()).toBe(0);
+    await prevBtn.trigger('click');
+    expect(dotsActive()).toBe(2);
+    await prevBtn.trigger('click');
+    expect(dotsActive()).toBe(1);
+  });
+
+  it('clicking next resets the auto-advance timer so the freshly chosen slide gets a full window', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountPlaceDetailPage({
+        coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      });
+      await flushPromises();
+
+      const dotsActive = (): number =>
+        wrapper
+          .findAll('[data-testid="pd-hero-dots"] .hero-dot')
+          .findIndex((d) => d.classes().includes('active'));
+
+      // 3s into the auto-advance window → still on slide 0.
+      vi.advanceTimersByTime(3000);
+      await flushPromises();
+      expect(dotsActive()).toBe(0);
+
+      // User clicks next → jumps to slide 1, timer resets.
+      await wrapper.find('[data-testid="pd-hero-next"]').trigger('click');
+      expect(dotsActive()).toBe(1);
+
+      // 3s after the click — still on slide 1 (auto-advance hasn't re-fired
+      // because the timer was reset). If reset weren't happening the next
+      // tick at the carry-over 1s mark would have already moved us to 2.
+      vi.advanceTimersByTime(3000);
+      await flushPromises();
+      expect(dotsActive()).toBe(1);
+
+      // 1s more → 4s since the click → auto-advance fires, slide 2.
+      vi.advanceTimersByTime(1000);
+      await flushPromises();
+      expect(dotsActive()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders gallery cells = photos.length + (photoCount > photos.length ? 1 : 0)', async () => {
     const { wrapper } = mountPlaceDetailPage();
     await flushPromises();
