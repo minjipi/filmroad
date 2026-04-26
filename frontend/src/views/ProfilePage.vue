@@ -89,13 +89,29 @@
               <span v-if="photo.workTitle" class="tag">{{ photo.workTitle }}</span>
             </div>
           </div>
-          <p
+          <!--
+            인증샷이 0건일 때만 노출. 단순 텍스트 placeholder 대신 일러스트 +
+            CTA 카드로 첫 인증을 유도. 업로드는 `placeId` anchored 플로우라
+            CTA 는 직접 /upload 로 못 가고, 발견 면(map)으로 보내 거기서
+            장소 → "인증하러 가기" → /camera → /upload 의 기존 경로를 탐.
+          -->
+          <div
             v-else-if="!myPhotosLoading && myPhotosLoaded"
-            class="empty-note"
+            class="empty-shots"
             data-testid="photos-empty"
           >
-            아직 인증샷이 없어요
-          </p>
+            <span class="empty-icon" aria-hidden="true">
+              <ion-icon :icon="cameraOutline" class="ic-32" />
+            </span>
+            <h4 class="empty-title">아직 인증샷이 없어요</h4>
+            <p class="empty-sub">드라마 촬영지에 들러 첫 인증샷을 남겨보세요</p>
+            <button
+              type="button"
+              class="empty-cta"
+              data-testid="photos-empty-cta"
+              @click="onBrowseLocations"
+            >촬영지 둘러보기</button>
+          </div>
           <p
             v-else-if="myPhotosLoading"
             class="empty-note"
@@ -224,6 +240,7 @@ import {
   bookmarkOutline,
   logOutOutline,
   trophyOutline,
+  cameraOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -347,6 +364,10 @@ async function onOpenStampbook(): Promise<void> {
 }
 
 async function onOpenMap(): Promise<void> {
+  await router.push('/map');
+}
+
+async function onBrowseLocations(): Promise<void> {
   await router.push('/map');
 }
 
@@ -811,5 +832,57 @@ ion-content.pf-content {
   color: var(--fr-ink-3);
   font-size: 13px;
 }
+
+/* 인증샷 0건 빈 상태 — 일러스트 + 카피 + CTA. 페이지 본문 폭 안에서
+   세로 중앙 배치, 다른 빈 상태(stampbook 등)와 톤 맞춤. */
+.empty-shots {
+  padding: 40px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.empty-shots .empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--fr-primary-soft);
+  color: var(--fr-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.empty-shots .empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--fr-ink);
+  letter-spacing: -0.02em;
+}
+.empty-shots .empty-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fr-ink-3);
+  line-height: 1.5;
+}
+.empty-shots .empty-cta {
+  margin-top: 12px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--fr-primary);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+.empty-shots .empty-cta:active { opacity: 0.9; }
 
 </style>
