@@ -149,8 +149,39 @@ public class CommentService {
             throw BaseException.of(BaseResponseStatus.UNAUTHORIZED_COMMENT);
         }
         PlacePhoto photo = comment.getPlacePhoto();
+
+        // 답글이 달려있으면 함께 정리 — DB FK cascade 대신 service 단에서 명시적으로
+        // 자식을 처리해야 (a) 자식의 첨부 이미지 파일 cleanup, (b) photo.commentCount
+        // 정확한 차감, (c) JPA 영속성 컨텍스트 일관성 모두 챙길 수 있다. depth=1
+        // 정책이라 자식의 자식은 존재할 수 없음.
+        List<PostComment> replies = postCommentRepository.findByParentId(commentId);
+        for (PostComment r : replies) {
+            cleanupStoredImage(r.getImageUrl());
+        }
+        if (!replies.isEmpty()) {
+            postCommentRepository.deleteAll(replies);
+            photo.applyCommentDelta(-replies.size());
+        }
+
+        cleanupStoredImage(comment.getImageUrl());
         postCommentRepository.delete(comment);
         photo.applyCommentDelta(-1);
+    }
+
+    /**
+     * 저장된 댓글 이미지 URL("/uploads/comments/yyyy/MM/dd/{uuid}.jpg") 의 실제
+     * 파일을 best-effort 로 삭제. URL 이 null 이거나 매핑 prefix 가 다르면 noop.
+     * 실패해도 본 작업(댓글 삭제) 은 그대로 진행 — 디스크 cleanup 은 보조.
+     */
+    private void cleanupStoredImage(String storedUrl) {
+        if (storedUrl == null) return;
+        final String prefix = "/uploads/";
+        if (!storedUrl.startsWith(prefix)) return;
+        String relative = storedUrl.substring(prefix.length());
+        Path uploadDir = Paths.get(uploadPath).toAbsolutePath().normalize();
+        Path target = uploadDir.resolve(relative).normalize();
+        if (!target.startsWith(uploadDir)) return;  // path traversal 방어
+        cleanupWrittenFile(target);
     }
 
     @Transactional(readOnly = true)
