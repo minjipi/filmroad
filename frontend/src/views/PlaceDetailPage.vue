@@ -18,6 +18,7 @@
             @pointermove="onHeroPointerMove"
             @pointerup="onHeroPointerUp"
             @pointercancel="onHeroPointerUp"
+            @dragstart.prevent
           >
             <div
               class="hero-track"
@@ -556,6 +557,19 @@ function onHeroPointerDown(e: PointerEvent): void {
   heroStartY = e.clientY;
   heroLockedAxis = null;
   heroDragOffset.value = 0;
+  // 마우스가 carousel 영역을 벗어나도 pointerup 까지 계속 받기 위해 capture.
+  // 이게 없으면 데스크톱에서 손목 한 번 꺾어 영역 밖으로 가는 순간 드래그가
+  // 그대로 멈춰버려 swipe 가 commit 안 된 채 panning=true 로 남는다.
+  // jsdom 등 setPointerCapture 가 noop / undefined 인 환경 대비해 try/catch.
+  try {
+    (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+  } catch {
+    /* unsupported in this environment — drag still works inside the bounds */
+  }
+  // mousedown 이 일어나는 그 frame 에 native image-drag 가 시작될 수 있어
+  // 즉시 차단한다. <img draggable="false"> 와 .hero-img { pointer-events: none }
+  // 이 있긴 하지만 일부 브라우저는 mousedown 시점에 이미 ghost 를 띄우려 한다.
+  if (typeof e.preventDefault === 'function') e.preventDefault();
   // 자동 전환은 사용자가 만지고 있는 동안 일시 중지. pointerup 에서 재시작.
   stopHeroAutoAdvance();
 }
@@ -581,6 +595,13 @@ function onHeroPointerMove(e: PointerEvent): void {
 function onHeroPointerUp(e: PointerEvent): void {
   if (heroPointerId !== e.pointerId) return;
   heroPointerId = null;
+  // pointerdown 에서 잡았던 capture 를 해제 (브라우저는 pointerup 시 자동
+  // release 하지만 일부 환경에서 명시적 release 가 안전).
+  try {
+    (e.currentTarget as Element | null)?.releasePointerCapture?.(e.pointerId);
+  } catch {
+    /* swallow — capture may not have been set */
+  }
   if (heroLockedAxis !== 'x') {
     heroLockedAxis = null;
     return;
@@ -888,7 +909,8 @@ ion-content.pd-content {
 }
 /* 가로 슬라이드 carousel — 외곽은 시야창(overflow:hidden) 역할.
    touch-action: pan-y 로 두면 세로 스크롤은 페이지(.pd-scroll)에 양보하고
-   가로 swipe 만 컴포넌트가 직접 처리(pointer events). */
+   가로 swipe 만 컴포넌트가 직접 처리(pointer events).
+   cursor: grab → 데스크톱 사용자에게 "여기 드래그 가능" 시각적 신호. */
 .hero-carousel {
   position: absolute;
   inset: 0;
@@ -896,6 +918,10 @@ ion-content.pd-content {
   touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
+  cursor: grab;
+}
+.hero-carousel:active {
+  cursor: grabbing;
 }
 /* 트랙은 flex 로 슬라이드를 일렬로 깔고 transform 으로 이동. transition 은
    .panning 클래스가 있을 때 (사용자 손가락 추적 중) 끄고, 평소에는 0.4s
@@ -916,7 +942,12 @@ ion-content.pd-content {
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
+  /* hero-track 이 마우스/터치를 받게 두고, 이미지 자체는 native drag 도 막는다
+     (Chrome/Safari 의 경우 draggable="false" 만으로는 한 frame 동안 ghost 가
+     나타나는 케이스가 있어 user-drag 도 함께 차단). */
   pointer-events: none;
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 .hero-dots {
   position: absolute;

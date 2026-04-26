@@ -292,6 +292,50 @@ describe('PlaceDetailPage.vue', () => {
     }
   });
 
+  it('mouse drag past the threshold also advances the slide (desktop drag, not just touch swipe)', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: [
+        'https://img/cover-0.jpg',
+        'https://img/cover-1.jpg',
+        'https://img/cover-2.jpg',
+      ],
+    });
+    await flushPromises();
+
+    const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
+    const carouselEl = carousel.element as HTMLElement;
+    Object.defineProperty(carouselEl, 'clientWidth', { value: 320, configurable: true });
+    // setPointerCapture 가 환경(jsdom)에 없을 수도 있으니 spy 로 박아 호출 자체는
+    // 검증 — 마우스가 영역 밖으로 빠져도 드래그가 유지되는 게 핵심.
+    const captureSpy = vi.fn();
+    (carouselEl as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture = captureSpy;
+
+    await carousel.trigger('pointerdown', {
+      pointerId: 99,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 100,
+    });
+    expect(captureSpy).toHaveBeenCalledWith(99);
+
+    await carousel.trigger('pointermove', {
+      pointerId: 99,
+      pointerType: 'mouse',
+      clientX: 80,
+      clientY: 100,
+    });
+    await carousel.trigger('pointerup', {
+      pointerId: 99,
+      pointerType: 'mouse',
+      clientX: 80,
+      clientY: 100,
+    });
+    await flushPromises();
+
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[1].classes()).toContain('active');
+  });
+
   it('horizontal swipe past the threshold (15% of width) advances to the next slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
       coverImageUrls: [
