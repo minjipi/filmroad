@@ -1,5 +1,7 @@
 package com.filmroad.api.domain.feed;
 
+import com.filmroad.api.domain.auth.JwtTokenService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,13 @@ class FeedControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie userCookie(long userId) {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(userId));
+    }
 
     @Test
     @DisplayName("GET /api/feed (default RECENT) — posts 는 id DESC 로 최신 먼저, 시드 최대 id(175) 가 상단")
@@ -67,6 +76,24 @@ class FeedControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.posts", not(empty())))
                 .andExpect(jsonPath("$.results.posts[*].work.id", everyItem(is(1))));
+    }
+
+    @Test
+    @DisplayName("GET /api/feed (logged-in viewer) — viewer 가 follow 중인 author 의 row 만 following=true")
+    void getFeed_loggedIn_authorFollowingReflectsViewerRelation() throws Exception {
+        // 시드: user=1 follows user=2,3,4 → 그 사용자들이 author 인 post 는 following=true,
+        // 나머지(user=5 등) 는 false. user=1 토큰으로 조회.
+        mockMvc.perform(get("/api/feed").param("limit", "20").cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                // 시드 author user_id 는 1~5 순환 — viewer=1 본인 post 는 following=false.
+                .andExpect(jsonPath("$.results.posts[?(@.author.userId == 1)].author.following",
+                        everyItem(is(false))))
+                // user=2 가 author 인 post 는 시드상 user=1 의 following 대상이라 true.
+                .andExpect(jsonPath("$.results.posts[?(@.author.userId == 2)].author.following",
+                        everyItem(is(true))))
+                // user=5 는 user=1 의 following 대상이 아님.
+                .andExpect(jsonPath("$.results.posts[?(@.author.userId == 5)].author.following",
+                        everyItem(is(false))));
     }
 
     @Test

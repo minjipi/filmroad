@@ -244,14 +244,31 @@ class PhotoControllerTest {
         // photo 101 = place 10, user_id=2 (이서준), visibility=PUBLIC. user=1 토큰으로 조회.
         // user=1 은 photo 101 에 대한 photo_like 없음 → liked=false.
         // place 10 은 user=1 saved_place(place=10) 있음 → saved=true.
+        // user=1 은 시드에서 user=2 를 follow 중이므로 author.following=true.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/101")
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.author.id", is(2)))
                 .andExpect(jsonPath("$.results.author.isMe", is(false)))
+                .andExpect(jsonPath("$.results.author.following", is(true)))
                 .andExpect(jsonPath("$.results.liked", is(false)))
                 .andExpect(jsonPath("$.results.saved", is(true)));
     }
+
+    @Test
+    @DisplayName("GET /api/photos/{id} — 내 사진 author.following = false (자기 자신은 follow 대상 X)")
+    void getPhoto_ownPhoto_authorFollowingIsFalse() throws Exception {
+        // photo 100 = user_id=1. user=1 토큰 → isMe=true 이므로 following 은 false.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.author.isMe", is(true)))
+                .andExpect(jsonPath("$.results.author.following", is(false)));
+    }
+
+    // 비로그인 anonymous 케이스는 따로 검증 안 함 — CurrentUser.currentUserId() 가
+    // 데모 폴백(user=1)을 반환해서 실제 anonymous 시나리오와 동일하지 않음. 폴백
+    // 제거 작업이 들어오기 전엔 author.following 도 user=1 의 관계로 채워진다.
 
     @Test
     @DisplayName("GET /api/photos/{id} — 내 PRIVATE 사진은 owner 본인에게 200")

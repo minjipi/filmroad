@@ -129,16 +129,27 @@
             />
           </div>
           <div class="meta">
-            <div class="nm">
+            <button
+              type="button"
+              class="nm"
+              data-testid="sd-author-nickname"
+              :disabled="shot.author.id == null"
+              @click="onOpenAuthor"
+            >
               {{ shot.author.nickname }}
               <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="verified" />
-            </div>
+            </button>
             <div class="sub">
               <ion-icon :icon="locationOutline" class="ic-16" />
               {{ shot.place.name }} · {{ takenAtLabel }}
             </div>
           </div>
-          <button type="button" class="follow" @click="onAuthorAction">
+          <button
+            type="button"
+            :class="['follow', !shot.author.isMe && shot.author.following ? 'on' : '']"
+            data-testid="sd-author-action"
+            @click="onAuthorAction"
+          >
             {{ authorActionLabel }}
           </button>
         </section>
@@ -354,7 +365,7 @@ import {
 const props = defineProps<{ id: string | number }>();
 
 const router = useRouter();
-const { showInfo } = useToast();
+const { showInfo, showError } = useToast();
 const shotStore = useShotDetailStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
@@ -394,9 +405,12 @@ const placeSaved = computed(() =>
 
 const meAvatarUrl = computed(() => authStore.user?.avatarUrl ?? null);
 
-const authorActionLabel = computed(() =>
-  shot.value?.author.isMe ? '내 기록' : '팔로우',
-);
+const authorActionLabel = computed(() => {
+  const a = shot.value?.author;
+  if (!a) return '';
+  if (a.isMe) return '내 기록';
+  return a.following ? '팔로잉' : '팔로우';
+});
 
 // Short "YYYY.MM.DD" for the user-meta line + a longer label for the caption
 // footer. Backend only ships `createdAt` (ISO); the design's "오후 6시 24분"
@@ -435,10 +449,24 @@ async function onMore(): Promise<void> {
   await showInfo('메뉴는 곧 공개됩니다');
 }
 
+async function onOpenAuthor(): Promise<void> {
+  const a = shot.value?.author;
+  if (!a || a.id == null) return;
+  // /user/:id 페이지가 isMe 인 경우 내부에서 /profile 로 리다이렉트하므로
+  // 여기서 별도 분기 없이 같은 라우트로 보낸다.
+  await router.push(`/user/${a.id}`);
+}
+
 async function onAuthorAction(): Promise<void> {
-  await showInfo(
-    shot.value?.author.isMe ? '내 기록 화면은 곧 공개됩니다' : '팔로우는 곧 공개됩니다',
-  );
+  const a = shot.value?.author;
+  if (!a) return;
+  if (a.isMe) {
+    // 본인 사진 — "내 기록" 페이지로의 라우팅 / placeholder. 실 페이지 들어오기 전엔 안내.
+    await showInfo('내 기록 화면은 곧 공개됩니다');
+    return;
+  }
+  await shotStore.toggleAuthorFollow();
+  if (error.value) await showError(error.value);
 }
 
 async function onToggleLike(): Promise<void> {
@@ -717,11 +745,21 @@ ion-content.sd-content {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.sd-user .nm:disabled { cursor: default; }
+.sd-user .nm:hover:not(:disabled) { color: var(--fr-ink-2); }
 .sd-user .verified {
   width: 14px;
   height: 14px;
@@ -741,10 +779,17 @@ ion-content.sd-content {
   border-radius: 10px;
   background: var(--fr-primary-soft);
   color: var(--fr-primary);
-  border: none;
+  border: 1px solid transparent;
   font-weight: 800;
   font-size: 12px;
   cursor: pointer;
+}
+/* 팔로잉 상태 — Instagram 의 "Following" 버튼처럼 약하게 표현해
+   언팔 가능한 토글임을 시각적으로 알림. 평상시(팔로우)는 강조 색. */
+.sd-user .follow.on {
+  background: #ffffff;
+  border-color: var(--fr-line);
+  color: var(--fr-ink-2);
 }
 
 /* Stats bar */

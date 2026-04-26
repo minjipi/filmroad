@@ -56,6 +56,7 @@ function makePost(
       nickname: `닉${id}`,
       avatarUrl: `https://img/ava${id}.jpg`,
       verified: false,
+      following: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시 주문진읍' },
     work: { id: 1, title: workTitle, workEpisode: '1회', sceneTimestamp: '00:24:10' },

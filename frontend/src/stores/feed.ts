@@ -17,6 +17,8 @@ export interface FeedAuthor {
   nickname: string;
   avatarUrl: string | null;
   verified: boolean;
+  /** viewer 가 이 author 를 follow 중인지. 비로그인 / fallback (userId=null) 면 false. */
+  following: boolean;
 }
 
 export interface FeedPlace {
@@ -246,13 +248,24 @@ export const useFeedStore = defineStore('feed', {
         useUiStore().showLoginPrompt('팔로우는 로그인 후 이용할 수 있어요.');
         return;
       }
+      // 같은 userId 가 등장하는 모든 surface(추천 카드 + 포스트 작성자) 를 한 번에
+      // 동기화. optimistic flip — 즉시 UI 반영, 실패 시 일괄 rollback.
+      const reco = this.recommendedUsers.find((u) => u.userId === userId);
+      const matchingPosts = this.posts.filter(
+        (p) => p.author.userId != null && p.author.userId === userId,
+      );
+      const wasFollowing = reco?.following ?? matchingPosts[0]?.author.following ?? false;
+      if (reco) reco.following = !wasFollowing;
+      for (const p of matchingPosts) p.author.following = !wasFollowing;
       try {
         const { data } = await api.post<FollowToggleResponse>(
           `/api/users/${userId}/follow`,
         );
-        const user = this.recommendedUsers.find((u) => u.userId === userId);
-        if (user) user.following = data.following;
+        if (reco) reco.following = data.following;
+        for (const p of matchingPosts) p.author.following = data.following;
       } catch (e) {
+        if (reco) reco.following = wasFollowing;
+        for (const p of matchingPosts) p.author.following = wasFollowing;
         this.error = e instanceof Error ? e.message : 'Failed to toggle follow';
       }
     },
