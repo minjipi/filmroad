@@ -186,12 +186,12 @@
           </button>
         </div>
 
-        <div class="cs-foot-row">
+        <div v-if="authReady" class="cs-foot-row">
           <button
             type="button"
             class="cs-attach-btn"
             data-testid="cs-attach-btn"
-            :disabled="!authReady || submitting"
+            :disabled="submitting"
             aria-label="이미지 첨부"
             @click="onPickImage"
           >
@@ -210,20 +210,27 @@
             v-model="draft"
             class="cs-input"
             type="text"
-            :placeholder="authReady ? '댓글을 입력하세요...' : '로그인 후 댓글을 작성할 수 있어요'"
-            :disabled="!authReady || submitting"
+            placeholder="댓글을 입력하세요..."
+            :disabled="submitting"
             enterkeyhint="send"
             @keyup.enter="onSubmit"
           />
           <button
             class="cs-send"
             type="button"
-            :disabled="!authReady || !canSend || submitting"
+            :disabled="!canSend || submitting"
             @click="onSubmit"
           >
             <ion-icon :icon="paperPlaneOutline" class="ic-20" />
           </button>
         </div>
+        <button
+          v-else
+          type="button"
+          class="cs-foot-login"
+          data-testid="cs-login-cta"
+          @click="onGoLogin"
+        >로그인 후 댓글을 작성할 수 있어요</button>
       </footer>
     </div>
   </ion-modal>
@@ -418,6 +425,16 @@ async function onOpenAuthor(userId: number): Promise<void> {
     return;
   }
   await router.push(`/user/${userId}`);
+}
+
+async function onGoLogin(): Promise<void> {
+  // sheet 가 DOM 에 남아 navigation 과 충돌하는 걸 막기 위해 먼저 close.
+  emit('close');
+  // 로그인 후 원래 보던 페이지로 돌아오도록 redirect 쿼리에 현재 경로 보존.
+  // router-guard 가 requiresAuth 라우트에서 쓰는 형식과 동일.
+  const redirect =
+    typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/';
+  await router.push({ path: '/onboarding', query: { redirect } });
 }
 
 function close(): void {
@@ -785,6 +802,26 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
+/* 비로그인 상태에서 input 행 자리에 들어가는 단일 CTA. 입력란과 같은
+   라운드/높이/폰트로 disabled input 처럼 보이지만 탭하면 /onboarding 으로
+   이동한다 — disabled <input> 은 클릭 자체가 안 잡혀서 명시적인 button 으로 교체. */
+.cs-foot-login {
+  width: 100%;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--fr-line);
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+.cs-foot-login:active { background: var(--fr-line-soft); }
 /* 답글 컨텍스트 배너 — 푸터 input 위에 한 줄. 답글 모드 진입 시에만 노출. */
 .cs-reply-banner {
   display: flex;
