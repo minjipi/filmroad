@@ -3,23 +3,35 @@
     <ion-content :fullscreen="true" class="pd-content">
       <div v-if="place" class="pd-scroll no-scrollbar">
         <section class="hero">
-          <!-- 1:N cover image carousel — gallery 와 같은 가로 스와이프(scroll-snap)로
-               렌더한다. 한 장이면 자동으로 단일 이미지처럼 보이고, 빈 배열이면
-               검은 배경 + grad 만 깔려 hero-caption 이 가독성 잃지 않게 한다. -->
+          <!-- 1:N cover image carousel — transform 기반 슬라이드.
+               외곽은 overflow:hidden 으로 시야창 역할만 하고, 안쪽 .hero-track 이
+               translateX 로 좌우 이동한다. heroSlide 가 바뀌면 CSS transition 이
+               자동으로 옆으로 흐르는 애니메이션을 그린다. swipe 는 pointer
+               이벤트로 직접 처리(pan-y 만 허용해서 페이지 세로 스크롤은 그대로). -->
           <div
             v-if="place.coverImageUrls.length > 0"
             ref="heroCarouselEl"
-            class="hero-carousel no-scrollbar"
+            class="hero-carousel"
             data-testid="pd-hero-carousel"
-            @scroll.passive="onHeroCarouselScroll"
+            @pointerdown="onHeroPointerDown"
+            @pointermove="onHeroPointerMove"
+            @pointerup="onHeroPointerUp"
+            @pointercancel="onHeroPointerUp"
           >
-            <img
-              v-for="(url, i) in place.coverImageUrls"
-              :key="i"
-              :src="url"
-              :alt="`${place.name} 커버 ${i + 1}`"
-              class="hero-img"
-            />
+            <div
+              class="hero-track"
+              :class="{ panning: heroPanning }"
+              :style="heroTrackStyle"
+            >
+              <img
+                v-for="(url, i) in place.coverImageUrls"
+                :key="i"
+                :src="url"
+                :alt="`${place.name} 커버 ${i + 1}`"
+                class="hero-img"
+                draggable="false"
+              />
+            </div>
           </div>
           <span
             v-if="place.coverImageUrls.length > 1"
@@ -407,18 +419,30 @@ function formatNearby(n: KakaoNearbyDto): string {
   return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
 }
 
-// Hero carousel scroll tracking — scroll-snap 만으로는 dot 활성 상태/인디케이터를
-// 보여줄 수가 없어서 scroll position 으로 현재 slide index 를 계산한다.
-// ShotDetail 의 multi-image carousel 과 동일 패턴.
+// Hero carousel — transform 기반 슬라이드.
+// heroSlide 가 source of truth. heroPanning 은 사용자가 손가락을 카로우셀 위에
+// 누르고 있을 때만 true → CSS transition 을 끄고 손가락 따라 즉시 따라가게 한다.
+// pointer up 시 heroPanning=false 로 돌아오면서 transition 이 다시 켜져 finish
+// position 까지 부드럽게 흐른다. ShotDetail 의 carousel 과 동일 톤이지만 거기
+// 컴포넌트는 native scroll, 여기는 명시적 transform 으로 차이.
 const heroCarouselEl = ref<HTMLElement | null>(null);
 const heroSlide = ref(0);
+const heroPanning = ref(false);
+const heroDragOffset = ref(0); // 손가락 이동 중 px (음수=오른쪽으로 슬라이드, 양수=왼쪽)
 
-function onHeroCarouselScroll(e: Event): void {
-  const el = e.target as HTMLElement;
-  if (el.clientWidth === 0) return;
-  const idx = Math.round(el.scrollLeft / el.clientWidth);
-  if (idx !== heroSlide.value) heroSlide.value = idx;
-}
+// panning 중엔 손가락 픽셀이동을 그대로 반영해야 하니 px, 평상시엔 % 단위로
+// 두면 viewport 가 resize 되어도 transform 이 자동으로 따라간다 (clientWidth
+// 는 reactive 가 아니라 별도 resize 트래킹이 필요해지는 걸 회피).
+const heroTrackStyle = computed<Record<string, string>>(() => {
+  if (heroPanning.value) {
+    const el = heroCarouselEl.value;
+    const width = el?.clientWidth ?? 0;
+    const tx = -heroSlide.value * width + heroDragOffset.value;
+    return { transform: `translate3d(${tx}px, 0, 0)` };
+  }
+  const tx = -heroSlide.value * 100;
+  return { transform: `translate3d(${tx}%, 0, 0)` };
+});
 
 function onHeroDotClick(i: number): void {
   goHeroSlide(i);
@@ -436,17 +460,77 @@ function onHeroNext(): void {
   goHeroSlide((heroSlide.value + 1) % len);
 }
 
-// dot/arrow 클릭 공통 진입점. 사용자가 수동으로 슬라이드를 옮기면 auto-advance
-// 타이머도 재시작 — 그렇지 않으면 막 본 슬라이드가 1~2초만에 자동으로 다시
-// 넘어가서 사용자 인터랙션이 의미 없어진다. heroSlide 를 즉시 갱신하고
-// scrollTo 는 부드럽게.
+// dot/arrow 클릭/auto-advance 공통 진입점. 사용자가 수동으로 슬라이드를 옮기면
+// auto-advance 타이머도 재시작 — 그렇지 않으면 막 본 슬라이드가 1~2초만에
+// 자동으로 다시 넘어가서 사용자 인터랙션이 의미 없어진다. heroSlide 만 갱신하면
+// transform watch 가 자동으로 transition 을 그린다.
 function goHeroSlide(i: number): void {
   heroSlide.value = i;
-  const el = heroCarouselEl.value;
-  if (el && el.clientWidth > 0) {
-    el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
-  }
   // 길이가 1 이하면 startHeroAutoAdvance 가 알아서 no-op 한다.
+  startHeroAutoAdvance();
+}
+
+// --- swipe 처리 -----------------------------------------------------------
+// 손가락이 carousel 위에 닿으면 transition 을 잠깐 꺼서 1:1 로 따라가게 하고,
+// 떼면 deltaX 가 임계값(viewport 의 15%)을 넘었는지에 따라 다음/이전/제자리로
+// snap. touch-action: pan-y 가 CSS 로 걸려있어 수직 페이지 스크롤은 그대로.
+const HERO_SWIPE_RATIO = 0.15;
+let heroPointerId: number | null = null;
+let heroStartX = 0;
+let heroStartY = 0;
+let heroLockedAxis: 'x' | 'y' | null = null;
+
+function onHeroPointerDown(e: PointerEvent): void {
+  if ((place.value?.coverImageUrls.length ?? 0) <= 1) return;
+  heroPointerId = e.pointerId;
+  heroStartX = e.clientX;
+  heroStartY = e.clientY;
+  heroLockedAxis = null;
+  heroDragOffset.value = 0;
+  // 자동 전환은 사용자가 만지고 있는 동안 일시 중지. pointerup 에서 재시작.
+  stopHeroAutoAdvance();
+}
+
+function onHeroPointerMove(e: PointerEvent): void {
+  if (heroPointerId !== e.pointerId) return;
+  const dx = e.clientX - heroStartX;
+  const dy = e.clientY - heroStartY;
+  // 첫 5px 이상 움직였을 때 한 번만 축 결정. |dx| > |dy| 면 carousel 이 이벤트
+  // 잡고 (panning), 아니면 페이지 세로 스크롤로 양보 (heroLockedAxis='y').
+  if (heroLockedAxis === null) {
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    if (adx < 5 && ady < 5) return;
+    heroLockedAxis = adx > ady ? 'x' : 'y';
+    if (heroLockedAxis === 'x') heroPanning.value = true;
+  }
+  if (heroLockedAxis !== 'x') return;
+  e.preventDefault();
+  heroDragOffset.value = dx;
+}
+
+function onHeroPointerUp(e: PointerEvent): void {
+  if (heroPointerId !== e.pointerId) return;
+  heroPointerId = null;
+  if (heroLockedAxis !== 'x') {
+    heroLockedAxis = null;
+    return;
+  }
+  const el = heroCarouselEl.value;
+  const width = el?.clientWidth ?? 0;
+  const len = place.value?.coverImageUrls.length ?? 0;
+  const dx = heroDragOffset.value;
+  let next = heroSlide.value;
+  if (width > 0 && Math.abs(dx) > width * HERO_SWIPE_RATIO) {
+    if (dx < 0 && heroSlide.value < len - 1) next = heroSlide.value + 1;
+    else if (dx > 0 && heroSlide.value > 0) next = heroSlide.value - 1;
+  }
+  // panning 끄기 → transition 다시 켜진다 → snap 위치까지 부드럽게.
+  heroPanning.value = false;
+  heroDragOffset.value = 0;
+  heroSlide.value = next;
+  heroLockedAxis = null;
+  // swipe 가 한 번 이라도 있었으면 auto-advance 타이머 재가동.
   startHeroAutoAdvance();
 }
 
@@ -729,23 +813,36 @@ ion-content.pd-content {
   height: 440px;
   background: #000;
 }
-/* 가로 스와이프 carousel — 한 장이면 단일 이미지와 시각적으로 동일하다.
-   touch-action 을 X 축으로 제한해 세로 스크롤(.pd-scroll)과 충돌하지 않게 함. */
+/* 가로 슬라이드 carousel — 외곽은 시야창(overflow:hidden) 역할.
+   touch-action: pan-y 로 두면 세로 스크롤은 페이지(.pd-scroll)에 양보하고
+   가로 swipe 만 컴포넌트가 직접 처리(pointer events). */
 .hero-carousel {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 트랙은 flex 로 슬라이드를 일렬로 깔고 transform 으로 이동. transition 은
+   .panning 클래스가 있을 때 (사용자 손가락 추적 중) 끄고, 평소에는 0.4s
+   ease-out cubic 으로 부드럽게. translate3d 는 GPU 가속 hint. */
+.hero-track {
+  position: absolute;
+  inset: 0;
   display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hero-track.panning {
+  transition: none;
 }
 .hero-img {
   flex: 0 0 100%;
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
-  scroll-snap-align: start;
+  pointer-events: none;
 }
 .hero-dots {
   position: absolute;
