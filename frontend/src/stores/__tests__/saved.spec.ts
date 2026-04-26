@@ -18,8 +18,8 @@ const mockApi = api as unknown as {
 
 const fixture: SavedResponse = {
   collections: [
-    { id: 1, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c1.jpg', count: 8, gradient: null },
-    { id: 2, name: '도깨비 컴플리트', coverImageUrl: 'https://img/c2.jpg', count: 24, gradient: null },
+    { id: 1, name: '다음 여행 · 강릉', coverImageUrls: ['https://img/c1.jpg'], count: 8, gradient: null },
+    { id: 2, name: '도깨비 컴플리트', coverImageUrls: ['https://img/c2.jpg'], count: 24, gradient: null },
   ],
   totalCount: 2,
   items: [
@@ -27,7 +27,7 @@ const fixture: SavedResponse = {
       placeId: 10,
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
-      coverImageUrl: 'https://img/p10.jpg',
+      coverImageUrls: ['https://img/p10.jpg'],
       workId: 1,
       workTitle: '도깨비',
       distanceKm: 1.2,
@@ -39,7 +39,7 @@ const fixture: SavedResponse = {
       placeId: 13,
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
-      coverImageUrl: 'https://img/p13.jpg',
+      coverImageUrls: ['https://img/p13.jpg'],
       workId: 2,
       workTitle: '이태원 클라쓰',
       distanceKm: 4.8,
@@ -191,7 +191,7 @@ describe('saved store', () => {
             placeId: 42,
             name: 'x',
             regionLabel: 'y',
-            coverImageUrl: 'z',
+            coverImageUrls: ['z'],
             workId: 1,
             workTitle: 'w',
             distanceKm: null,
@@ -253,7 +253,7 @@ describe('saved store', () => {
           placeId: 99,
           name: '영진 커피숍',
           regionLabel: '강릉시 주문진읍',
-          coverImageUrl: 'https://img/p99.jpg',
+          coverImageUrls: ['https://img/p99.jpg'],
           workId: 1,
           workTitle: '도깨비',
           distanceKm: 0.4,
@@ -300,7 +300,7 @@ describe('saved store', () => {
     const serverResp = {
       id: 99,
       name: '새 여름 여행',
-      coverImageUrl: null,
+      coverImageUrls: null,
       count: 0,
       gradient: null,
     };
@@ -356,7 +356,7 @@ describe('saved store', () => {
     // Before the PATCH resolves, optimistic update should already have flipped the name.
     expect(store.collections.find((c) => c.id === 1)?.name).toBe('강릉 새이름');
 
-    resolvePatch({ data: { id: 1, name: '강릉 새이름', count: 8, coverImageUrl: null, gradient: null } });
+    resolvePatch({ data: { id: 1, name: '강릉 새이름', count: 8, coverImageUrls: null, gradient: null } });
     await p;
 
     expect(store.collections.find((c) => c.id === 1)?.name).toBe('강릉 새이름');
@@ -399,7 +399,7 @@ describe('saved store', () => {
 
     const store = useSavedStore();
     // Need a target in collections so the early "not found" branch doesn't fire.
-    store.collections = [{ id: 1, name: '강릉', coverImageUrl: null, count: 0, gradient: null }];
+    store.collections = [{ id: 1, name: '강릉', coverImageUrls: null, count: 0, gradient: null }];
 
     const ok = await store.renameCollection(1, '새 이름');
 
@@ -412,14 +412,14 @@ describe('saved store', () => {
     // Hand-rolled fixture: one collection (id=1) holding two saved items.
     const localFixture: SavedResponse = {
       collections: [
-        { id: 1, name: '강릉', coverImageUrl: null, count: 2, gradient: null },
-        { id: 2, name: '서울', coverImageUrl: null, count: 1, gradient: null },
+        { id: 1, name: '강릉', coverImageUrls: null, count: 2, gradient: null },
+        { id: 2, name: '서울', coverImageUrls: null, count: 1, gradient: null },
       ],
       totalCount: 3,
       items: [
-        { placeId: 10, name: 'A', regionLabel: '', coverImageUrl: '', workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
-        { placeId: 11, name: 'B', regionLabel: '', coverImageUrl: '', workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
-        { placeId: 12, name: 'C', regionLabel: '', coverImageUrl: '', workId: 2, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 2 },
+        { placeId: 10, name: 'A', regionLabel: '', coverImageUrls: [], workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 11, name: 'B', regionLabel: '', coverImageUrls: [], workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 12, name: 'C', regionLabel: '', coverImageUrls: [], workId: 2, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 2 },
       ],
       nearbyRouteSuggestion: null,
     };
@@ -476,7 +476,7 @@ describe('saved store', () => {
     const promptSpy = vi.spyOn(uiMod.useUiStore(), 'showLoginPrompt');
 
     const store = useSavedStore();
-    store.collections = [{ id: 1, name: '강릉', coverImageUrl: null, count: 0, gradient: null }];
+    store.collections = [{ id: 1, name: '강릉', coverImageUrls: null, count: 0, gradient: null }];
 
     const ok = await store.deleteCollection(1);
 

@@ -52,7 +52,11 @@
             data-testid="coll-card"
             @click="onCollectionCardTap(c)"
           >
-            <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
+            <img
+              v-if="(c.coverImageUrls ?? []).length > 0"
+              :src="(c.coverImageUrls ?? [])[0]"
+              :alt="c.name"
+            />
             <div />
             <div>
               <div class="name">{{ c.name }}</div>
@@ -109,7 +113,13 @@
               data-testid="saved-card"
               @click="onOpenPlace(i.placeId)"
             >
-              <div class="saved-thumb"><img :src="i.coverImageUrl" :alt="i.name" /></div>
+              <div class="saved-thumb">
+                <img
+                  v-if="i.coverImageUrls.length > 0"
+                  :src="i.coverImageUrls[0]"
+                  :alt="i.name"
+                />
+              </div>
               <div class="saved-info">
                 <div>
                   <div class="chips">

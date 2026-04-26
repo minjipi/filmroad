@@ -28,7 +28,7 @@ export interface WorkDetailSpot {
   placeId: number;
   name: string;
   regionShort: string;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   workEpisode: string | null;
   sceneTimestamp: string | null;
   sceneDescription: string | null;

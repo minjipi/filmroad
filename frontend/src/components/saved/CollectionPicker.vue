@@ -55,7 +55,11 @@
             @click="pick(c.id)"
           >
             <span class="cp-ico">
-              <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
+              <img
+                v-if="(c.coverImageUrls ?? []).length > 0"
+                :src="(c.coverImageUrls ?? [])[0]"
+                :alt="c.name"
+              />
               <ion-icon v-else :icon="locationOutline" class="ic-20" />
             </span>
             <span class="cp-meta">

@@ -180,7 +180,11 @@
               data-testid="coll-card"
               @click="onOpenCollection(c.id)"
             >
-              <img v-if="c.coverImageUrl" :src="c.coverImageUrl" :alt="c.name" />
+              <img
+                v-if="(c.coverImageUrls ?? []).length > 0"
+                :src="(c.coverImageUrls ?? [])[0]"
+                :alt="c.name"
+              />
               <div />
               <div>
                 <div class="name">{{ c.name }}</div>

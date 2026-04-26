@@ -223,7 +223,11 @@
               @click="onPickPlace(p)"
             >
               <div class="thumb">
-                <img v-if="p.coverImageUrl" :src="p.coverImageUrl" :alt="p.name" />
+                <img
+                  v-if="p.coverImageUrls.length > 0"
+                  :src="p.coverImageUrls[0]"
+                  :alt="p.name"
+                />
               </div>
               <div class="meta">
                 <div class="t">{{ p.name }}</div>

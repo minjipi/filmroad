@@ -54,7 +54,7 @@ const savedState = {
       placeId: 10,
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
-      coverImageUrl: 'https://img/p10.jpg',
+      coverImageUrls: ['https://img/p10.jpg'],
       workId: 1,
       workTitle: '도깨비',
       distanceKm: 1.2,
@@ -66,7 +66,7 @@ const savedState = {
       placeId: 13,
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
-      coverImageUrl: 'https://img/p13.jpg',
+      coverImageUrls: ['https://img/p13.jpg'],
       workId: 2,
       workTitle: '이태원 클라쓰',
       distanceKm: 4.8,
@@ -178,8 +178,8 @@ describe('SavedPage.vue', () => {
   it('collections render from store data — seeded entries show title + count', async () => {
     const { wrapper } = mountSaved({
       collections: [
-        { id: 1, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c1.jpg', count: 8, gradient: null },
-        { id: 2, name: '도깨비 컴플리트', coverImageUrl: 'https://img/c2.jpg', count: 24, gradient: null },
+        { id: 1, name: '다음 여행 · 강릉', coverImageUrls: ['https://img/c1.jpg'], count: 8, gradient: null },
+        { id: 2, name: '도깨비 컴플리트', coverImageUrls: ['https://img/c2.jpg'], count: 24, gradient: null },
       ],
     });
     await flushPromises();
@@ -194,7 +194,7 @@ describe('SavedPage.vue', () => {
   it('collection card click pushes /collection/:id (task #30)', async () => {
     const { wrapper } = mountSaved({
       collections: [
-        { id: 7, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c7.jpg', count: 8, gradient: null },
+        { id: 7, name: '다음 여행 · 강릉', coverImageUrls: ['https://img/c7.jpg'], count: 8, gradient: null },
       ],
     });
     await flushPromises();

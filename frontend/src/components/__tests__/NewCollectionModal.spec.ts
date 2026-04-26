@@ -82,7 +82,7 @@ describe('NewCollectionModal.vue', () => {
     const createSpy = vi.spyOn(saved, 'createCollection').mockResolvedValue({
       id: 99,
       name: '새 여름',
-      coverImageUrl: null,
+      coverImageUrls: null,
       count: 0,
       gradient: null,
     });
@@ -108,7 +108,7 @@ describe('NewCollectionModal.vue', () => {
     vi.spyOn(saved, 'createCollection').mockResolvedValue({
       id: 99,
       name: '새 여름',
-      coverImageUrl: null,
+      coverImageUrls: null,
       count: 0,
       gradient: null,
     });
@@ -136,7 +136,7 @@ describe('NewCollectionModal.vue', () => {
     vi.spyOn(saved, 'createCollection').mockResolvedValue({
       id: 99,
       name: '새 여름',
-      coverImageUrl: null,
+      coverImageUrls: null,
       count: 0,
       gradient: null,
     });

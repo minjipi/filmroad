@@ -7,7 +7,8 @@ import { useToast } from '@/composables/useToast';
 export interface SavedCollection {
   id: number;
   name: string;
-  coverImageUrl: string | null;
+  // 빈 컬렉션 (직후 생성/이름변경 등) 은 서버가 null 을 보낸다 — 사용처에서 `?? []` 로 안전 처리.
+  coverImageUrls: string[] | null;
   count: number;
   gradient: string | null;
   // Optional iconKey for future server-driven cover icons (MAP_PIN / FILM /
@@ -19,7 +20,7 @@ export interface SavedItem {
   placeId: number;
   name: string;
   regionLabel: string;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   workId: number;
   workTitle: string;
   distanceKm: number | null;

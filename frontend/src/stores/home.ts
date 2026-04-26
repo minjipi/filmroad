@@ -22,7 +22,7 @@ export interface PlaceSummary {
   id: number;
   name: string;
   regionLabel: string;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   workId: number;
   workTitle: string;
   liked: boolean;

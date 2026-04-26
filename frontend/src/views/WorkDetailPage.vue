@@ -101,7 +101,13 @@
                 <ion-icon v-if="s.visited" :icon="checkmark" class="ic-16" />
                 <template v-else>{{ s.orderIndex }}</template>
               </span>
-              <div class="spot-thumb"><img :src="s.coverImageUrl" :alt="s.name" /></div>
+              <div class="spot-thumb">
+                <img
+                  v-if="s.coverImageUrls.length > 0"
+                  :src="s.coverImageUrls[0]"
+                  :alt="s.name"
+                />
+              </div>
               <div class="spot-info">
                 <div class="t">{{ s.name }}</div>
                 <div class="s2">
