@@ -129,10 +129,16 @@
             />
           </div>
           <div class="meta">
-            <div class="nm">
+            <button
+              type="button"
+              class="nm"
+              data-testid="sd-author-nickname"
+              :disabled="shot.author.id == null"
+              @click="onOpenAuthor"
+            >
               {{ shot.author.nickname }}
               <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="verified" />
-            </div>
+            </button>
             <div class="sub">
               <ion-icon :icon="locationOutline" class="ic-16" />
               {{ shot.place.name }} · {{ takenAtLabel }}
@@ -443,6 +449,14 @@ async function onMore(): Promise<void> {
   await showInfo('메뉴는 곧 공개됩니다');
 }
 
+async function onOpenAuthor(): Promise<void> {
+  const a = shot.value?.author;
+  if (!a || a.id == null) return;
+  // /user/:id 페이지가 isMe 인 경우 내부에서 /profile 로 리다이렉트하므로
+  // 여기서 별도 분기 없이 같은 라우트로 보낸다.
+  await router.push(`/user/${a.id}`);
+}
+
 async function onAuthorAction(): Promise<void> {
   const a = shot.value?.author;
   if (!a) return;
@@ -731,11 +745,21 @@ ion-content.sd-content {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.sd-user .nm:disabled { cursor: default; }
+.sd-user .nm:hover:not(:disabled) { color: var(--fr-ink-2); }
 .sd-user .verified {
   width: 14px;
   height: 14px;
