@@ -98,12 +98,14 @@ function mountSheet(opts: {
     },
   });
   const wrapper = mount(CommentSheet, {
+    attachTo: document.body,
     global: {
       plugins: [pinia],
       stubs: {
         'ion-modal': {
-          props: ['isOpen'],
-          template: '<div v-if="isOpen" class="ion-modal-stub"><slot /></div>',
+          props: ['isOpen', 'breakpoints', 'initialBreakpoint'],
+          template:
+            '<div v-if="isOpen" class="ion-modal-stub" :data-initial-breakpoint="initialBreakpoint" :data-breakpoints="breakpoints ? breakpoints.join(\',\') : \'\'"><slot /></div>',
         },
         'ion-icon': true,
       },
@@ -263,6 +265,29 @@ describe('CommentSheet.vue', () => {
       URL.createObjectURL = origCreate;
       URL.revokeObjectURL = origRevoke;
     }
+  });
+
+  it('passes initial-breakpoint that matches one of breakpoints (Ionic contract)', async () => {
+    const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7 });
+    await flushPromises();
+    const modal = wrapper.find('.ion-modal-stub');
+    const initial = Number(modal.attributes('data-initial-breakpoint'));
+    const breakpoints = (modal.attributes('data-breakpoints') ?? '')
+      .split(',')
+      .map((s) => Number(s));
+    expect(breakpoints.length).toBeGreaterThan(0);
+    expect(breakpoints).toContain(initial);
+  });
+
+  it('focuses the comment input after the sheet opens (auto-focus UX)', async () => {
+    // 모달이 열리면 input 에 포커스가 들어가야 한다. ion-modal 의 did-present
+    // 이벤트가 뜨지 않는 stub 환경에서도 props.open watcher 의 fallback 에서
+    // input.focus() 가 호출돼야 하는 것이 회귀 포인트.
+    const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7 });
+    await flushPromises();
+
+    const input = wrapper.find('input.cs-input').element as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
   });
 
   it('renders the attach thumbnail on a comment whose imageUrl is set', async () => {

@@ -2,9 +2,10 @@
   <ion-modal
     :is-open="open"
     :breakpoints="[0, 0.5, 0.95]"
-    :initial-breakpoint="0.7"
+    :initial-breakpoint="0.95"
     handle-behavior="cycle"
     @did-dismiss="onDismiss"
+    @did-present="onDidPresent"
   >
     <div class="cs-root">
       <header class="cs-head">
@@ -104,6 +105,7 @@
             @change="onFilePicked"
           />
           <input
+            ref="textInput"
             v-model="draft"
             class="cs-input"
             type="text"
@@ -155,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { IonModal, IonIcon } from '@ionic/vue';
 import {
   closeOutline,
@@ -187,7 +189,15 @@ const attachFile = ref<File | null>(null);
 const attachPreview = ref<string | null>(null);
 const submitting = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
+const textInput = ref<HTMLInputElement | null>(null);
 const viewerSrc = ref<string | null>(null);
+
+function focusTextInput(): void {
+  // 키보드 자동 호출은 OS/디바이스마다 다르게 동작하므로 강제하지 않고
+  // focus() 만 위임. 비로그인 상태 등 input 이 disabled 일 땐 focus() 호출 자체가
+  // 무시되므로 별도 가드 불필요.
+  textInput.value?.focus();
+}
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
@@ -227,6 +237,12 @@ function close(): void {
 
 function onDismiss(): void {
   if (props.open) emit('close');
+}
+
+// Real Ionic ion-modal 이 시트를 펼친 직후 호출. swiper transition 이 끝난
+// 시점이라 input 이 화면 안에 있으니 그때 focus 를 준다.
+function onDidPresent(): void {
+  focusTextInput();
 }
 
 async function onLoadMore(): Promise<void> {
@@ -330,6 +346,11 @@ watch(
       await commentStore.fetch(id);
       const err = commentStore.errorFor(id);
       if (err) await showError(err);
+      // Fallback focus — real Ionic ion-modal 도 did-present 에서 한 번 더
+      // 잡지만, 그 이벤트가 뜨지 않는 환경(vitest stub 등)에서도 input 에
+      // 포커스가 들어가도록 watch 시점에 nextTick 후 시도한다.
+      await nextTick();
+      focusTextInput();
     } else if (!isOpen) {
       draft.value = '';
       attachFile.value = null;
