@@ -3,11 +3,12 @@
     :is-open="open"
     :breakpoints="[0, 0.5, 0.95]"
     :initial-breakpoint="0.95"
+    :style="modalStyle"
     handle-behavior="cycle"
     @did-dismiss="onDismiss"
     @did-present="onDidPresent"
   >
-    <div class="cs-root" :style="{ '--cs-keyboard-offset': `${keyboardOffset}px` }">
+    <div class="cs-root" :style="rootStyle">
       <header class="cs-head">
         <div class="title">댓글 {{ items.length }}</div>
         <button type="button" aria-label="close" class="close" @click="close">
@@ -199,24 +200,47 @@ function focusTextInput(): void {
   textInput.value?.focus();
 }
 
-// OS 키보드가 footer 를 가리지 않도록 visualViewport 변화에 맞춰 .cs-foot 의
-// padding-bottom 을 키보드 높이만큼 늘린다. ion-modal 의 sheet 모드는 자체
-// 보정을 하지 않으므로 user-land 에서 처리하는 표준 패턴. CSS 커스텀 프로퍼티를
-// .cs-root 에 박아두고 .cs-foot 의 padding-bottom 이 그것을 더해 사용하도록 했다.
+// OS 키보드 / 모바일 브라우저 URL bar 가 footer 를 가리지 않도록 visualViewport
+// 를 따라간다. 두 값을 노출:
+//  1) keyboardOffset — innerHeight - vv.height - vv.offsetTop. .cs-foot 의
+//     padding-bottom 에 더해 input 을 키보드 위로 띄운다.
+//  2) sheetMaxHeight — vv.height. .cs-root 의 max-height 에 박아 layout
+//     viewport 가 visual viewport 보다 길어 패널 하단이 화면 밖으로 잘리는
+//     케이스(iOS Safari URL bar 등)에서 foot 이 visible 영역 안에 들어오게.
+// CSS 커스텀 프로퍼티로 노출하므로 scoped style 에서 그대로 받아 쓴다.
 const keyboardOffset = ref(0);
+const sheetMaxHeight = ref<string>('100%');
 
 function recomputeKeyboardOffset(): void {
   if (typeof window === 'undefined') return;
   const vv = window.visualViewport;
   if (!vv) {
     keyboardOffset.value = 0;
+    sheetMaxHeight.value = '100%';
     return;
   }
   // pinch-zoom 케이스에서 visualViewport 가 위로 올라가 있을 수 있어 offsetTop
   // 도 차감 — 그냥 innerHeight - height 로만 잡으면 zoom 상황에서 오버보정.
   const diff = window.innerHeight - vv.height - vv.offsetTop;
   keyboardOffset.value = Math.max(0, Math.round(diff));
+  sheetMaxHeight.value = `${Math.round(vv.height)}px`;
 }
+
+const rootStyle = computed<Record<string, string>>(() => ({
+  '--cs-keyboard-offset': `${keyboardOffset.value}px`,
+  '--cs-sheet-max-height': sheetMaxHeight.value,
+}));
+
+// ion-modal 호스트의 --height / --max-height 를 visual viewport 높이로 묶는다.
+// sheet 모드는 패널 높이를 layout viewport (`100%` = innerHeight) 기준으로
+// 잡기 때문에, layout > visual 인 모바일 브라우저(URL bar 가시 시 iOS Safari,
+// Android Chrome 등) 에서는 패널 하단(=foot 위치) 이 visible 영역 밖으로
+// 떨어진다. 호스트의 --height 를 visualViewport.height 로 강제해서 패널
+// 자체가 visible 영역 안에 들어오게 한다.
+const modalStyle = computed<Record<string, string>>(() => ({
+  '--height': sheetMaxHeight.value,
+  '--max-height': sheetMaxHeight.value,
+}));
 
 function onViewportChange(): void {
   recomputeKeyboardOffset();
@@ -383,6 +407,10 @@ watch(
   () => [props.open, props.photoId] as const,
   async ([isOpen, id]) => {
     if (isOpen && typeof id === 'number') {
+      // 시트가 열리는 첫 프레임에 visual viewport 값을 잡아두지 않으면 sheet
+      // 패널이 default 100% (layout viewport) 로 한 번 그려졌다가 늦게 줄어들어
+      // 깜빡인다. 열기 직전에 한 번 동기 recompute.
+      recomputeKeyboardOffset();
       await commentStore.fetch(id);
       const err = commentStore.errorFor(id);
       if (err) await showError(err);
@@ -397,6 +425,7 @@ watch(
       revokePreview();
       viewerSrc.value = null;
       keyboardOffset.value = 0;
+      sheetMaxHeight.value = '100%';
     }
   },
   { immediate: true },
@@ -413,6 +442,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* layout viewport 가 visual viewport 보다 길 때(iOS Safari address bar
+     visible, Android Chrome 등) ion-modal 패널의 하단이 화면 밖으로 잘리고
+     foot 이 보이지 않는 문제를 막는다. JS 가 visualViewport.height 를
+     --cs-sheet-max-height 로 박아 .cs-root 가 visible 영역까지로 줄어들면
+     foot 이 자동으로 visible bottom 위에 붙는다. visualViewport 미지원
+     환경은 100% 폴백으로 기존 동작 유지. */
+  max-height: var(--cs-sheet-max-height, 100%);
   background: #ffffff;
 }
 
@@ -422,6 +458,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--fr-line);
+  flex-shrink: 0;
 }
 .cs-head .title {
   font-size: 15px;
@@ -546,6 +583,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 8px;
   background: #ffffff;
+  /* body 가 콘텐츠로 가득 찼을 때 foot 이 줄어들어 버튼/input 이 잘리는
+     케이스를 막는다. body(flex:1) 가 먼저 줄어들고 foot 은 자연 높이 유지. */
+  flex-shrink: 0;
 }
 .cs-foot-row {
   display: flex;

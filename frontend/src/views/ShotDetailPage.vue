@@ -191,19 +191,25 @@
           <div class="date">{{ takenAtFullLabel }}</div>
         </section>
 
-        <div class="cmt-input-wrap">
-          <div class="me-av">
+        <button
+          type="button"
+          class="cmt-input-wrap"
+          data-testid="sd-cmt-trigger"
+          aria-label="댓글 작성"
+          @click="onOpenComments"
+        >
+          <span class="me-av">
             <img
               v-if="meAvatarUrl"
               :src="meAvatarUrl"
               alt="me"
             />
-          </div>
-          <div class="box">댓글을 남겨보세요…</div>
-          <button type="button" class="send" aria-label="send">
+          </span>
+          <span class="box">댓글을 남겨보세요…</span>
+          <span class="send" aria-hidden="true">
             <ion-icon :icon="paperPlaneOutline" class="ic-18" />
-          </button>
-        </div>
+          </span>
+        </button>
 
         <section class="loc-card" @click="onOpenPlace">
           <div class="loc-map-thumb" />
@@ -254,19 +260,19 @@
           <div
             v-for="c in shot.topComments"
             :key="c.id"
-            :class="['cmt', c.parentId != null ? 'is-reply' : '']"
+            :class="['cmt', c.isReply ? 'is-reply' : '']"
             data-testid="sd-comment"
           >
             <div class="av">
               <img
-                v-if="c.author.avatarUrl"
-                :src="c.author.avatarUrl"
-                :alt="c.author.handle"
+                v-if="c.authorAvatarUrl"
+                :src="c.authorAvatarUrl"
+                :alt="c.authorHandle ?? ''"
               />
             </div>
             <div class="body">
               <div class="top">
-                <span class="nm">{{ c.author.handle }}</span>
+                <span class="nm">{{ c.authorHandle }}</span>
                 <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
               </div>
               <div class="txt">{{ c.content }}</div>
@@ -284,6 +290,12 @@
         </section>
       </div>
     </ion-content>
+    <CommentSheet
+      :photo-id="commentSheetOpen ? shot?.id ?? null : null"
+      :open="commentSheetOpen"
+      @close="commentSheetOpen = false"
+      @created="onCommentCreated"
+    />
   </ion-page>
 </template>
 
@@ -317,6 +329,7 @@ import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
+import CommentSheet from '@/components/comment/CommentSheet.vue';
 import {
   formatRelativeTime,
   formatVisitDate,
@@ -335,6 +348,7 @@ const { shot, loading, error } = storeToRefs(shotStore);
 const commentsRef = ref<HTMLElement | null>(null);
 const carouselEl = ref<HTMLElement | null>(null);
 const currentSlide = ref(0);
+const commentSheetOpen = ref(false);
 
 // Always fall back to the lead frame as a length-1 list so the template can
 // treat `images` as non-empty regardless of how old the backend response is.
@@ -429,6 +443,15 @@ async function onToggleBookmark(): Promise<void> {
 
 function onScrollToComments(): void {
   commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function onOpenComments(): void {
+  if (!shot.value) return;
+  commentSheetOpen.value = true;
+}
+
+function onCommentCreated(): void {
+  if (shot.value) shot.value.commentCount += 1;
 }
 
 async function onOpenPlace(): Promise<void> {
@@ -1000,16 +1023,26 @@ ion-content.sd-content {
 /* Inline comment-compose row — sd-caption 과 loc-card 사이에 끼어
    사용자가 본문 읽은 직후 자연스럽게 댓글을 남기게. Instagram/Threads/YouTube
    처럼 외곽 라운드/보더 없이, 위쪽 구분선만으로 섹션 분리. 안쪽 input 만
-   살짝 라운드(10px) 줘서 입력란임을 시각적으로 표시. */
+   살짝 라운드(10px) 줘서 입력란임을 시각적으로 표시.
+   바 전체가 트리거 — 탭하면 CommentSheet 모달이 열린다 (FeedDetail/Gallery
+   와 동일 패턴). 그래서 <button> 으로 두고 button 기본 스타일은 reset. */
 .cmt-input-wrap {
+  width: 100%;
   margin: 8px 0 0;
   padding: 12px 16px;
   background: #ffffff;
+  border: none;
   border-top: 1px solid var(--fr-line);
   border-bottom: 1px solid var(--fr-line);
   display: flex;
   align-items: center;
   gap: 10px;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .cmt-input-wrap .me-av {
   width: 32px;
