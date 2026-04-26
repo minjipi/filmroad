@@ -83,12 +83,16 @@ interface State {
 // so the first-entry map frames Seoul, 제주, and the east/west coasts at the
 // country zoom below.
 export const KOREA_CENTER = { lat: 36.0, lng: 127.8 };
-// Kakao Map "level" — higher = zoomed out. Level 14 is the SDK's max and
-// frames the entire peninsula (제주 포함) on a 390pt-wide mobile viewport;
-// level 13 clipped to roughly 서울~충청 on the same viewport which was the
-// primary trigger of task #11's "first entry shows only Seoul" bug. 5 is
-// the regional detail zoom used when the sheet shows a selected place.
-export const COUNTRY_ZOOM = 14;
+// Kakao Map "level" — higher = zoomed out. SDK max is 14, which frames the
+// entire peninsula incl. 제주 on a 390pt-wide mobile viewport but reads as
+// uncomfortably wide / sparse to first-time users. Level 13 (one step closer)
+// trims 제주 and the far edges of 강원/경상 but gives a denser default view
+// of the populated regions where most content lives. The earlier "first entry
+// shows only Seoul" regression (task #11) was a data bug — bounds_changed
+// refetch overwriting the country marker set — and is held back by the
+// COUNTRY_BOUNDS_SUPPRESS_MS gate in MapPage, independent of zoom level.
+// 5 is the regional detail zoom used when the sheet shows a selected place.
+export const COUNTRY_ZOOM = 13;
 export const DETAIL_ZOOM = 5;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 14;
