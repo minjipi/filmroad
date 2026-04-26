@@ -78,12 +78,19 @@ const fixture: PlaceDetailResponse = {
   ],
 };
 
-function mountPlaceDetailPage() {
+function mountPlaceDetailPage(
+  overrides: { coverImageUrls?: string[] } = {},
+) {
   const { wrapper } = mountWithStubs(PlaceDetailPage, {
     props: { id: fixture.place.id },
     initialState: {
       placeDetail: {
-        place: { ...fixture.place },
+        place: {
+          ...fixture.place,
+          ...(overrides.coverImageUrls
+            ? { coverImageUrls: overrides.coverImageUrls }
+            : {}),
+        },
         photos: [...fixture.photos],
         related: [...fixture.related],
         loading: false,
@@ -133,6 +140,74 @@ describe('PlaceDetailPage.vue', () => {
     // workEpisode + sceneTimestamp combine into the second chip.
     expect(chipText).toContain('1회');
     expect(chipText).toContain('00:24:10');
+  });
+
+  it('renders all cover images inside the hero carousel and hides dot/counter overlays for a single-cover place', async () => {
+    const { wrapper } = mountPlaceDetailPage();
+    await flushPromises();
+
+    const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
+    expect(carousel.exists()).toBe(true);
+    // fixture has exactly one cover URL — dots and counter must stay hidden so
+    // a single-image place keeps the original visual.
+    expect(carousel.findAll('img.hero-img').length).toBe(1);
+    expect(wrapper.find('[data-testid="pd-hero-dots"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').exists()).toBe(false);
+  });
+
+  it('renders one .hero-img + one .hero-dot per cover URL, marks dot 0 active, and shows "1 / N" counter when length > 1', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: [
+        'https://img/cover-0.jpg',
+        'https://img/cover-1.jpg',
+        'https://img/cover-2.jpg',
+      ],
+    });
+    await flushPromises();
+
+    const imgs = wrapper.findAll('[data-testid="pd-hero-carousel"] img.hero-img');
+    expect(imgs.length).toBe(3);
+    expect(imgs.map((i) => i.attributes('src'))).toEqual([
+      'https://img/cover-0.jpg',
+      'https://img/cover-1.jpg',
+      'https://img/cover-2.jpg',
+    ]);
+
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots.length).toBe(3);
+    // First dot active on initial render — scroll position is 0.
+    expect(dots[0].classes()).toContain('active');
+    expect(dots[1].classes()).not.toContain('active');
+
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain(
+      '1 / 3',
+    );
+  });
+
+  it('updates the active dot when the carousel scrolls to the next slide', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: [
+        'https://img/cover-0.jpg',
+        'https://img/cover-1.jpg',
+        'https://img/cover-2.jpg',
+      ],
+    });
+    await flushPromises();
+
+    const carouselEl = wrapper.find('[data-testid="pd-hero-carousel"]')
+      .element as HTMLElement;
+    // jsdom doesn't lay things out — fake the dimensions used by the index calc.
+    Object.defineProperty(carouselEl, 'clientWidth', { value: 320, configurable: true });
+    Object.defineProperty(carouselEl, 'scrollLeft', { value: 320, configurable: true });
+    await wrapper.find('[data-testid="pd-hero-carousel"]').trigger('scroll');
+    await flushPromises();
+
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[0].classes()).not.toContain('active');
+    expect(dots[1].classes()).toContain('active');
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain(
+      '2 / 3',
+    );
   });
 
   it('renders gallery cells = photos.length + (photoCount > photos.length ? 1 : 0)', async () => {

@@ -8,8 +8,10 @@
                검은 배경 + grad 만 깔려 hero-caption 이 가독성 잃지 않게 한다. -->
           <div
             v-if="place.coverImageUrls.length > 0"
+            ref="heroCarouselEl"
             class="hero-carousel no-scrollbar"
             data-testid="pd-hero-carousel"
+            @scroll.passive="onHeroCarouselScroll"
           >
             <img
               v-for="(url, i) in place.coverImageUrls"
@@ -19,15 +21,26 @@
               class="hero-img"
             />
           </div>
+          <span
+            v-if="place.coverImageUrls.length > 1"
+            class="hero-counter"
+            data-testid="pd-hero-counter"
+          >
+            {{ heroSlide + 1 }} / {{ place.coverImageUrls.length }}
+          </span>
           <div
             v-if="place.coverImageUrls.length > 1"
             class="hero-dots"
+            data-testid="pd-hero-dots"
             aria-hidden="true"
           >
-            <span
+            <button
               v-for="(_, i) in place.coverImageUrls"
               :key="i"
-              class="hero-dot"
+              type="button"
+              :class="['hero-dot', i === heroSlide ? 'active' : '']"
+              :aria-label="`커버 ${i + 1} 보기`"
+              @click="onHeroDotClick(i)"
             />
           </div>
           <div class="hero-grad" />
@@ -185,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -228,6 +241,25 @@ const isLiked = (id: number): boolean => detailStore.isLiked(id);
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 const placeId = computed(() => Number(props.id));
+
+// Hero carousel scroll tracking — scroll-snap 만으로는 dot 활성 상태/인디케이터를
+// 보여줄 수가 없어서 scroll position 으로 현재 slide index 를 계산한다.
+// ShotDetail 의 multi-image carousel 과 동일 패턴.
+const heroCarouselEl = ref<HTMLElement | null>(null);
+const heroSlide = ref(0);
+
+function onHeroCarouselScroll(e: Event): void {
+  const el = e.target as HTMLElement;
+  if (el.clientWidth === 0) return;
+  const idx = Math.round(el.scrollLeft / el.clientWidth);
+  if (idx !== heroSlide.value) heroSlide.value = idx;
+}
+
+function onHeroDotClick(i: number): void {
+  const el = heroCarouselEl.value;
+  if (!el) return;
+  el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+}
 
 const episodeLabel = computed(() => {
   const p = place.value;
@@ -380,7 +412,13 @@ async function load(id: number): Promise<void> {
 
 onMounted(() => load(placeId.value));
 watch(placeId, (next, prev) => {
-  if (next !== prev) void load(next);
+  if (next !== prev) {
+    void load(next);
+    // 다른 place 로 이동할 때 hero carousel 위치/인덱스를 초기화 — 이전 place 에서
+    // 끝 슬라이드까지 넘긴 상태가 그대로 남아있으면 dot 활성이 어긋난다.
+    heroSlide.value = 0;
+    if (heroCarouselEl.value) heroCarouselEl.value.scrollLeft = 0;
+  }
 });
 </script>
 
@@ -426,13 +464,41 @@ ion-content.pd-content {
   justify-content: center;
   gap: 6px;
   z-index: 6;
-  pointer-events: none;
 }
+/* dot 자체는 button — 탭하면 해당 슬라이드로 scroll. button 기본 스타일은 reset.
+   .active 슬라이드는 흰색 + 가로로 늘려서 페이지 인디케이터 처럼 표시. */
 .hero-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.55);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: width 160ms ease, background 160ms ease;
+}
+.hero-dot.active {
+  width: 18px;
+  border-radius: 3px;
+  background: #ffffff;
+}
+/* 우상단 페이지 카운터 ("1 / 3") — 한 장만 있을 때는 숨겨 단일 이미지 화면이
+   이전과 동일하게 보이도록 한다. ShotDetail 의 carousel-count 와 동일 톤. */
+.hero-counter {
+  position: absolute;
+  top: calc(72px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 6;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  pointer-events: none;
+  letter-spacing: -0.01em;
 }
 .hero-grad {
   position: absolute; inset: 0;
