@@ -417,3 +417,12 @@ INSERT IGNORE INTO saved_place (id, user_id, place_id, collection_id, CREATE_DAT
   (4, 1, 11, NULL, NOW(), NOW()),
   (5, 1, 13, NULL, NOW(), NOW()),
   (6, 1, 15, NULL, NOW(), NOW());
+
+-- KakaoPlaceInfo 시드(feat/place-kakao-info). 카카오 REST API 키가 없는 dev 환경에서도
+-- frontend kakao-section 이 mock 데이터로 보이도록 1:1 캐시 행을 미리 박아둔다.
+-- last_synced_at=NOW() 라 TTL(24h) 안 → 외부 호출 트리거 안 됨.
+INSERT IGNORE INTO kakao_place_info (place_id, road_address, jibun_address, phone, category, kakao_place_url, last_synced_at, CREATE_DATE, UPDATE_DATE) VALUES
+  (10, '강원 강릉시 주문진읍 교항리 산51-2', '강원 강릉시 주문진읍 교항리 산51-2', '033-640-5420',
+   '여행 > 관광,명소 > 해변', 'https://place.map.kakao.com/8138648', NOW(), NOW(), NOW()),
+  (14, '서울 중구 정동길 26', '서울 중구 정동 5-1', NULL,
+   '여행 > 관광,명소 > 거리,골목', 'https://place.map.kakao.com/8064637', NOW(), NOW(), NOW());

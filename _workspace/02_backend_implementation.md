@@ -1,103 +1,128 @@
-# Backend Implementation — feat/comment-verification-photo
+# Backend Implementation — feat/place-kakao-info
 
 ## 작업 범위
-인증샷 댓글 (`POST /api/photos/{photoId}/comments`) 의 multipart 전환과 `image_url` 컬럼 추가.
+PlaceDetailPage 의 새 kakao-section 데이터를 위해 Kakao Local REST API 연동 추가.
+- 장소 자체 메타데이터(주소/전화/카테고리/카카오맵 URL): 1:1 캐시 + 24h TTL
+- 주변 맛집(FD6) / 카페(CE7): 매 요청 fresh, 캐시 안 함
+- API 키 미설정/장애 시 200 + `available=false` 로 응답 (프론트가 섹션 숨김)
 
 ## 변경된 파일
 
-### 신규 / 수정 (production)
-- `src/main/java/com/filmroad/api/domain/comment/PostComment.java` — `image_url VARCHAR(500) NULL` 컬럼 추가.
-- `src/main/java/com/filmroad/api/domain/comment/dto/CommentDto.java` — `imageUrl: String?` 필드 추가, `from(...)` 매핑 갱신.
-- `src/main/java/com/filmroad/api/domain/comment/CommentController.java` — `@RequestBody JSON` → `multipart/form-data` (`@RequestParam content` + `@RequestPart(required=false) image`) 로 시그니처 변경.
-- `src/main/java/com/filmroad/api/domain/comment/CommentService.java` — `createComment(Long, String, MultipartFile)` 로 확장. PhotoUploadService 의 3단 검증 (확장자·Content-Type·magic byte) 패턴을 인라인으로 복제하고 `comments/yyyy/MM/dd/{uuid}.{ext}` 경로에 저장.
+### 신규 (production)
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoLocalProperties.java` — `@ConfigurationProperties("kakao")` record. `disabled-kakao` sentinel 처리.
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoLocalResult.java` — 카카오 API 응답을 keyword/category/coord2address 통합 정규화한 내부 record.
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoLocalClient.java` — Spring 6 RestClient 기반. `findPlace(name, lat, lng)` 키워드 → 0건이면 reverse-geocode 폴백, `findNearby(code, lat, lng, radius)` 카테고리 검색. 실패 시 빈 결과(예외 전파 X).
+- `src/main/java/com/filmroad/api/domain/place/KakaoPlaceInfo.java` — Place 와 1:1 (`@MapsId`, place_id PK) 캐시 엔티티. BaseEntity 상속.
+- `src/main/java/com/filmroad/api/domain/place/KakaoPlaceInfoRepository.java` — `findByPlaceId(Long)`.
+- `src/main/java/com/filmroad/api/domain/place/KakaoPlaceInfoService.java` — `getOrFetch(placeId)`: 캐시 fresh 면 그대로, 아니면 외부 호출 + upsert. nearby 는 매 요청 두 카테고리 호출 후 거리순 정렬.
+- `src/main/java/com/filmroad/api/domain/place/dto/KakaoNearbyDto.java` — 주변 항목 응답.
+- `src/main/java/com/filmroad/api/domain/place/dto/PlaceKakaoInfoResponse.java` — `available` 플래그 포함 응답.
 
-### 삭제
-- `src/main/java/com/filmroad/api/domain/comment/dto/CommentCreateRequest.java` — multipart 전환으로 더 이상 사용되지 않음.
+### 수정 (production)
+- `src/main/java/com/filmroad/api/FilmroadApplication.java` — `@ConfigurationPropertiesScan` 추가로 `KakaoLocalProperties` 빈 등록.
+- `src/main/java/com/filmroad/api/domain/place/PlaceController.java` — `GET /{id}/kakao-info` 엔드포인트 추가 (Operation/ApiResponses 메타).
+- `src/main/java/com/filmroad/api/config/SecurityConfig.java` — `/api/places/*/kakao-info` GET 을 permitAll() 목록에 추가.
+- `src/main/resources/application.yml` — `kakao.*` 설정 블록 추가.
+- `src/main/resources/application-dev.yml` — 동일 블록 추가 (env 기반 override).
+- `src/test/resources/application-test.yml` — `kakao.rest-api-key=disabled-kakao` 명시.
+- `src/main/resources/data.sql` — `kakao_place_info` 시드 2건 (place_id=10, 14). dev 환경에서 키 없이도 캐시 데이터 보임.
 
-### 테스트
-- `src/test/java/com/filmroad/api/domain/comment/CommentControllerTest.java` — multipart 케이스로 전면 재작성. 기존 4 케이스 유지 + 6 신규 케이스.
+### 신규 (테스트)
+- `src/test/java/com/filmroad/api/domain/place/KakaoPlaceInfoServiceTest.java` — Mockito 단위 테스트 6 케이스.
+  - placeId 없음 → `BaseException(PLACE_NOT_FOUND)`
+  - 캐시 fresh → 외부 호출 X
+  - 캐시 miss → save 호출 + 응답 매핑
+  - 캐시 expired → 기존 행 update (save 안 부름, dirty checking)
+  - 키 비활성 + 캐시 없음 → `available=false`
+  - 키 비활성 + stale 캐시 → 캐시 데이터로 응답
 
-## API 계약 (프론트와 합의된 스펙)
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/place/PlaceControllerTest.java` — 통합 테스트 3 케이스 추가.
+  - `/api/places/10/kakao-info` 캐시 시드로 `available=true` 응답
+  - `/api/places/12/kakao-info` 캐시 없음 + 키 비활성 → `available=false`
+  - `/api/places/99999/kakao-info` 404
 
-### 요청
+## API 계약 (frontend-dev 와 합의)
+
+### Endpoint
 ```
-POST /api/photos/{photoId}/comments
-Content-Type: multipart/form-data
-
-content=...           (form field, required, max 500자)
-image=<binary>        (file part, optional, 1장)
+GET /api/places/{id}/kakao-info
+인증: 불필요 (permitAll)
 ```
 
-### 응답 (`CommentDto`)
+### 응답 스키마 (BaseResponse 래핑)
 ```json
 {
-  "id": 12,
-  "content": "여기 진짜로 다녀왔어요",
-  "imageUrl": "/uploads/comments/2026/04/26/{uuid}.jpg",
-  "createdAt": "2026-04-26T00:48:30.000+09:00",
-  "author": { "userId": 1, "nickname": "...", "profileImageUrl": "..." }
+  "success": true,
+  "code": 20000,
+  "message": "요청에 성공하였습니다.",
+  "results": {
+    "roadAddress": "강원 강릉시 주문진읍 교항리 산51-2",
+    "jibunAddress": "강원 강릉시 주문진읍 교항리 산51-2",
+    "phone": "033-640-5420",
+    "category": "여행 > 관광,명소 > 해변",
+    "kakaoPlaceUrl": "https://place.map.kakao.com/8138648",
+    "lastSyncedAt": "2026-04-26T12:00:00.000+00:00",
+    "nearby": [
+      {
+        "name": "주문진해전어",
+        "categoryGroupCode": "FD6",
+        "categoryName": "음식점 > 한식 > 해물,생선",
+        "distanceMeters": 120,
+        "kakaoPlaceUrl": "https://place.map.kakao.com/...",
+        "lat": 37.8927,
+        "lng": 128.8350,
+        "phone": "033-661-1234"
+      }
+    ],
+    "available": true
+  }
 }
 ```
-- 인증샷이 없는 댓글이면 `imageUrl: null`.
-- `GET /api/photos/{photoId}/comments` 의 각 항목도 동일하게 `imageUrl` 포함.
 
-### curl 예시
-```bash
-# 인증샷 첨부 댓글
-curl -X POST 'http://localhost:8080/api/photos/100/comments' \
-  -H 'Cookie: ATOKEN=...' \
-  -F 'content=여기 진짜로 다녀왔어요' \
-  -F 'image=@/path/to/verify.jpg'
-
-# 텍스트-only (image 생략)
-curl -X POST 'http://localhost:8080/api/photos/100/comments' \
-  -H 'Cookie: ATOKEN=...' \
-  -F 'content=좋은 사진이네요'
+### available=false 시
+```json
+{
+  "success": true,
+  "code": 20000,
+  "message": "요청에 성공하였습니다.",
+  "results": {
+    "roadAddress": null,
+    "jibunAddress": null,
+    "phone": null,
+    "category": null,
+    "kakaoPlaceUrl": null,
+    "lastSyncedAt": null,
+    "nearby": [],
+    "available": false
+  }
+}
 ```
+프론트엔드는 `available=false` 면 kakao-section 자체를 렌더링하지 않는다.
 
-### 에러 응답
-- 허용되지 않은 확장자 / MIME / 매직바이트 깨짐 → HTTP 400, `code: 40060` (`INVALID_FILE_TYPE`).
-- 5MB(현재 yml 기본 10MB) 초과 → HTTP 413, `code: 40061` (`UPLOAD_FAILED`) — 기존 `GlobalExceptionHandler` 의 `handleMaxUploadSize` 가 처리.
-- 빈 `content` 또는 길이 초과 → HTTP 400, `REQUEST_ERROR`.
-
-## 마이그레이션 / 스키마
-
-### 컬럼 추가
-- `post_comment.image_url VARCHAR(500) NULL`.
-- Hibernate `ddl-auto=update` 가 자동으로 `ALTER TABLE post_comment ADD COLUMN image_url VARCHAR(500)` 발행. 기존 row 는 `NULL` 채워짐 → 백워드 호환.
-- `LegacyPhotoSchemaMigration` 같은 부팅 시 보정 코드는 **불필요**. 그 클래스는 Hibernate 가 자동 처리하지 못하는 *drop* 만 다루기 위한 것이며, *nullable column add* 는 update 모드의 정상 경로.
-
-### 파일 저장 경로
-- `${project.upload.path}/comments/yyyy/MM/dd/{uuid}.{ext}`.
-- 응답 `imageUrl` 은 정적 매핑(`/uploads/**`) prefix 그대로: `"/uploads/comments/2026/04/26/{uuid}.jpg"`.
-- 파일 write 실패 시 best-effort 삭제 후 `UPLOAD_FAILED` throw, DB save 실패 시 작성된 파일 정리 + 트랜잭션 롤백.
-
-### 검증 패턴
-- `ALLOWED_EXTENSIONS = {jpg, jpeg, png, webp}`
-- `ALLOWED_CONTENT_TYPES = {image/jpeg, image/jpg, image/png, image/webp}`
-- `EXT_SAFE = ^[a-z0-9]{1,10}$`
-- magic byte peek 12 bytes — JPEG (FF D8 FF) / PNG (89 50 4E 47) / RIFF…WEBP.
-- 파일 사이즈 상한은 `spring.servlet.multipart.max-file-size` (현재 10MB) — 하드코딩 없음.
+### 환경 변수
+```
+KAKAO_REST_API_KEY=<카카오 REST API 키>
+```
+미설정 시 `disabled-kakao` 으로 떨어져 외부 호출이 즉시 빈 결과 반환.
 
 ## 테스트 결과
+- `./gradlew test` — 그린. 신규 9 케이스(6 unit + 3 integration) 포함 전체 통과.
+- `./gradlew build` — BUILD SUCCESSFUL.
 
-`./gradlew build` SUCCESSFUL.
-`./gradlew test` — total **143 tests, 0 failures, 0 errors**.
+### curl 호출 예시
+```bash
+# dev 서버 (키 없이도 시드 캐시로 동작)
+curl http://localhost:8080/api/places/10/kakao-info | jq
 
-`CommentControllerTest` — 10/10 PASS:
-- `POST /api/photos/100/comments multipart with text only returns CommentDto, imageUrl null`
-- `POST /api/photos/100/comments with image part returns imageUrl pointing under /uploads/comments/`
-- `POST /api/photos/100/comments accepts PNG when extension/MIME/magic byte all align`
-- `POST /api/photos/100/comments without ATOKEN returns 401`
-- `POST /api/photos/100/comments with disallowed extension returns 4xx INVALID_FILE_TYPE`
-- `POST /api/photos/100/comments with mismatched content-type returns 4xx INVALID_FILE_TYPE`
-- `POST /api/photos/100/comments with bad magic byte returns 4xx INVALID_FILE_TYPE`
-- `GET /api/photos/100/comments returns seeded comments with imageUrl field serialized`
-- `DELETE /api/comments/{id} by the author returns 204`
-- `DELETE /api/comments/{id} by another user returns 403 UNAUTHORIZED_COMMENT`
+# 키 미설정 + 캐시 없음 → available=false
+curl http://localhost:8080/api/places/12/kakao-info | jq
 
-## 프론트엔드 전달 사항 (frontend-dev)
-1. `POST /api/photos/{id}/comments` 가 **JSON → multipart/form-data** 로 변경됨. 폼 필드명은 `content`, 파일 파트명은 `image` (모두 소문자, 단일).
-2. 응답/리스트 응답에 `imageUrl: string | null` 필드가 추가됨. 인증샷 댓글 UI 에서 `imageUrl` 이 truthy 일 때만 썸네일 렌더.
-3. 5MB 정도의 이미지면 안전. 10MB 초과 시 백엔드가 413 / `UPLOAD_FAILED` 로 응답. 클라이언트 단에서 size guard 권장.
-4. `frontend/src/services/comment*.ts` (또는 동등) 의 axios 호출에서 `Content-Type: application/json` 보내면 415. multipart 로 전환 필요.
+# 존재하지 않는 placeId → 404
+curl -w '\nHTTP %{http_code}\n' http://localhost:8080/api/places/99999/kakao-info
+```
+
+## 비고 / 제약
+- 카카오 API 가 영업시간/리뷰/메뉴는 안 줌 — 프론트는 "카카오맵에서 보기" CTA 로 우회 (응답 `kakaoPlaceUrl`).
+- nearby 는 캐시 안 함. quota 보호는 캐시되는 장소 메타데이터 쪽에만 24h TTL 로 적용.
+- 외부 호출 timeout 3s. 실패는 디버그 로그 + 빈 결과 — endpoint 가 500 으로 안 떨어진다.
