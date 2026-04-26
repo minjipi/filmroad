@@ -260,19 +260,19 @@
           <div
             v-for="c in shot.topComments"
             :key="c.id"
-            :class="['cmt', c.parentId != null ? 'is-reply' : '']"
+            :class="['cmt', c.isReply ? 'is-reply' : '']"
             data-testid="sd-comment"
           >
             <div class="av">
               <img
-                v-if="c.author.avatarUrl"
-                :src="c.author.avatarUrl"
-                :alt="c.author.handle"
+                v-if="c.authorAvatarUrl"
+                :src="c.authorAvatarUrl"
+                :alt="c.authorHandle ?? ''"
               />
             </div>
             <div class="body">
               <div class="top">
-                <span class="nm">{{ c.author.handle }}</span>
+                <span class="nm">{{ c.authorHandle }}</span>
                 <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
               </div>
               <div class="txt">{{ c.content }}</div>

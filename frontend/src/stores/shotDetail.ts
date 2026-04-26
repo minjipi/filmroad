@@ -15,15 +15,6 @@ export interface ShotAuthor {
   isMe: boolean;
 }
 
-// Nested comment author — same shape as the post author minus `isMe`.
-export interface ShotCommentAuthor {
-  id: number;
-  nickname: string;
-  handle: string;
-  avatarUrl: string | null;
-  verified: boolean;
-}
-
 export interface ShotPlace {
   id: number;
   name: string;
@@ -52,20 +43,23 @@ export interface ShotImage {
   imageOrderIndex: number;
 }
 
+// Matches backend `PhotoDetailCommentDto` — flat author shape on purpose
+// (backend DTO comment: "프론트 ShotDetailPage 가 flat shape 을 쓰므로
+// author 는 nested 하지 않고 authorHandle / authorAvatarUrl 로 펼침").
+// Distinct from `Comment` in @/stores/comment, which uses the nested
+// CommentAuthor shape returned by /api/photos/:id/comments.
 export interface ShotComment {
   id: number;
   content: string;
-  author: ShotCommentAuthor;
   createdAt: string;
+  authorHandle: string | null;
+  authorAvatarUrl: string | null;
   /** Currently stub=0 on the backend (PostComment has no like field yet). */
   likeCount: number;
   /** Currently stub=false. */
   liked: boolean;
-  /**
-   * Thread parent id — `null` means top-level, non-null means a reply.
-   * Backend currently always emits null (no reply entity yet).
-   */
-  parentId: number | null;
+  /** Currently stub=false (no reply entity yet). */
+  isReply: boolean;
 }
 
 export interface ShotDetail {
