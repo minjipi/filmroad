@@ -40,6 +40,45 @@
         </button>
       </div>
 
+      <!--
+        지도 컨트롤 — 카카오/네이버 지도와 같은 우측 세로 스택 FAB. 위에서부터
+        + / − / 📍. 시트가 peek/full 로 떠 있으면 시트 위로 가도록
+        bottom 을 sheet height + 여유로 잡아 올린다(JS 로 측정해 ${variant}로
+        반영하면 너무 무거우니 시트 모드별 정적 단계만 사용).
+      -->
+      <div :class="['map-controls', `sheet-${sheetMode}`]" data-testid="map-controls">
+        <button
+          type="button"
+          class="ctrl-btn"
+          aria-label="확대"
+          data-testid="map-zoom-in"
+          :disabled="zoom <= 1"
+          @click="onZoomIn"
+        >
+          <ion-icon :icon="add" class="ic-22" />
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn"
+          aria-label="축소"
+          data-testid="map-zoom-out"
+          :disabled="zoom >= 14"
+          @click="onZoomOut"
+        >
+          <ion-icon :icon="remove" class="ic-22" />
+        </button>
+        <button
+          type="button"
+          :class="['ctrl-btn', 'locate', locating ? 'busy' : '']"
+          aria-label="내 위치"
+          data-testid="map-locate"
+          :disabled="locating"
+          @click="onLocateMe"
+        >
+          <ion-icon :icon="locate" class="ic-22" />
+        </button>
+      </div>
+
       <button
         v-if="selected && sheetMode === 'closed'"
         class="reopen"
@@ -270,6 +309,9 @@ import {
   shareSocialOutline,
   carOutline,
   refreshOutline,
+  add,
+  remove,
+  locate,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import {
@@ -287,6 +329,10 @@ import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import { useToast } from '@/composables/useToast';
 import { useDraggableSheet } from '@/composables/useDraggableSheet';
+import {
+  requestLocation,
+  type LocationFailReason,
+} from '@/composables/useGeolocation';
 
 const mapStore = useMapStore();
 const { selected, error, filter, center, zoom, workId, sheetMode } = storeToRefs(mapStore);
@@ -509,6 +555,51 @@ function onKakaoZoomChange(level: number): void {
   mapStore.setZoom(level);
 }
 
+// 우측 컨트롤 핸들러 — Kakao 의 level 은 작을수록 확대. setZoom 안에서
+// 이미 1..14 로 클램프하므로 여기선 단순 ±1 만. setZoom 은 동기 — store 의
+// reactive zoom 이 KakaoMap 의 watch 를 트리거해 실제 줌이 일어난다.
+function onZoomIn(): void {
+  mapStore.setZoom(zoom.value - 1);
+}
+
+function onZoomOut(): void {
+  mapStore.setZoom(zoom.value + 1);
+}
+
+// 내 위치 — one-shot 리센터. requestLocation() 은 권한 거부 / 타임아웃 /
+// 사용 불가를 reason 으로 구분해 돌려주므로 그에 맞춰 한국어 안내 토스트만
+// 띄운다. 성공하면 setCenter() 가 fetchMap 까지 같이 호출하므로 marker 도
+// 새 viewport 기준으로 갱신된다.
+const locating = ref(false);
+
+function locationFailMessage(reason: LocationFailReason): string {
+  switch (reason) {
+    case 'denied':
+      return '위치 권한이 차단되어 있어요. 주소창 자물쇠 → 권한 설정에서 허용해 주세요';
+    case 'timeout':
+      return '위치 확인이 지연됐어요. 잠시 후 다시 시도해 주세요';
+    case 'unavailable':
+    default:
+      return 'GPS 또는 네트워크를 사용할 수 없어요';
+  }
+}
+
+async function onLocateMe(): Promise<void> {
+  if (locating.value) return;
+  locating.value = true;
+  try {
+    const result = await requestLocation();
+    if (!result.ok) {
+      await showError(locationFailMessage(result.reason));
+      return;
+    }
+    mapStore.setZoom(DETAIL_ZOOM);
+    await mapStore.setCenter(result.coords.lat, result.coords.lng);
+  } finally {
+    locating.value = false;
+  }
+}
+
 function onClusterClick(payload: {
   latitude: number;
   longitude: number;
@@ -706,6 +797,55 @@ ion-content.map-content {
   cursor: pointer;
 }
 .filter-chip.on { background: var(--fr-ink); color: #ffffff; }
+
+/* 지도 컨트롤 — 카카오/네이버 지도 패턴: 우측 세로 스택 FAB.
+   bottom 은 tab bar(84px) 위 + safe-area + 시트 모드별 추가 오프셋.
+   peek 시 시트 위로 잠시 올라가고, full 시는 시트가 화면을 거의 덮으니
+   접근성을 위해 화면 상단쪽으로 빠져 있는다(top 으로 anchor 변경).
+   sheetMode 클래스로 분기하면 transition 도 자연스럽게 따라옴. */
+.map-controls {
+  position: absolute;
+  right: 12px;
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* 시트 peek(약 220px) 위로 올림 — 시트 높이는 useDraggableSheet 가 결정하지만
+   실측 의존하면 transition 이 거칠어져 정적 단계만 둠. closed 는 peek 보다 낮게. */
+.map-controls.sheet-peek {
+  bottom: calc(330px + env(safe-area-inset-bottom));
+}
+/* full 시는 화면 거의 전체가 시트라 컨트롤을 상단으로 옮김 — chip-row 아래. */
+.map-controls.sheet-full {
+  top: calc(132px + env(safe-area-inset-top));
+  bottom: auto;
+}
+.ctrl-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: none;
+  background: #ffffff;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.ctrl-btn:active { transform: scale(0.94); }
+.ctrl-btn:disabled { opacity: 0.4; cursor: default; }
+.ctrl-btn:disabled:active { transform: none; }
+.ctrl-btn.locate { color: var(--fr-primary); }
+.ctrl-btn.locate.busy { animation: locate-pulse 0.9s ease-in-out infinite; }
+@keyframes locate-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
 
 .reopen {
   position: absolute;
