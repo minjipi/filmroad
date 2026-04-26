@@ -34,6 +34,7 @@ function makeComment(
   id: number,
   authorId: number,
   imageUrl: string | null = null,
+  parentId: number | null = null,
 ): Comment {
   return {
     id,
@@ -47,6 +48,7 @@ function makeComment(
       verified: false,
     },
     imageUrl,
+    parentId,
   };
 }
 
@@ -159,7 +161,7 @@ describe('CommentSheet.vue', () => {
 
     // onSubmit trims before dispatching create. 이미지 미첨부 케이스는
     // 세 번째 인자가 undefined 로 들어간다.
-    expect(createSpy).toHaveBeenCalledWith(10, 'hi there', undefined);
+    expect(createSpy).toHaveBeenCalledWith(10, 'hi there', undefined, null);
   });
 
   it('clicking delete on my own comment dispatches commentStore.remove', async () => {

@@ -19,7 +19,11 @@ const mockApi = api as unknown as {
   delete: ReturnType<typeof vi.fn>;
 };
 
-function makeComment(id: number, imageUrl: string | null = null): Comment {
+function makeComment(
+  id: number,
+  imageUrl: string | null = null,
+  parentId: number | null = null,
+): Comment {
   return {
     id,
     content: `comment-${id}`,
@@ -32,6 +36,7 @@ function makeComment(id: number, imageUrl: string | null = null): Comment {
       verified: false,
     },
     imageUrl,
+    parentId,
   };
 }
 

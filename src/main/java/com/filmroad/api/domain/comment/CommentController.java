@@ -39,16 +39,17 @@ public class CommentController {
      * <ul>
      *   <li>{@code content}: 텍스트 본문 (form field, 필수, 최대 500자)</li>
      *   <li>{@code image}: 인증샷 이미지 (file part, 선택, 1장)</li>
+     *   <li>{@code parentId}: 답글이면 부모 댓글 id (form field, 선택). 답글의 답글은 거부된다.</li>
      * </ul>
-     * 인증샷 검증·저장은 {@link CommentService#createComment(Long, String, MultipartFile)} 참조.
      */
     @PostMapping(value = "/api/photos/{photoId}/comments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<CommentDto> create(
             @PathVariable Long photoId,
             @RequestParam("content") String content,
+            @RequestParam(value = "parentId", required = false) Long parentId,
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
-        return BaseResponse.success(commentService.createComment(photoId, content, image));
+        return BaseResponse.success(commentService.createComment(photoId, content, image, parentId));
     }
 
     @DeleteMapping("/api/comments/{id}")

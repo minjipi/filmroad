@@ -187,4 +187,202 @@ class CommentControllerTest {
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40370)));
     }
+
+    @Test
+    @DisplayName("POST /api/photos/100/comments with parentId attaches reply, response carries parentId")
+    void createComment_withParentId_returnsParentId() throws Exception {
+        // 시드 comment id=1 은 photo 100 의 댓글 (다른 테스트에서 활용 중).
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "@parent 동의해요")
+                        .param("parentId", "1")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.parentId", is(1)))
+                .andExpect(jsonPath("$.results.content", is("@parent 동의해요")));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/comments without parentId leaves parentId=null in response")
+    void createComment_noParent_parentIdIsNull() throws Exception {
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "혼자 다는 댓글")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.parentId", is(nullValue())));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/100/comments with parentId belonging to a different photo returns 404 COMMENT_NOT_FOUND")
+    void createComment_crossPhotoParent_returns404() throws Exception {
+        // 시드 comment id=1 은 photo 100 의 댓글. 그걸 photo 110 의 답글로 달려고 시도.
+        mockMvc.perform(multipart("/api/photos/110/comments")
+                        .param("content", "잘못된 부모")
+                        .param("parentId", "1")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40011)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/comments with non-existent parentId returns 404 COMMENT_NOT_FOUND")
+    void createComment_unknownParent_returns404() throws Exception {
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "유령 부모")
+                        .param("parentId", "9999999")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(40011)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/comments rejects reply-to-reply (depth > 1) with 400 REQUEST_ERROR")
+    void createComment_replyToReply_returns400() throws Exception {
+        // 1) parent 댓글 작성
+        String parentBody = mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "1차 댓글")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        // id 추출 (간단 파싱)
+        int idx = parentBody.indexOf("\"id\":") + 5;
+        int end = parentBody.indexOf(",", idx);
+        long parentId = Long.parseLong(parentBody.substring(idx, end).trim());
+
+        // 2) 그 부모에 답글 작성
+        String replyBody = mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "1차 답글")
+                        .param("parentId", String.valueOf(parentId))
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int idx2 = replyBody.indexOf("\"id\":") + 5;
+        int end2 = replyBody.indexOf(",", idx2);
+        long replyId = Long.parseLong(replyBody.substring(idx2, end2).trim());
+
+        // 3) 그 답글을 부모로 또 답글 시도 → 거부
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "2차 답글 (불가)")
+                        .param("parentId", String.valueOf(replyId))
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(30001)));
+    }
+
+    @Test
+    @DisplayName("DELETE 부모 댓글: 자식 답글들도 함께 삭제 + commentCount 가 부모+자식 수만큼 차감")
+    void deleteComment_parent_cascadesToReplies() throws Exception {
+        // 1) photo 100 의 baseline commentCount 확인
+        long before = mockMvc.perform(get("/api/photos/100"))
+                .andReturn().getResponse().getContentAsString()
+                .lines()
+                .findFirst()
+                .map(s -> {
+                    int idx = s.indexOf("\"commentCount\":");
+                    if (idx < 0) return 0L;
+                    int start = idx + "\"commentCount\":".length();
+                    int end = s.indexOf(",", start);
+                    if (end < 0) end = s.indexOf("}", start);
+                    return Long.parseLong(s.substring(start, end).trim());
+                })
+                .orElse(0L);
+
+        // 2) 부모 댓글 작성 (user 1 소유)
+        String parentBody = mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "삭제 테스트용 부모")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int idx = parentBody.indexOf("\"id\":") + 5;
+        int end = parentBody.indexOf(",", idx);
+        long parentId = Long.parseLong(parentBody.substring(idx, end).trim());
+
+        // 3) 그 부모에 답글 2개 (user 1 이 둘 다 작성, 권한 단순화)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(multipart("/api/photos/100/comments")
+                            .param("content", "답글 " + i)
+                            .param("parentId", String.valueOf(parentId))
+                            .contentType(MediaType.MULTIPART_FORM_DATA)
+                            .cookie(userCookie(1L)))
+                    .andExpect(status().isOk());
+        }
+
+        // 4) 이 시점 commentCount = before + 3 (부모 1 + 답글 2)
+        mockMvc.perform(get("/api/photos/100"))
+                .andExpect(jsonPath("$.results.commentCount", is((int) before + 3)));
+
+        // 5) 부모 삭제
+        mockMvc.perform(delete("/api/comments/" + parentId).cookie(userCookie(1L)))
+                .andExpect(status().isNoContent());
+
+        // 6) commentCount 가 baseline 으로 복귀 — cascade 가 자식 답글까지 같이 처리.
+        mockMvc.perform(get("/api/photos/100"))
+                .andExpect(jsonPath("$.results.commentCount", is((int) before)));
+
+        // 7) 자식 답글 페이지엔 자식이 더 이상 보이지 않음 — parentId == parentId 인 항목 0개.
+        mockMvc.perform(get("/api/photos/100/comments"))
+                .andExpect(jsonPath(
+                        "$.results.comments[?(@.parentId == " + parentId + ")]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("DELETE 답글(자식): 다른 답글이나 부모는 그대로 — 자기 자신만 삭제")
+    void deleteComment_reply_doesNotAffectSiblings() throws Exception {
+        // 부모 작성
+        String parentBody = mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "부모")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andReturn().getResponse().getContentAsString();
+        long parentId = Long.parseLong(parentBody.substring(parentBody.indexOf("\"id\":") + 5,
+                parentBody.indexOf(",", parentBody.indexOf("\"id\":") + 5)).trim());
+
+        // 답글 2개
+        long[] replyIds = new long[2];
+        for (int i = 0; i < 2; i++) {
+            String body = mockMvc.perform(multipart("/api/photos/100/comments")
+                            .param("content", "답글 " + i)
+                            .param("parentId", String.valueOf(parentId))
+                            .contentType(MediaType.MULTIPART_FORM_DATA)
+                            .cookie(userCookie(1L)))
+                    .andReturn().getResponse().getContentAsString();
+            replyIds[i] = Long.parseLong(body.substring(body.indexOf("\"id\":") + 5,
+                    body.indexOf(",", body.indexOf("\"id\":") + 5)).trim());
+        }
+
+        // 첫 답글만 삭제
+        mockMvc.perform(delete("/api/comments/" + replyIds[0]).cookie(userCookie(1L)))
+                .andExpect(status().isNoContent());
+
+        // 부모 + 두번째 답글은 살아있음
+        mockMvc.perform(get("/api/photos/100/comments"))
+                .andExpect(jsonPath("$.results.comments[?(@.id == " + parentId + ")]", hasSize(1)))
+                .andExpect(jsonPath("$.results.comments[?(@.id == " + replyIds[1] + ")]", hasSize(1)))
+                .andExpect(jsonPath("$.results.comments[?(@.id == " + replyIds[0] + ")]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id}/comments includes replies with their parentId in the same flat list")
+    void listComments_includesRepliesWithParentId() throws Exception {
+        // 답글 작성 후 GET 응답에 parentId 가 채워진 entry 가 보이는지.
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "리스트용 답글")
+                        .param("parentId", "1")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/photos/100/comments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.comments[?(@.parentId == 1)]", hasSize(greaterThanOrEqualTo(1))));
+    }
 }

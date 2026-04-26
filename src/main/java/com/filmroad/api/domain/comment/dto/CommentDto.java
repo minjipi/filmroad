@@ -15,6 +15,8 @@ public class CommentDto {
     private String imageUrl;
     private Date createdAt;
     private CommentAuthorDto author;
+    /** 답글이면 부모 댓글 id, 부모 댓글이면 null. */
+    private Long parentId;
 
     public static CommentDto from(PostComment comment) {
         return CommentDto.builder()
@@ -23,6 +25,7 @@ public class CommentDto {
                 .imageUrl(comment.getImageUrl())
                 .createdAt(comment.getCreatedAt())
                 .author(CommentAuthorDto.from(comment.getUser()))
+                .parentId(comment.getParent() == null ? null : comment.getParent().getId())
                 .build();
     }
 }
