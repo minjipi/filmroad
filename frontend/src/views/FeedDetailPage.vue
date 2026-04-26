@@ -46,6 +46,13 @@
                   <span class="drama">{{ p.work.title }}</span>·{{ p.place.name }}
                 </div>
               </div>
+              <button
+                v-if="!isOwnAuthor(p)"
+                type="button"
+                :class="['author-follow', p.author.following ? 'on' : '']"
+                data-testid="post-author-follow"
+                @click="onFollowAuthor(p)"
+              >{{ p.author.following ? '팔로잉' : '팔로우' }}</button>
               <button class="more" type="button" aria-label="more" @click="onMore">
                 <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
               </button>
@@ -186,6 +193,7 @@ import { useRouter } from 'vue-router';
 import { useFeedStore, type FeedPost, type FeedTab, type FeedUser } from '@/stores/feed';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
+import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
@@ -194,9 +202,16 @@ import { formatRelativeTime } from '@/utils/formatRelativeTime';
 const feedStore = useFeedStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const { posts, recommendedUsers, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
+
+/** post 의 author 가 viewer 본인인지 — follow 버튼 숨김 판정용. */
+function isOwnAuthor(p: FeedPost): boolean {
+  const me = authStore.user?.id;
+  return me != null && p.author.userId === me;
+}
 
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
@@ -286,6 +301,12 @@ async function onSearch(): Promise<void> {
 
 async function onFollow(u: FeedUser): Promise<void> {
   await feedStore.toggleFollow(u.userId);
+  if (error.value) await showError(error.value);
+}
+
+async function onFollowAuthor(p: FeedPost): Promise<void> {
+  if (p.author.userId == null) return;
+  await feedStore.toggleFollow(p.author.userId);
   if (error.value) await showError(error.value);
 }
 
@@ -437,6 +458,26 @@ ion-content.feed-content {
   background: transparent;
   border: none;
   cursor: pointer;
+}
+/* 작성자 팔로우 버튼 — Instagram 스타일. 평상시 강조색, 팔로잉이면 약하게. */
+.post-head .author-follow {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--fr-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.post-head .author-follow.on {
+  background: #ffffff;
+  border-color: var(--fr-line);
+  color: var(--fr-ink-2);
 }
 
 .post-image {

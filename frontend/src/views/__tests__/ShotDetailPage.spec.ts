@@ -50,6 +50,7 @@ const fixture: ShotDetail = {
     avatarUrl: 'https://img/ava1.jpg',
     verified: true,
     isMe: true,
+    following: false,
   },
   place: {
     id: 10,

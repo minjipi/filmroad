@@ -58,8 +58,14 @@ public class PhotoDetailService {
         long totalComments = photo.getCommentCount();
         int moreComments = (int) Math.max(0, totalComments - commentPreview.size());
 
+        // viewer 가 author 를 follow 중인지 — 한 개 사진이라 단일 exists 쿼리로 충분.
+        // viewerId == null 또는 isMe 면 무조건 false.
+        boolean authorFollowing = false;
+        if (photo.getUser() != null && viewerId != null && !viewerId.equals(photo.getUser().getId())) {
+            authorFollowing = userFollowRepository.existsByFollowerIdAndFolloweeId(viewerId, photo.getUser().getId());
+        }
         PhotoDetailAuthorDto author = photo.getUser() != null
-                ? PhotoDetailAuthorDto.of(photo.getUser(), viewerId)
+                ? PhotoDetailAuthorDto.of(photo.getUser(), viewerId, authorFollowing)
                 : PhotoDetailAuthorDto.fallback(photo.getAuthorNickname());
 
         boolean liked = viewerId != null

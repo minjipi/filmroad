@@ -11,4 +11,6 @@ public class FeedAuthorDto {
     private String nickname;
     private String avatarUrl;
     private boolean verified;
+    /** viewer 가 author 를 follow 중인지. 비로그인 / isMe / fallback (userId=null) 이면 false. */
+    private boolean following;
 }

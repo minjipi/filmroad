@@ -17,16 +17,23 @@ public class PhotoDetailAuthorDto {
     private String avatarUrl;
     private Boolean verified;
     private Boolean isMe;
+    /**
+     * viewer 가 작성자를 follow 중인지. 비로그인 / isMe / fallback 작성자 면 false.
+     * Boolean wrapper 로 선언해 Jackson 이 "is" 접두를 떼는 걸 방지.
+     */
+    private Boolean following;
 
-    public static PhotoDetailAuthorDto of(User user, Long viewerId) {
+    public static PhotoDetailAuthorDto of(User user, Long viewerId, boolean following) {
         if (user == null) return null;
+        boolean isMe = viewerId != null && viewerId.equals(user.getId());
         return PhotoDetailAuthorDto.builder()
                 .id(user.getId())
                 .nickname(user.getNickname())
                 .handle(user.getHandle())
                 .avatarUrl(user.getAvatarUrl())
                 .verified(user.isVerified())
-                .isMe(viewerId != null && viewerId.equals(user.getId()))
+                .isMe(isMe)
+                .following(!isMe && following)
                 .build();
     }
 
@@ -39,6 +46,7 @@ public class PhotoDetailAuthorDto {
                 .avatarUrl(null)
                 .verified(false)
                 .isMe(false)
+                .following(false)
                 .build();
     }
 }
