@@ -3,6 +3,7 @@
     :is-open="open"
     :breakpoints="[0, 0.5, 0.95]"
     :initial-breakpoint="0.95"
+    :style="modalStyle"
     handle-behavior="cycle"
     @did-dismiss="onDismiss"
     @did-present="onDidPresent"
@@ -230,6 +231,17 @@ const rootStyle = computed<Record<string, string>>(() => ({
   '--cs-sheet-max-height': sheetMaxHeight.value,
 }));
 
+// ion-modal 호스트의 --height / --max-height 를 visual viewport 높이로 묶는다.
+// sheet 모드는 패널 높이를 layout viewport (`100%` = innerHeight) 기준으로
+// 잡기 때문에, layout > visual 인 모바일 브라우저(URL bar 가시 시 iOS Safari,
+// Android Chrome 등) 에서는 패널 하단(=foot 위치) 이 visible 영역 밖으로
+// 떨어진다. 호스트의 --height 를 visualViewport.height 로 강제해서 패널
+// 자체가 visible 영역 안에 들어오게 한다.
+const modalStyle = computed<Record<string, string>>(() => ({
+  '--height': sheetMaxHeight.value,
+  '--max-height': sheetMaxHeight.value,
+}));
+
 function onViewportChange(): void {
   recomputeKeyboardOffset();
 }
@@ -395,6 +407,10 @@ watch(
   () => [props.open, props.photoId] as const,
   async ([isOpen, id]) => {
     if (isOpen && typeof id === 'number') {
+      // 시트가 열리는 첫 프레임에 visual viewport 값을 잡아두지 않으면 sheet
+      // 패널이 default 100% (layout viewport) 로 한 번 그려졌다가 늦게 줄어들어
+      // 깜빡인다. 열기 직전에 한 번 동기 recompute.
+      recomputeKeyboardOffset();
       await commentStore.fetch(id);
       const err = commentStore.errorFor(id);
       if (err) await showError(err);
