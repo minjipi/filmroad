@@ -157,7 +157,7 @@
               <span class="l">좋아요</span>
             </span>
           </button>
-          <button type="button" class="sd-stat-btn" @click="onScrollToComments">
+          <button type="button" class="sd-stat-btn" @click="onOpenComments">
             <span class="stat-inner">
               <ion-icon :icon="chatbubbleOutline" class="ic-22" />
               <span class="n">{{ formatCount(shot.commentCount) }}</span>
@@ -189,6 +189,57 @@
             <span v-for="t in shot.tags" :key="t" class="tag">#{{ t }}</span>
           </div>
           <div class="date">{{ takenAtFullLabel }}</div>
+        </section>
+
+        <!--
+          댓글 미리보기 — Instagram 패턴. caption 직후, cmt-input 직전에 위치해
+          사용자가 페이지를 스크롤하면서도 최근 댓글을 시야 안에 두게 한다.
+          backend 가 이미 topComments(상위 N개) + moreCommentsCount 로 자른
+          상태로 내려주므로 여기서는 그대로 렌더만 하고, "모두 보기" 또는
+          전체 영역 클릭으로 CommentSheet 모달을 열어 본격적인 리스트로 넘긴다.
+          댓글이 0개면 cmt-input 의 placeholder("댓글을 남겨보세요...") 가
+          진입을 유도하니 이 섹션은 통째로 숨김.
+        -->
+        <section
+          v-if="shot.commentCount > 0 || shot.topComments.length > 0"
+          class="comments inline"
+          ref="commentsRef"
+          data-testid="sd-comments-preview"
+        >
+          <h4>
+            댓글 <span class="cnt">{{ formatCount(shot.commentCount) }}개</span>
+          </h4>
+          <!-- inline preview 는 최대 1건만. 나머지는 "모두 보기" 로 모달 진입. -->
+          <div
+            v-for="c in shot.topComments.slice(0, 1)"
+            :key="c.id"
+            :class="['cmt', c.isReply ? 'is-reply' : '']"
+            data-testid="sd-comment"
+          >
+            <div class="av">
+              <img
+                v-if="c.authorAvatarUrl"
+                :src="c.authorAvatarUrl"
+                :alt="c.authorHandle ?? ''"
+              />
+            </div>
+            <div class="body">
+              <div class="top">
+                <span class="nm">{{ c.authorHandle }}</span>
+                <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
+              </div>
+              <div class="txt">{{ c.content }}</div>
+            </div>
+          </div>
+          <!-- inline 에는 1건만 보이므로 commentCount 가 그 이상이면 항상
+               "모두 보기" 링크 노출. 0~1 인 케이스는 스킵. -->
+          <button
+            v-if="shot.commentCount > 1 || shot.topComments.length === 0"
+            type="button"
+            class="see-more"
+            data-testid="sd-comments-open"
+            @click="onOpenComments"
+          >댓글 {{ formatCount(shot.commentCount) }}개 모두 보기 ›</button>
         </section>
 
         <button
@@ -253,41 +304,8 @@
           </div>
         </section>
 
-        <section class="comments" ref="commentsRef">
-          <h4>
-            댓글 <span class="cnt">{{ formatCount(shot.commentCount) }}개</span>
-          </h4>
-          <div
-            v-for="c in shot.topComments"
-            :key="c.id"
-            :class="['cmt', c.isReply ? 'is-reply' : '']"
-            data-testid="sd-comment"
-          >
-            <div class="av">
-              <img
-                v-if="c.authorAvatarUrl"
-                :src="c.authorAvatarUrl"
-                :alt="c.authorHandle ?? ''"
-              />
-            </div>
-            <div class="body">
-              <div class="top">
-                <span class="nm">{{ c.authorHandle }}</span>
-                <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
-              </div>
-              <div class="txt">{{ c.content }}</div>
-              <div class="act-row">
-                <span :class="['like-btn', c.liked ? 'on' : '']">
-                  <ion-icon :icon="heart" class="ic-16" />{{ c.likeCount }}
-                </span>
-                <span>답글 달기</span>
-              </div>
-            </div>
-          </div>
-          <div v-if="shot.moreCommentsCount > 0" class="see-more">
-            댓글 {{ shot.moreCommentsCount }}개 더 보기
-          </div>
-        </section>
+        <!-- 페이지 하단의 풀 댓글 섹션은 위로 inline preview 로 이동 (caption
+             직후). 본격적인 리스트는 CommentSheet 모달이 담당. -->
       </div>
     </ion-content>
     <CommentSheet
@@ -439,10 +457,6 @@ async function onToggleBookmark(): Promise<void> {
     return;
   }
   uiStore.openCollectionPicker(placeId);
-}
-
-function onScrollToComments(): void {
-  commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function onOpenComments(): void {
@@ -1012,13 +1026,27 @@ ion-content.sd-content {
 }
 .cmt .like-btn.on { color: var(--fr-coral); }
 .see-more {
-  text-align: center;
-  padding-top: 8px;
-  font-size: 12px;
-  color: var(--fr-primary);
-  font-weight: 700;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 0 0;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--fr-ink-3);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
 }
+.see-more:hover { color: var(--fr-ink-2); }
+
+/* Inline preview 모드 — caption 직후에 컴팩트하게 노출. h4 / 댓글 한 건의
+   여백을 살짝 줄여서 페이지 흐름을 끊지 않고 1-2개만 슬쩍 보여줌. 본격
+   리스트 + 답글은 CommentSheet 모달이 담당. */
+.comments.inline { padding: 0 20px 8px; }
+.comments.inline h4 { margin-bottom: 6px; }
+.comments.inline .cmt { padding: 6px 0; }
+.comments.inline .cmt .txt { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* Inline comment-compose row — sd-caption 과 loc-card 사이에 끼어
    사용자가 본문 읽은 직후 자연스럽게 댓글을 남기게. Instagram/Threads/YouTube
