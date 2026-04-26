@@ -184,6 +184,80 @@ describe('PlaceDetailPage.vue', () => {
     );
   });
 
+  it('auto-advances the hero carousel every 4s on a multi-cover place and wraps after the last slide', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountPlaceDetailPage({
+        coverImageUrls: [
+          'https://img/cover-0.jpg',
+          'https://img/cover-1.jpg',
+          'https://img/cover-2.jpg',
+        ],
+      });
+      await flushPromises();
+
+      const dotsAt = (): string[] =>
+        wrapper
+          .findAll('[data-testid="pd-hero-dots"] .hero-dot')
+          .map((d) => (d.classes().includes('active') ? 'on' : 'off'));
+
+      // initial — slide 0 active
+      expect(dotsAt()).toEqual(['on', 'off', 'off']);
+
+      // tick 4s → slide 1
+      vi.advanceTimersByTime(4000);
+      await flushPromises();
+      expect(dotsAt()).toEqual(['off', 'on', 'off']);
+
+      // tick 4s → slide 2
+      vi.advanceTimersByTime(4000);
+      await flushPromises();
+      expect(dotsAt()).toEqual(['off', 'off', 'on']);
+
+      // tick 4s → wrap to slide 0
+      vi.advanceTimersByTime(4000);
+      await flushPromises();
+      expect(dotsAt()).toEqual(['on', 'off', 'off']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not start the auto-advance timer for a single-cover place', async () => {
+    vi.useFakeTimers();
+    try {
+      const setIntervalSpy = vi.spyOn(global, 'setInterval');
+      mountPlaceDetailPage();
+      await flushPromises();
+
+      // fixture has length=1; the auto-advance branch must short-circuit before
+      // setInterval is ever called.
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      setIntervalSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the auto-advance interval on unmount (no leak after navigating away)', async () => {
+    vi.useFakeTimers();
+    try {
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+      const { wrapper } = mountPlaceDetailPage({
+        coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
+      });
+      await flushPromises();
+
+      wrapper.unmount();
+      // unmount 시점에 stopHeroAutoAdvance 가 호출되어야 한다 — 한 번이라도
+      // 정리되었는지만 확인 (다른 라이프사이클이 호출했어도 상관없음).
+      expect(clearIntervalSpy).toHaveBeenCalled();
+      clearIntervalSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('updates the active dot when the carousel scrolls to the next slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
       coverImageUrls: [

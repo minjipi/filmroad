@@ -198,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -259,6 +259,49 @@ function onHeroDotClick(i: number): void {
   const el = heroCarouselEl.value;
   if (!el) return;
   el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+}
+
+// 일정 시간마다 다음 사진으로 자동 전환 — Instagram stories / 광고 배너와 같은
+// 패턴. 4초 간격, 마지막 슬라이드 다음은 0 으로 wrap. 한 장만 있는 place 는
+// 타이머 자체를 안 돌린다(불필요한 setInterval 회피). 탭이 hidden 일 때는
+// 정지 → visible 되면 재시작 (백그라운드 타이머가 throttled 되긴 하지만
+// 명시적으로 끊는 편이 배터리/CPU 측면에서 깔끔).
+const HERO_AUTO_ADVANCE_MS = 4000;
+let heroAutoTimer: ReturnType<typeof setInterval> | null = null;
+
+function advanceHeroSlide(): void {
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return;
+  const next = (heroSlide.value + 1) % len;
+  // heroSlide 를 즉시 갱신 → dot/counter 가 바로 반응. scrollTo 는 부드러운
+  // 시각 전환용. scroll 이벤트가 다시 listener 를 호출하지만 동일 인덱스라
+  // no-op.
+  heroSlide.value = next;
+  const el = heroCarouselEl.value;
+  if (el && el.clientWidth > 0) {
+    el.scrollTo({ left: el.clientWidth * next, behavior: 'smooth' });
+  }
+}
+
+function startHeroAutoAdvance(): void {
+  stopHeroAutoAdvance();
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
+  heroAutoTimer = setInterval(advanceHeroSlide, HERO_AUTO_ADVANCE_MS);
+}
+
+function stopHeroAutoAdvance(): void {
+  if (heroAutoTimer !== null) {
+    clearInterval(heroAutoTimer);
+    heroAutoTimer = null;
+  }
+}
+
+function onVisibilityChange(): void {
+  if (typeof document === 'undefined') return;
+  if (document.hidden) stopHeroAutoAdvance();
+  else startHeroAutoAdvance();
 }
 
 const episodeLabel = computed(() => {
@@ -410,7 +453,20 @@ async function load(id: number): Promise<void> {
   }
 }
 
-onMounted(() => load(placeId.value));
+onMounted(() => {
+  void load(placeId.value);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+});
+
+onUnmounted(() => {
+  stopHeroAutoAdvance();
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  }
+});
+
 watch(placeId, (next, prev) => {
   if (next !== prev) {
     void load(next);
@@ -420,6 +476,18 @@ watch(placeId, (next, prev) => {
     if (heroCarouselEl.value) heroCarouselEl.value.scrollLeft = 0;
   }
 });
+
+// coverImageUrls 가 셋업되거나(load 완료) 길이가 바뀔 때 자동 전환을 켜고/끈다.
+// 한 장 → 한 장이면 그냥 정지 상태 유지, 한 장 → 여러 장이면 시작.
+// place 가 null → populated 로 바뀌는 첫 fetch 도 이 watch 에서 함께 처리.
+watch(
+  () => place.value?.coverImageUrls.length ?? 0,
+  (len) => {
+    if (len > 1) startHeroAutoAdvance();
+    else stopHeroAutoAdvance();
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
