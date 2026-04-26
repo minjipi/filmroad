@@ -7,7 +7,7 @@
     @did-dismiss="onDismiss"
     @did-present="onDidPresent"
   >
-    <div class="cs-root">
+    <div class="cs-root" :style="{ '--cs-keyboard-offset': `${keyboardOffset}px` }">
       <header class="cs-head">
         <div class="title">댓글 {{ items.length }}</div>
         <button type="button" aria-label="close" class="close" @click="close">
@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { IonModal, IonIcon } from '@ionic/vue';
 import {
   closeOutline,
@@ -198,6 +198,46 @@ function focusTextInput(): void {
   // 무시되므로 별도 가드 불필요.
   textInput.value?.focus();
 }
+
+// OS 키보드가 footer 를 가리지 않도록 visualViewport 변화에 맞춰 .cs-foot 의
+// padding-bottom 을 키보드 높이만큼 늘린다. ion-modal 의 sheet 모드는 자체
+// 보정을 하지 않으므로 user-land 에서 처리하는 표준 패턴. CSS 커스텀 프로퍼티를
+// .cs-root 에 박아두고 .cs-foot 의 padding-bottom 이 그것을 더해 사용하도록 했다.
+const keyboardOffset = ref(0);
+
+function recomputeKeyboardOffset(): void {
+  if (typeof window === 'undefined') return;
+  const vv = window.visualViewport;
+  if (!vv) {
+    keyboardOffset.value = 0;
+    return;
+  }
+  // pinch-zoom 케이스에서 visualViewport 가 위로 올라가 있을 수 있어 offsetTop
+  // 도 차감 — 그냥 innerHeight - height 로만 잡으면 zoom 상황에서 오버보정.
+  const diff = window.innerHeight - vv.height - vv.offsetTop;
+  keyboardOffset.value = Math.max(0, Math.round(diff));
+}
+
+function onViewportChange(): void {
+  recomputeKeyboardOffset();
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined') return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  vv.addEventListener('resize', onViewportChange);
+  vv.addEventListener('scroll', onViewportChange);
+  recomputeKeyboardOffset();
+});
+
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  vv.removeEventListener('resize', onViewportChange);
+  vv.removeEventListener('scroll', onViewportChange);
+});
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
@@ -356,6 +396,7 @@ watch(
       attachFile.value = null;
       revokePreview();
       viewerSrc.value = null;
+      keyboardOffset.value = 0;
     }
   },
   { immediate: true },
@@ -498,7 +539,9 @@ onBeforeUnmount(() => {
 
 .cs-foot {
   border-top: 1px solid var(--fr-line);
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  /* --cs-keyboard-offset 은 visualViewport 가 줄어들 때 컴포넌트가 채워주는
+     키보드 높이. 0 이면 기존 동작과 동일. */
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom) + var(--cs-keyboard-offset, 0px));
   display: flex;
   flex-direction: column;
   gap: 8px;
