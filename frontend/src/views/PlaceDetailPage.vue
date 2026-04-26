@@ -3,7 +3,33 @@
     <ion-content :fullscreen="true" class="pd-content">
       <div v-if="place" class="pd-scroll no-scrollbar">
         <section class="hero">
-          <img :src="place.coverImageUrl" :alt="place.name" class="hero-img" />
+          <!-- 1:N cover image carousel — gallery 와 같은 가로 스와이프(scroll-snap)로
+               렌더한다. 한 장이면 자동으로 단일 이미지처럼 보이고, 빈 배열이면
+               검은 배경 + grad 만 깔려 hero-caption 이 가독성 잃지 않게 한다. -->
+          <div
+            v-if="place.coverImageUrls.length > 0"
+            class="hero-carousel no-scrollbar"
+            data-testid="pd-hero-carousel"
+          >
+            <img
+              v-for="(url, i) in place.coverImageUrls"
+              :key="i"
+              :src="url"
+              :alt="`${place.name} 커버 ${i + 1}`"
+              class="hero-img"
+            />
+          </div>
+          <div
+            v-if="place.coverImageUrls.length > 1"
+            class="hero-dots"
+            aria-hidden="true"
+          >
+            <span
+              v-for="(_, i) in place.coverImageUrls"
+              :key="i"
+              class="hero-dot"
+            />
+          </div>
           <div class="hero-grad" />
           <div class="hero-top">
             <button class="round-btn" type="button" aria-label="back" @click="onBack">
@@ -134,7 +160,13 @@
                 class="rel-card"
                 @click="onOpenRelated(r.id)"
               >
-                <div class="thumb"><img :src="r.coverImageUrl" :alt="r.name" /></div>
+                <div class="thumb">
+                  <img
+                    v-if="r.coverImageUrls.length > 0"
+                    :src="r.coverImageUrls[0]"
+                    :alt="r.name"
+                  />
+                </div>
                 <div class="t">{{ r.name }}</div>
                 <div class="s">
                   <template v-if="r.workEpisode">{{ r.workEpisode }} · </template>{{ r.regionShort }}
@@ -253,7 +285,8 @@ function onShare(): void {
   uiStore.openShareSheet({
     title: p.name,
     description: `${p.workTitle} · ${p.regionLabel}`,
-    imageUrl: p.coverImageUrl,
+    // 첫 번째 cover 이미지를 공유 미리보기로 — 없으면 빈 문자열로 두고 share sheet 측에서 fallback.
+    imageUrl: p.coverImageUrls[0] ?? '',
     url: typeof window !== 'undefined' ? window.location.href : `/place/${p.id}`,
   });
 }
@@ -336,7 +369,7 @@ async function load(id: number): Promise<void> {
       workId: p.workId,
       workTitle: p.workTitle,
       workEpisode: p.workEpisode,
-      coverImageUrl: p.coverImageUrl,
+      coverImageUrls: p.coverImageUrls,
       photoCount: p.photoCount,
       likeCount: p.likeCount,
       rating: p.rating,
@@ -367,10 +400,39 @@ ion-content.pd-content {
   height: 440px;
   background: #000;
 }
+/* 가로 스와이프 carousel — 한 장이면 단일 이미지와 시각적으로 동일하다.
+   touch-action 을 X 축으로 제한해 세로 스크롤(.pd-scroll)과 충돌하지 않게 함. */
+.hero-carousel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
 .hero-img {
+  flex: 0 0 100%;
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
+  scroll-snap-align: start;
+}
+.hero-dots {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  z-index: 6;
+  pointer-events: none;
+}
+.hero-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 .hero-grad {
   position: absolute; inset: 0;

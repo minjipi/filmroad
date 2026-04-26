@@ -26,7 +26,7 @@ const fixture: SearchResponse = {
       id: 10,
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
-      coverImageUrl: 'https://img/10.jpg',
+      coverImageUrls: ['https://img/10.jpg'],
       workId: 1,
       workTitle: '도깨비',
     },

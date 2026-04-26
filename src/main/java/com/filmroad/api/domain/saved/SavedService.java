@@ -5,6 +5,7 @@ import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.common.util.GeoUtils;
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlaceCoverImage;
 import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.saved.dto.CollectionDetailResponse;
@@ -66,7 +67,7 @@ public class SavedService {
                             .id(c.getId())
                             .name(c.getName())
                             .count(collectionRepository.countSavedByCollectionId(c.getId()))
-                            .coverImageUrl(cover == null ? null : cover.getCoverImageUrl())
+                            .coverImageUrls(cover == null ? null : toCoverImageUrls(cover))
                             .gradient(c.getGradient())
                             .build();
                 })
@@ -80,7 +81,7 @@ public class SavedService {
                             .placeId(p.getId())
                             .name(p.getName())
                             .regionLabel(p.getRegionLabel())
-                            .coverImageUrl(p.getCoverImageUrl())
+                            .coverImageUrls(toCoverImageUrls(p))
                             .workId(p.getWork().getId())
                             .workTitle(p.getWork().getTitle())
                             .distanceKm(distance)
@@ -163,7 +164,7 @@ public class SavedService {
                     .orderIndex(idx)
                     .name(p.getName())
                     .regionLabel(p.getRegionLabel())
-                    .coverImageUrl(p.getCoverImageUrl())
+                    .coverImageUrl(p.getPrimaryCoverImageUrl())
                     .latitude(p.getLatitude())
                     .longitude(p.getLongitude())
                     .workId(p.getWork().getId())
@@ -197,7 +198,7 @@ public class SavedService {
         String coverImageUrl = null;
         if (collection.getCoverPlaceId() != null) {
             coverImageUrl = placeRepository.findById(collection.getCoverPlaceId())
-                    .map(Place::getCoverImageUrl)
+                    .map(Place::getPrimaryCoverImageUrl)
                     .orElse(null);
         }
         if (coverImageUrl == null && !items.isEmpty()) {
@@ -265,7 +266,7 @@ public class SavedService {
                 .id(saved.getId())
                 .name(saved.getName())
                 .count(0L)
-                .coverImageUrl(null)
+                .coverImageUrls(null)
                 .gradient(saved.getGradient())
                 .build();
     }
@@ -282,7 +283,7 @@ public class SavedService {
                 .id(collection.getId())
                 .name(collection.getName())
                 .count(collectionRepository.countSavedByCollectionId(collection.getId()))
-                .coverImageUrl(null)
+                .coverImageUrls(null)
                 .gradient(collection.getGradient())
                 .build();
     }
@@ -340,6 +341,13 @@ public class SavedService {
                 .saved(saved)
                 .totalCount(savedPlaceRepository.countByUserId(userId))
                 .build();
+    }
+
+    /**
+     * Place.coverImages → List<String> 매핑 헬퍼. 비어 있으면 빈 리스트.
+     */
+    private static List<String> toCoverImageUrls(Place place) {
+        return place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList();
     }
 
     /**

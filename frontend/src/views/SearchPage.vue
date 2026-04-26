@@ -96,7 +96,11 @@
                 @click="onOpenPlace(p)"
               >
                 <div class="cover">
-                  <img :src="p.coverImageUrl" :alt="p.name" />
+                  <img
+                    v-if="p.coverImageUrls.length > 0"
+                    :src="p.coverImageUrls[0]"
+                    :alt="p.name"
+                  />
                   <div class="grad" />
                   <div class="cover-caption">
                     <span class="chip">{{ p.workTitle }}</span>

@@ -7,6 +7,7 @@ import com.filmroad.api.domain.badge.Badge;
 import com.filmroad.api.domain.badge.BadgeConditionType;
 import com.filmroad.api.domain.badge.BadgeRepository;
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlaceCoverImage;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
@@ -55,7 +56,7 @@ public class WorkDetailService {
                     .placeId(p.getId())
                     .name(p.getName())
                     .regionShort(shortenRegion(p.getRegionLabel()))
-                    .coverImageUrl(p.getCoverImageUrl())
+                    .coverImageUrls(p.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                     .workEpisode(p.getWorkEpisode())
                     .sceneTimestamp(p.getSceneTimestamp())
                     .sceneDescription(p.getSceneDescription())

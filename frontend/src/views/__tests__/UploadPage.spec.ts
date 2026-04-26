@@ -51,7 +51,7 @@ function mountUpload(overrides: Partial<{
     id: number;
     name: string;
     regionLabel: string;
-    coverImageUrl: string;
+    coverImageUrls: string[];
     workId: number;
     workTitle: string;
     liked: boolean;
@@ -176,7 +176,7 @@ describe('UploadPage.vue', () => {
         id: 13,
         name: '단밤 포차',
         regionLabel: '서울 용산구',
-        coverImageUrl: 'https://img/13.jpg',
+        coverImageUrls: ['https://img/13.jpg'],
         workId: 2,
         workTitle: '이태원 클라쓰',
         liked: false,

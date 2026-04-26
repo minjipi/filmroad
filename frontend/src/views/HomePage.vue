@@ -150,7 +150,11 @@
               class="photo-card"
               @click="onOpenDetail(p.id)"
             >
-              <img :src="p.coverImageUrl" :alt="p.name" />
+              <img
+                v-if="p.coverImageUrls.length > 0"
+                :src="p.coverImageUrls[0]"
+                :alt="p.name"
+              />
               <div class="grad" />
               <div
                 :class="['like', p.liked ? 'on' : '']"

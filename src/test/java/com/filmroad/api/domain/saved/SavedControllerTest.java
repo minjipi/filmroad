@@ -87,7 +87,7 @@ class SavedControllerTest {
                 .andExpect(jsonPath("$.results.id", notNullValue()))
                 .andExpect(jsonPath("$.results.name", is("제주 힐링 코스")))
                 .andExpect(jsonPath("$.results.count", is(0)))
-                .andExpect(jsonPath("$.results.coverImageUrl").value(nullValue()));
+                .andExpect(jsonPath("$.results.coverImageUrls").value(nullValue()));
     }
 
     @Test

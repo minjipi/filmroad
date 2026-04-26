@@ -66,15 +66,15 @@ const profileState = {
 // derives from `items.filter(i => i.collectionId == null).length`.
 const savedSeedState = {
   collections: [
-    { id: 1, name: '다음 여행 · 강릉', coverImageUrl: 'https://img/c1.jpg', count: 8, gradient: null },
-    { id: 2, name: '도깨비 컴플리트', coverImageUrl: 'https://img/c2.jpg', count: 24, gradient: null },
+    { id: 1, name: '다음 여행 · 강릉', coverImageUrls: ['https://img/c1.jpg'], count: 8, gradient: null },
+    { id: 2, name: '도깨비 컴플리트', coverImageUrls: ['https://img/c2.jpg'], count: 24, gradient: null },
   ],
   items: [
     {
       placeId: 10,
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
-      coverImageUrl: 'https://img/p10.jpg',
+      coverImageUrls: ['https://img/p10.jpg'],
       workId: 1,
       workTitle: '도깨비',
       distanceKm: 1.2,
@@ -86,7 +86,7 @@ const savedSeedState = {
       placeId: 11,
       name: '덕수궁 돌담길',
       regionLabel: '정동',
-      coverImageUrl: 'https://img/p11.jpg',
+      coverImageUrls: ['https://img/p11.jpg'],
       workId: 1,
       workTitle: '도깨비',
       distanceKm: 8.4,
@@ -98,7 +98,7 @@ const savedSeedState = {
       placeId: 13,
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
-      coverImageUrl: 'https://img/p13.jpg',
+      coverImageUrls: ['https://img/p13.jpg'],
       workId: 2,
       workTitle: '이태원 클라쓰',
       distanceKm: 4.8,

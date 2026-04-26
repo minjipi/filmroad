@@ -86,7 +86,11 @@
 
           <div class="sheet-preview">
             <div class="sheet-thumb">
-              <img :src="selected.coverImageUrl" :alt="selected.name" />
+              <img
+                v-if="selected.coverImageUrls.length > 0"
+                :src="selected.coverImageUrls[0]"
+                :alt="selected.name"
+              />
             </div>
             <div class="sheet-meta">
               <div class="stat-row">

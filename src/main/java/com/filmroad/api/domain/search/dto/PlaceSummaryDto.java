@@ -1,8 +1,11 @@
 package com.filmroad.api.domain.search.dto;
 
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlaceCoverImage;
 import lombok.Builder;
 import lombok.Getter;
+
+import java.util.List;
 
 /**
  * 통합 검색 결과의 장소 섹션 단건. 지도 점프/딥링크에 필요한 좌표·workId·썸네일만 포함.
@@ -17,7 +20,7 @@ public class PlaceSummaryDto {
     private Double longitude;
     private Long workId;
     private String workTitle;
-    private String coverImageUrl;
+    private List<String> coverImageUrls;
 
     public static PlaceSummaryDto of(Place place) {
         return PlaceSummaryDto.builder()
@@ -28,7 +31,7 @@ public class PlaceSummaryDto {
                 .longitude(place.getLongitude())
                 .workId(place.getWork() == null ? null : place.getWork().getId())
                 .workTitle(place.getWork() == null ? null : place.getWork().getTitle())
-                .coverImageUrl(place.getCoverImageUrl())
+                .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .build();
     }
 }

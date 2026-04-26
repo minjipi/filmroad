@@ -22,7 +22,7 @@ export interface PlaceDetail {
   workId: number;
   workTitle: string;
   workEpisode: string | null;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   photoCount: number;
   likeCount: number;
   rating: number;
@@ -178,7 +178,7 @@ export const useMapStore = defineStore('map', {
           workId: hit.workId,
           workTitle: hit.workTitle,
           workEpisode: prev?.workEpisode ?? null,
-          coverImageUrl: prev?.coverImageUrl ?? '',
+          coverImageUrls: prev?.coverImageUrls ?? [],
           photoCount: prev?.photoCount ?? 0,
           likeCount: prev?.likeCount ?? 0,
           rating: prev?.rating ?? 0,
@@ -259,7 +259,7 @@ export const useMapStore = defineStore('map', {
         workId: next.workId,
         workTitle: next.workTitle,
         workEpisode: null,
-        coverImageUrl: '',
+        coverImageUrls: [],
         photoCount: 0,
         likeCount: 0,
         rating: 0,

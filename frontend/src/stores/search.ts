@@ -16,7 +16,7 @@ export interface SearchPlaceResult {
   id: number;
   name: string;
   regionLabel: string;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   workId: number;
   workTitle: string;
   // Coordinates travel through so /map deep-links can center on the place

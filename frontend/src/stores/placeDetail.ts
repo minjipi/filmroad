@@ -9,7 +9,8 @@ export interface PlaceDetailPlace {
   regionLabel: string;
   latitude: number;
   longitude: number;
-  coverImageUrl: string;
+  // image_order_index ASC 로 정렬된 cover 이미지 배열. 빈 배열은 cover 가 없는 상태.
+  coverImageUrls: string[];
   workId: number;
   workTitle: string;
   workEpisode: string | null;
@@ -36,7 +37,7 @@ export interface PlacePhoto {
 export interface RelatedPlace {
   id: number;
   name: string;
-  coverImageUrl: string;
+  coverImageUrls: string[];
   workEpisode: string | null;
   regionShort: string;
 }
