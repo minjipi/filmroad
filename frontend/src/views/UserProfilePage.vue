@@ -70,11 +70,19 @@
             <div class="n">{{ formatCount(user.stats.photoCount) }}</div>
             <div class="l">인증샷</div>
           </div>
-          <div class="up-stat">
+          <div
+            class="up-stat clickable"
+            data-testid="up-followers-stat"
+            @click="onOpenFollowers"
+          >
             <div class="n">{{ formatCount(user.stats.followersCount) }}</div>
             <div class="l">팔로워</div>
           </div>
-          <div class="up-stat">
+          <div
+            class="up-stat clickable"
+            data-testid="up-following-stat"
+            @click="onOpenFollowing"
+          >
             <div class="n">{{ formatCount(user.stats.followingCount) }}</div>
             <div class="l">팔로잉</div>
           </div>
@@ -235,6 +243,16 @@ function onBack(): void {
 
 async function onToggleFollow(): Promise<void> {
   await userStore.toggleFollow();
+}
+
+function onOpenFollowers(): void {
+  if (!user.value) return;
+  void router.push(`/user/${user.value.id}/followers`);
+}
+
+function onOpenFollowing(): void {
+  if (!user.value) return;
+  void router.push(`/user/${user.value.id}/following`);
 }
 
 async function onEditProfile(): Promise<void> {
@@ -436,6 +454,9 @@ ion-content.up-content {
 .up-stat {
   text-align: left;
   flex-shrink: 0;
+}
+.up-stat.clickable {
+  cursor: pointer;
 }
 .up-stat .n {
   font-size: 16px;

@@ -60,6 +60,21 @@ const routes: Array<RouteRecordRaw> = [
     props: true,
   },
   {
+    // 팔로워 / 팔로잉 목록 — 같은 컴포넌트가 두 라우트를 처리하고 initialTab
+    // prop 으로 어느 탭을 활성화할지 결정. 사용자가 탭을 바꾸면 router.replace
+    // 로 URL 도 같이 동기화.
+    path: '/user/:id/followers',
+    name: 'FollowFollowers',
+    component: () => import('../views/FollowListPage.vue'),
+    props: (route) => ({ id: route.params.id, initialTab: 'followers' }),
+  },
+  {
+    path: '/user/:id/following',
+    name: 'FollowFollowing',
+    component: () => import('../views/FollowListPage.vue'),
+    props: (route) => ({ id: route.params.id, initialTab: 'following' }),
+  },
+  {
     path: '/profile/edit',
     name: 'ProfileEdit',
     component: () => import('../views/ProfileEditPage.vue'),
