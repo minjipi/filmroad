@@ -252,16 +252,19 @@ describe('ShotDetailPage.vue', () => {
     expect(tags.map((t) => t.text())).toEqual(['#도깨비', '#주문진']);
   });
 
-  it('top comments render one entry per topComments; "see-more" shows moreCommentsCount', async () => {
+  it('inline preview shows at most 1 top comment + "모두 보기" link with full commentCount', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
+    // 인라인 preview 는 항상 1건만 노출 — 나머지는 "모두 보기" 로 모달 진입.
     const comments = wrapper.findAll('[data-testid="sd-comment"]');
-    expect(comments.length).toBe(2);
+    expect(comments.length).toBe(1);
     expect(comments[0].find('.nm').text()).toBe('trip_hj');
-    expect(comments[1].find('.nm').text()).toBe('dokkaebi.love');
 
-    expect(wrapper.find('.see-more').text()).toContain('85');
+    // see-more 는 commentCount(89) 를 그대로 보여줌 — moreCommentsCount(85) 는
+    // backend 가 지금까지 잘라서 알려주는 값이지만, inline 은 1건만 보여주니
+    // "전체 N개" 가 사용자에게 더 직관적.
+    expect(wrapper.find('.see-more').text()).toContain('89');
   });
 
   it('like button reflects shot.liked and tap calls POST /api/photos/:id/like (task #39)', async () => {
