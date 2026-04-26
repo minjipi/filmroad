@@ -45,4 +45,13 @@ public class PostComment extends BaseEntity {
      */
     @Column(name = "image_url", length = 500)
     private String imageUrl;
+
+    /**
+     * 답글이면 부모 댓글. 부모는 항상 null (1단계 깊이만 허용 — Instagram /
+     * KakaoTalk 패턴). 같은 photo 의 다른 댓글을 가리켜야 하며, 부모 자체가
+     * 답글인 경우는 service 단에서 거부한다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private PostComment parent;
 }

@@ -19,6 +19,8 @@ export interface Comment {
   // 인증샷 댓글의 첨부 이미지 정적 경로(`/uploads/comments/...`).
   // 첨부 없는 댓글은 null.
   imageUrl: string | null;
+  // 답글이면 부모 댓글 id, 아니면 null. 1단계 깊이만 허용 (답글의 답글 X).
+  parentId: number | null;
 }
 
 interface CommentListResponse {
@@ -118,6 +120,7 @@ export const useCommentStore = defineStore('comment', {
       photoId: number,
       content: string,
       image?: File | null,
+      parentId?: number | null,
     ): Promise<Comment | null> {
       const trimmed = content.trim();
       // 백엔드 contract: content 는 NotBlank. 이미지만 보내는 케이스는 막아야 한다.
@@ -134,6 +137,7 @@ export const useCommentStore = defineStore('comment', {
         const form = new FormData();
         form.append('content', trimmed);
         if (image) form.append('image', image);
+        if (parentId != null) form.append('parentId', String(parentId));
         const { data } = await api.post<Comment>(
           `/api/photos/${photoId}/comments`,
           form,

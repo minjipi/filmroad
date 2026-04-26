@@ -24,47 +24,119 @@
       </header>
 
       <div class="cs-body no-scrollbar">
-        <p v-if="items.length === 0 && !loading" class="empty-note">첫 댓글을 남겨보세요</p>
-        <div v-for="c in items" :key="c.id" class="cs-item">
-          <div
-            class="ava"
-            data-testid="cs-author"
-            @click="onOpenAuthor(c.author.userId)"
-          >
-            <img v-if="c.author.avatarUrl" :src="c.author.avatarUrl" :alt="c.author.handle" />
-          </div>
-          <div class="body">
-            <div class="row">
-              <span
-                class="handle"
-                data-testid="cs-author-handle"
-                @click="onOpenAuthor(c.author.userId)"
-              >{{ c.author.handle }}</span>
-              <ion-icon v-if="c.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
-              <span class="time">{{ formatRelativeTime(c.createdAt) }}</span>
-            </div>
-            <div class="content">{{ c.content }}</div>
-            <button
-              v-if="c.imageUrl"
-              type="button"
-              class="cs-attach"
-              data-testid="cs-attach-thumb"
-              :aria-label="`인증샷 보기 — ${c.author.handle}`"
-              @click="onOpenAttach(c.imageUrl)"
+        <p v-if="parentComments.length === 0 && !loading" class="empty-note">첫 댓글을 남겨보세요</p>
+
+        <!--
+          댓글 + 답글 — 평면 items 배열을 parent / replies 로 분류해 부모를
+          순회하며 답글을 인접하게 렌더. 답글은 "답글 N개 보기" 토글로 펴고
+          접을 수 있고, 깊이는 1 (Instagram / KakaoTalk 패턴) 이라 답글의 답글
+          은 없다 (백엔드에서도 거부).
+        -->
+        <template v-for="parent in parentComments" :key="parent.id">
+          <div class="cs-item" data-testid="sd-comment">
+            <div
+              class="ava"
+              data-testid="cs-author"
+              @click="onOpenAuthor(parent.author.userId)"
             >
-              <img :src="c.imageUrl" :alt="`${c.author.handle} 인증샷`" />
+              <img v-if="parent.author.avatarUrl" :src="parent.author.avatarUrl" :alt="parent.author.handle" />
+            </div>
+            <div class="body">
+              <div class="row">
+                <span
+                  class="handle"
+                  data-testid="cs-author-handle"
+                  @click="onOpenAuthor(parent.author.userId)"
+                >{{ parent.author.handle }}</span>
+                <ion-icon v-if="parent.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
+                <span class="time">{{ formatRelativeTime(parent.createdAt) }}</span>
+              </div>
+              <div class="content">{{ parent.content }}</div>
+              <button
+                v-if="parent.imageUrl"
+                type="button"
+                class="cs-attach"
+                data-testid="cs-attach-thumb"
+                :aria-label="`인증샷 보기 — ${parent.author.handle}`"
+                @click="onOpenAttach(parent.imageUrl)"
+              >
+                <img :src="parent.imageUrl" :alt="`${parent.author.handle} 인증샷`" />
+              </button>
+              <div class="act-row">
+                <button
+                  type="button"
+                  class="reply-btn"
+                  data-testid="cs-reply-btn"
+                  :disabled="!authReady"
+                  @click="onStartReply(parent)"
+                >답글 달기</button>
+              </div>
+              <button
+                v-if="repliesFor(parent.id).length > 0"
+                type="button"
+                class="toggle-replies"
+                data-testid="cs-toggle-replies"
+                @click="toggleReplies(parent.id)"
+              >── 답글 {{ repliesFor(parent.id).length }}개 {{ isExpanded(parent.id) ? '숨기기' : '보기' }}</button>
+            </div>
+            <button
+              v-if="isOwn(parent)"
+              class="del"
+              type="button"
+              aria-label="delete"
+              @click="onDelete(parent)"
+            >
+              <ion-icon :icon="trashOutline" class="ic-16" />
             </button>
           </div>
-          <button
-            v-if="isOwn(c)"
-            class="del"
-            type="button"
-            aria-label="delete"
-            @click="onDelete(c)"
+
+          <div
+            v-for="r in (isExpanded(parent.id) ? repliesFor(parent.id) : [])"
+            :key="r.id"
+            class="cs-item is-reply"
+            data-testid="sd-comment"
           >
-            <ion-icon :icon="trashOutline" class="ic-16" />
-          </button>
-        </div>
+            <div
+              class="ava"
+              data-testid="cs-author"
+              @click="onOpenAuthor(r.author.userId)"
+            >
+              <img v-if="r.author.avatarUrl" :src="r.author.avatarUrl" :alt="r.author.handle" />
+            </div>
+            <div class="body">
+              <div class="row">
+                <span
+                  class="handle"
+                  data-testid="cs-author-handle"
+                  @click="onOpenAuthor(r.author.userId)"
+                >{{ r.author.handle }}</span>
+                <ion-icon v-if="r.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
+                <span class="time">{{ formatRelativeTime(r.createdAt) }}</span>
+              </div>
+              <div class="content">{{ r.content }}</div>
+              <button
+                v-if="r.imageUrl"
+                type="button"
+                class="cs-attach"
+                data-testid="cs-attach-thumb"
+                :aria-label="`인증샷 보기 — ${r.author.handle}`"
+                @click="onOpenAttach(r.imageUrl)"
+              >
+                <img :src="r.imageUrl" :alt="`${r.author.handle} 인증샷`" />
+              </button>
+              <!-- 답글의 답글은 깊이 정책상 불가 — 버튼 노출 안 함. -->
+            </div>
+            <button
+              v-if="isOwn(r)"
+              class="del"
+              type="button"
+              aria-label="delete"
+              @click="onDelete(r)"
+            >
+              <ion-icon :icon="trashOutline" class="ic-16" />
+            </button>
+          </div>
+        </template>
 
         <button
           v-if="hasMore"
@@ -76,6 +148,27 @@
       </div>
 
       <footer class="cs-foot">
+        <!--
+          답글 모드 컨텍스트 배너. 사용자가 "답글 달기" 를 누른 시점부터
+          전송/취소 전까지 노출. input 자체는 그대로 두고 (placeholder 도
+          유지) 컨텍스트만 별도 행으로 보여준다 — Instagram 의 @prefix 자동
+          삽입보다 명시적이라 실수로 답글이 일반 댓글로 가지 않는다.
+        -->
+        <div v-if="replyTarget" class="cs-reply-banner" data-testid="cs-reply-banner">
+          <span class="cs-reply-text">
+            <b>{{ replyTarget.handle }}</b>에게 답글 작성 중
+          </span>
+          <button
+            type="button"
+            class="cs-reply-cancel"
+            data-testid="cs-reply-cancel"
+            aria-label="답글 취소"
+            @click="onCancelReply"
+          >
+            <ion-icon :icon="closeOutline" class="ic-16" />
+          </button>
+        </div>
+
         <!--
           첨부 프리뷰: input 위에 행으로 노출. 첨부가 없으면 통째로 숨겨서
           기본 푸터 높이가 변하지 않게 한다(키보드 인터랙션 깨지면 안 됨).
@@ -199,6 +292,12 @@ const submitting = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const textInput = ref<HTMLInputElement | null>(null);
 const viewerSrc = ref<string | null>(null);
+// 답글 컨텍스트 — 사용자가 "답글 달기" 를 누른 댓글의 id + handle. null 이면 일반 댓글.
+const replyTarget = ref<{ id: number; handle: string } | null>(null);
+// 어떤 부모 댓글의 답글 리스트가 펼쳐져 있는지. Set 자체는 Vue 가 deep 추적
+// 하지만 add/delete 만으론 trigger 가 안 잡히는 케이스가 있어 매번 새 Set 으로
+// 교체한다.
+const expandedParents = ref<Set<number>>(new Set());
 
 function focusTextInput(): void {
   // 키보드 자동 호출은 OS/디바이스마다 다르게 동작하므로 강제하지 않고
@@ -264,6 +363,35 @@ const items = computed<Comment[]>(() => {
   if (props.photoId == null) return [];
   return commentStore.commentsByPhoto[props.photoId]?.items ?? [];
 });
+
+// 평면 items 를 부모 / 답글로 분리. 한 번 계산해서 부모 순회 + 답글 lookup
+// 양쪽에 재사용. items 가 바뀌면 자동 재계산.
+const parentComments = computed<Comment[]>(() =>
+  items.value.filter((c) => c.parentId == null),
+);
+const repliesByParent = computed<Map<number, Comment[]>>(() => {
+  const map = new Map<number, Comment[]>();
+  for (const c of items.value) {
+    if (c.parentId == null) continue;
+    const arr = map.get(c.parentId) ?? [];
+    arr.push(c);
+    map.set(c.parentId, arr);
+  }
+  return map;
+});
+
+function repliesFor(parentId: number): Comment[] {
+  return repliesByParent.value.get(parentId) ?? [];
+}
+function isExpanded(parentId: number): boolean {
+  return expandedParents.value.has(parentId);
+}
+function toggleReplies(parentId: number): void {
+  const next = new Set(expandedParents.value);
+  if (next.has(parentId)) next.delete(parentId);
+  else next.add(parentId);
+  expandedParents.value = next;
+}
 const hasMore = computed<boolean>(() => {
   if (props.photoId == null) return false;
   return commentStore.commentsByPhoto[props.photoId]?.hasMore ?? false;
@@ -364,10 +492,12 @@ async function onSubmit(): Promise<void> {
   }
   submitting.value = true;
   try {
+    const replyParentId = replyTarget.value?.id ?? null;
     const created = await commentStore.create(
       props.photoId,
       text,
       attachFile.value ?? undefined,
+      replyParentId,
     );
     if (!created) {
       const err = commentStore.errorFor(props.photoId);
@@ -377,10 +507,36 @@ async function onSubmit(): Promise<void> {
     draft.value = '';
     attachFile.value = null;
     revokePreview();
+    // 답글이 작성됐으면 사용자가 자기 답글이 어디 들어갔는지 볼 수 있게 부모를
+    // 자동 펼침. 한 부모에 여러 답글을 연달아 달 수도 있으니 replyTarget 은
+    // 유지하지 말고 명시적으로 비운다 (다음 답글 의도는 다시 명시해야 함).
+    if (replyParentId != null) {
+      const next = new Set(expandedParents.value);
+      next.add(replyParentId);
+      expandedParents.value = next;
+    }
+    replyTarget.value = null;
     emit('created');
   } finally {
     submitting.value = false;
   }
+}
+
+function onStartReply(c: Comment): void {
+  if (!authReady.value) return;
+  replyTarget.value = { id: c.id, handle: c.author.handle };
+  // 답글 모드 진입 시 그 부모의 기존 답글들도 자동으로 펼침 — 컨텍스트 보면서
+  // 작성하게.
+  if (!expandedParents.value.has(c.id)) {
+    const next = new Set(expandedParents.value);
+    next.add(c.id);
+    expandedParents.value = next;
+  }
+  void nextTick().then(() => focusTextInput());
+}
+
+function onCancelReply(): void {
+  replyTarget.value = null;
 }
 
 async function onDelete(c: Comment): Promise<void> {
@@ -422,6 +578,8 @@ watch(
       revokePreview();
       viewerSrc.value = null;
       keyboardOffset.value = 0;
+      replyTarget.value = null;
+      expandedParents.value = new Set();
     }
   },
   { immediate: true },
@@ -546,6 +704,52 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+/* 답글 — 부모 아바타 폭(34px) + gap(10px) 만큼 들여쓰기. 시각적으로 부모와
+   같은 컬럼에 콘텐츠가 정렬되어 트리 구조가 자연스럽게 읽힌다. */
+.cs-item.is-reply { margin-left: 44px; }
+.cs-item.is-reply .ava { width: 28px; height: 28px; }
+
+.cs-item .act-row {
+  margin-top: 4px;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--fr-ink-3);
+}
+.cs-item .reply-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.cs-item .reply-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cs-item .reply-btn:hover:not(:disabled) {
+  color: var(--fr-ink);
+}
+
+/* "── 답글 N개 보기" 토글 — Instagram 스타일. 좌측 작은 라인이 시각적으로
+   "이 댓글 아래 자식이 있다" 를 표시한다. */
+.cs-item .toggle-replies {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  text-align: left;
+}
+.cs-item .toggle-replies:hover { color: var(--fr-ink-2); }
+
 .empty-note {
   padding: 40px 8px;
   text-align: center;
@@ -581,6 +785,38 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
+/* 답글 컨텍스트 배너 — 푸터 input 위에 한 줄. 답글 모드 진입 시에만 노출. */
+.cs-reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--fr-bg-muted);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--fr-ink-2);
+}
+.cs-reply-banner .cs-reply-text { flex: 1; min-width: 0; }
+.cs-reply-banner b {
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+.cs-reply-banner .cs-reply-cancel {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--fr-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* 첨부 프리뷰 — 푸터 input 위 행. 썸네일 + 우상단 X. */
 .cs-attach-preview {
   position: relative;

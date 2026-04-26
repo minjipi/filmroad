@@ -62,7 +62,7 @@ public class CommentService {
     private String uploadPath;
 
     @Transactional
-    public CommentDto createComment(Long photoId, String content, MultipartFile image) {
+    public CommentDto createComment(Long photoId, String content, MultipartFile image, Long parentId) {
         String trimmed = content == null ? "" : content.trim();
         if (trimmed.isEmpty() || trimmed.length() > 500) {
             throw BaseException.of(BaseResponseStatus.REQUEST_ERROR);
@@ -75,6 +75,20 @@ public class CommentService {
 
         PlacePhoto photo = placePhotoRepository.findById(photoId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+
+        // 답글: parent 존재해야 하고, 같은 photo 소속이어야 하며, parent 자체가
+        // 답글이면 거부한다 (1단계 깊이만 허용 — Instagram / KakaoTalk 패턴).
+        PostComment parent = null;
+        if (parentId != null) {
+            parent = postCommentRepository.findById(parentId)
+                    .orElseThrow(() -> BaseException.of(BaseResponseStatus.COMMENT_NOT_FOUND));
+            if (!parent.getPlacePhoto().getId().equals(photoId)) {
+                throw BaseException.of(BaseResponseStatus.COMMENT_NOT_FOUND);
+            }
+            if (parent.getParent() != null) {
+                throw BaseException.of(BaseResponseStatus.REQUEST_ERROR);
+            }
+        }
 
         Long userId = currentUser.currentUserId();
         User user = userRepository.findById(userId)
@@ -114,6 +128,7 @@ public class CommentService {
                     .placePhoto(photo)
                     .content(trimmed)
                     .imageUrl(savedImageUrl)
+                    .parent(parent)
                     .build());
 
             photo.applyCommentDelta(1);
