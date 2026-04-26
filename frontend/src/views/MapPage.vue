@@ -167,51 +167,69 @@
             </button>
           </div>
 
-          <!-- Kakao Map info — revealed once the sheet is expanded to FULL.
-               Addresses/phone/reviews/nearby are design-mock values; we'll
-               hydrate them from Kakao Local API in a follow-up. -->
-          <section class="kakao-section">
+          <!-- 카카오 정보 — sheet 가 FULL 로 펼쳐질 때 노출. 백엔드
+               /api/places/:id/kakao-info 가 available=true 일 때만 그린다.
+               PlaceDetailPage 의 .kakao-section 과 동일 contract: 영업시간/리뷰는
+               공식 카카오 Local API 에 없어서 "카카오맵에서 확인" CTA 로 대체. -->
+          <section
+            v-if="kakaoInfo?.available"
+            class="kakao-section"
+            data-testid="map-kakao-section"
+          >
             <div class="kakao-head">
               <span class="kakao-badge">
                 <span class="k">K</span>카카오맵
               </span>
-              <span class="sync">
-                <ion-icon :icon="refreshOutline" class="ic-16" />방금 동기화
+              <span v-if="kakaoInfo.lastSyncedAt" class="sync">
+                <ion-icon :icon="refreshOutline" class="ic-16" />{{ syncLabel }}
               </span>
             </div>
 
-            <div class="k-hours">
+            <div v-if="kakaoInfo.kakaoPlaceUrl" class="k-hours">
               <span class="open-chip">
-                <span class="dot-open" />영업 중
+                <span class="dot-open" />카카오맵 정보
               </span>
-              <span class="time">24시간 개방</span>
-              <span class="sep">·</span>
-              <span class="time">주차 가능</span>
+              <span class="time">영업시간 / 리뷰는 카카오맵에서 확인</span>
             </div>
 
-            <div class="k-info-row">
+            <div
+              v-if="kakaoInfo.roadAddress || kakaoInfo.jibunAddress"
+              class="k-info-row"
+            >
               <ion-icon :icon="locationOutline" class="ic-20 ico" />
               <div class="txt">
-                {{ kakaoMock.address }}
-                <div class="sub">지번 · {{ kakaoMock.addressLot }}</div>
+                {{ kakaoInfo.roadAddress ?? kakaoInfo.jibunAddress }}
+                <div
+                  v-if="kakaoInfo.jibunAddress && kakaoInfo.roadAddress"
+                  class="sub"
+                >
+                  지번 · {{ kakaoInfo.jibunAddress }}
+                </div>
               </div>
               <button type="button" class="act" @click="onCopyAddress">복사</button>
             </div>
-            <div class="k-info-row">
+            <div v-if="kakaoInfo.phone" class="k-info-row">
               <ion-icon :icon="callOutline" class="ic-20 ico" />
               <div class="txt">
-                {{ kakaoMock.phone }}
-                <div class="sub">{{ kakaoMock.phoneLabel }}</div>
+                {{ kakaoInfo.phone }}
+                <div v-if="kakaoInfo.category" class="sub">
+                  {{ kakaoInfo.category }}
+                </div>
               </div>
-              <button type="button" class="act" @click="onCallPhone">전화</button>
+              <a :href="`tel:${kakaoInfo.phone}`" class="act">전화</a>
             </div>
-            <div class="k-info-row">
+            <div v-if="kakaoInfo.kakaoPlaceUrl" class="k-info-row">
               <ion-icon :icon="globeOutline" class="ic-20 ico" />
               <div class="txt">
-                {{ kakaoMock.website }}
-                <div class="sub">{{ kakaoMock.websiteLabel }}</div>
+                카카오맵에서 보기
+                <div class="sub">영업시간 · 리뷰 · 메뉴</div>
               </div>
-              <button type="button" class="act" @click="onOpenWebsite">열기</button>
+              <a
+                :href="kakaoInfo.kakaoPlaceUrl"
+                target="_blank"
+                rel="noopener"
+                class="act"
+              >열기</a>
             </div>
 
             <div class="k-actions">
@@ -232,48 +250,36 @@
               <button type="button" class="k-act-btn" @click="onShare">
                 <ion-icon :icon="shareSocialOutline" class="ic-22" />공유
               </button>
-              <button type="button" class="k-act-btn" @click="onDriveMode">
-                <ion-icon :icon="carOutline" class="ic-22" />자동차
-              </button>
-            </div>
-
-            <div class="k-review">
-              <h4>
-                카카오맵 리뷰
-                <span class="k-stars">
-                  <ion-icon v-for="i in 5" :key="i" :icon="star" class="ic-16" />
-                </span>
-                <span class="rating-num">{{ selected.rating.toFixed(1) }}</span>
-                <span class="cnt">· {{ kakaoMock.reviewCount }}개</span>
-              </h4>
-              <div
-                v-for="rev in kakaoMock.reviews"
-                :key="rev.name"
-                class="k-rev-item"
+              <a
+                :href="kakaoInfo.kakaoPlaceUrl ?? '#'"
+                target="_blank"
+                rel="noopener"
+                class="k-act-btn"
               >
-                <div class="av">{{ rev.initial }}</div>
-                <div class="body">
-                  <div class="meta-row">
-                    <span class="nm">{{ rev.name }}</span>
-                    <span class="dt">{{ rev.date }}</span>
-                  </div>
-                  <p>{{ rev.text }}</p>
-                </div>
-              </div>
+                <ion-icon :icon="openOutline" class="ic-22" />카카오맵
+              </a>
             </div>
 
-            <div class="k-nearby">
+            <div v-if="kakaoInfo.nearby.length > 0" class="k-nearby">
               <h4>주변 맛집 · 카페</h4>
               <div class="k-nearby-row no-scrollbar">
-                <div
-                  v-for="n in kakaoMock.nearby"
-                  :key="n.name"
+                <a
+                  v-for="(n, i) in kakaoInfo.nearby"
+                  :key="i"
+                  :href="n.kakaoPlaceUrl"
+                  target="_blank"
+                  rel="noopener"
                   class="k-nearby-card"
                 >
-                  <div class="th"><img :src="n.thumb" :alt="n.name" /></div>
+                  <div class="th th-icon">
+                    <ion-icon
+                      :icon="n.categoryGroupCode === 'CE7' ? cafeOutline : restaurantOutline"
+                      class="ic-22"
+                    />
+                  </div>
                   <div class="nm">{{ n.name }}</div>
-                  <div class="d">{{ n.meta }}</div>
-                </div>
+                  <div class="d">{{ formatNearby(n) }}</div>
+                </a>
               </div>
             </div>
 
@@ -307,11 +313,13 @@ import {
   globeOutline,
   navigateOutline,
   shareSocialOutline,
-  carOutline,
   refreshOutline,
   add,
   remove,
   locate,
+  openOutline,
+  cafeOutline,
+  restaurantOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import {
@@ -324,6 +332,10 @@ import {
 } from '@/stores/map';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
+import {
+  useKakaoInfoStore,
+  type KakaoNearbyDto,
+} from '@/stores/kakaoInfo';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
@@ -333,6 +345,7 @@ import {
   requestLocation,
   type LocationFailReason,
 } from '@/composables/useGeolocation';
+import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const mapStore = useMapStore();
 const { selected, error, filter, center, zoom, workId, sheetMode } = storeToRefs(mapStore);
@@ -343,7 +356,40 @@ const visibleMarkers = computed<MapMarker[]>(() => mapStore.visibleMarkers);
 const visitedIds = computed<number[]>(() => mapStore.visitedIds);
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const kakaoInfoStore = useKakaoInfoStore();
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
+
+// 현재 선택된 marker(=place) 의 카카오 정보. selected 가 바뀌면 watch 가
+// fetch 를 트리거하고, 응답이 오면 store 에 캐시되어 이 computed 가 갱신된다.
+// available=false 또는 아직 fetch 전이면 null → 섹션 자체가 v-if 로 숨겨짐.
+const kakaoInfo = computed(() => {
+  const id = selected.value?.id;
+  return id == null ? null : kakaoInfoStore.infoFor(id);
+});
+
+const syncLabel = computed(() => {
+  const at = kakaoInfo.value?.lastSyncedAt;
+  if (!at) return '';
+  const rel = formatRelativeTime(at);
+  if (!rel) return '';
+  if (rel === '방금 전') return '방금 동기화';
+  if (rel === '어제') return '어제 동기화';
+  return `${rel} 동기화`;
+});
+
+// 카카오 카테고리는 "한식 > 해물,생선" 식으로 깊이 표기 — 카드에서는 첫 토큰만
+// 짧게 노출해서 정보 밀도를 낮춘다. 빈 문자열이면 "주변" 으로 폴백.
+function shortCategoryLabel(categoryName: string): string {
+  const head = categoryName.split('>')[0]?.trim();
+  return head && head.length > 0 ? head : '주변';
+}
+
+// 도보 환산은 80m/min 기준 (네이버지도/카카오맵 표기와 동일). 0 분이 떨어지는
+// 매우 가까운 케이스는 "0 분" 이 어색하니 1 분으로 round-up.
+function formatNearby(n: KakaoNearbyDto): string {
+  const minutes = Math.max(1, Math.round(n.distanceMeters / 80));
+  return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
+}
 
 // Draggable sheet — the composable owns the live drag height + pointer
 // handlers; snap endpoints push the resulting mode back into the store so
@@ -428,73 +474,6 @@ const workBadge = computed(() => {
   const ep = s.workEpisode ? ` · ${s.workEpisode}` : '';
   return `${s.workTitle}${ep}`;
 });
-
-// Static mock Kakao details until Kakao Local API is wired up. Intentionally
-// bundled as a single object so swapping the source (API call, store field)
-// later is a single-line change.
-interface KakaoReview {
-  initial: string;
-  name: string;
-  date: string;
-  text: string;
-}
-interface KakaoNearby {
-  name: string;
-  meta: string;
-  thumb: string;
-}
-interface KakaoMock {
-  address: string;
-  addressLot: string;
-  phone: string;
-  phoneLabel: string;
-  website: string;
-  websiteLabel: string;
-  reviewCount: string;
-  reviews: KakaoReview[];
-  nearby: KakaoNearby[];
-}
-
-const kakaoMock: KakaoMock = {
-  address: '강원 강릉시 주문진읍 교항리 산51-2',
-  addressLot: '교항리 산51-2',
-  phone: '033-662-3639',
-  phoneLabel: '주문진읍 관광안내소',
-  website: 'gn.go.kr/tour',
-  websiteLabel: '공식 관광정보',
-  reviewCount: '812',
-  reviews: [
-    {
-      initial: '민',
-      name: '민수아빠',
-      date: '3일 전',
-      text: '드라마 덕분에 찾은 곳인데 석양이 정말 예술. 평일 낮에는 사람 적어서 사진 찍기 좋아요.',
-    },
-    {
-      initial: '소',
-      name: '소연',
-      date: '1주 전',
-      text: '메밀꽃은 주변 편의점에서 3천원에 판매 중. 방파제 끝까지 걸어가야 포토존이에요.',
-    },
-  ],
-  nearby: [
-    {
-      name: '영진회집',
-      meta: '⭐ 4.6 · 도보 3분',
-      thumb: 'https://images.unsplash.com/photo-1559305616-3f99cd43e353?auto=format&fit=crop&w=300&q=80',
-    },
-    {
-      name: '테라로사 커피',
-      meta: '⭐ 4.7 · 차 8분',
-      thumb: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=300&q=80',
-    },
-    {
-      name: '주문진 수산시장',
-      meta: '⭐ 4.5 · 차 5분',
-      thumb: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=300&q=80',
-    },
-  ],
-};
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -636,29 +615,33 @@ async function onOpenDetail(): Promise<void> {
   await router.push(`/place/${selected.value.id}`);
 }
 
+// roadAddress 우선, 없으면 jibun. clipboard 가 막힌 환경(HTTP 페이지 / 권한
+// 거부) 은 catch 로 떨어져 사용자에게 안내. PlaceDetailPage 와 동일 동작.
 async function onCopyAddress(): Promise<void> {
+  const k = kakaoInfo.value;
+  if (!k) return;
+  const addr = k.roadAddress ?? k.jibunAddress ?? '';
+  if (!addr) return;
   try {
-    await navigator.clipboard?.writeText(kakaoMock.address);
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      throw new Error('clipboard unavailable');
+    }
+    await navigator.clipboard.writeText(addr);
     await showInfo('주소를 복사했어요');
   } catch {
     await showError('주소 복사에 실패했어요');
   }
 }
 
-function onCallPhone(): void {
-  // Best-effort tel: link; on desktop this is a no-op, on mobile opens the dialer.
-  window.location.href = `tel:${kakaoMock.phone.replace(/[^0-9+]/g, '')}`;
-}
-
-function onOpenWebsite(): void {
-  const url = kakaoMock.website.startsWith('http')
-    ? kakaoMock.website
-    : `https://${kakaoMock.website}`;
-  window.open(url, '_blank', 'noopener');
-}
-
+// 카카오맵 길찾기 딥링크 — 모바일에서 카카오맵 앱이 깔려있으면 앱이 catch,
+// 없으면 모바일 웹/데스크톱 카카오맵으로 폴백. 좌표를 함께 보내야 동명 장소가
+// 임의로 매칭되지 않고 정확한 핀이 찍힌다.
 async function onRoute(): Promise<void> {
-  await showInfo('길찾기는 곧 열립니다');
+  const s = selected.value;
+  if (!s) return;
+  const name = encodeURIComponent(s.name);
+  const url = `https://map.kakao.com/link/to/${name},${s.latitude},${s.longitude}`;
+  window.open(url, '_blank', 'noopener');
 }
 
 async function onShare(): Promise<void> {
@@ -676,9 +659,6 @@ async function onShare(): Promise<void> {
   }
 }
 
-async function onDriveMode(): Promise<void> {
-  await showInfo('자동차 모드는 준비 중이에요');
-}
 
 function pickQueryNumber(v: unknown): number | null {
   const raw = Array.isArray(v) ? v[0] : v;
@@ -689,9 +669,15 @@ function pickQueryNumber(v: unknown): number | null {
 
 // When the user picks a new marker, force the sheet back to a useful height
 // in case they had previously closed it — otherwise the selection is silent.
+// Also kick off the kakao-info fetch for the newly selected place so the
+// bottom section hydrates with that place's data instead of staying empty
+// (or, before the fix, instead of staying on the previous mock fixture).
 watch(selected, (next, prev) => {
-  if (next && next.id !== prev?.id && sheetMode.value === 'closed') {
-    mapStore.setSheetMode('peek');
+  if (next && next.id !== prev?.id) {
+    if (sheetMode.value === 'closed') {
+      mapStore.setSheetMode('peek');
+    }
+    void kakaoInfoStore.fetch(next.id);
   }
 });
 
