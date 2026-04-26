@@ -3,11 +3,12 @@
     <ion-content :fullscreen="true" class="pd-content">
       <div v-if="place" class="pd-scroll no-scrollbar">
         <section class="hero">
-          <!-- 1:N cover image carousel — transform 기반 슬라이드.
+          <!-- 1:N cover image carousel — transform 기반 무한 슬라이드.
                외곽은 overflow:hidden 으로 시야창 역할만 하고, 안쪽 .hero-track 이
-               translateX 로 좌우 이동한다. heroSlide 가 바뀌면 CSS transition 이
-               자동으로 옆으로 흐르는 애니메이션을 그린다. swipe 는 pointer
-               이벤트로 직접 처리(pan-y 만 허용해서 페이지 세로 스크롤은 그대로). -->
+               translateX 로 좌우 이동한다. 양쪽 끝에 clone 슬라이드를 두어
+               (마지막 → 첫번째 wrap 시 오른쪽으로, 첫번째 → 마지막 wrap 시 왼쪽으로)
+               항상 진행 방향으로 자연스럽게 흐른다. transitionend 시점에 clone 자리에
+               도착했다면 transition 잠깐 끄고 진짜 슬라이드 자리로 instant snap. -->
           <div
             v-if="place.coverImageUrls.length > 0"
             ref="heroCarouselEl"
@@ -20,9 +21,23 @@
           >
             <div
               class="hero-track"
-              :class="{ panning: heroPanning }"
+              :class="{
+                panning: heroPanning,
+                'no-transition': skipHeroTransition,
+              }"
               :style="heroTrackStyle"
+              @transitionend="onHeroTrackTransitionEnd"
             >
+              <!-- clone of last slide (마지막 → 0 으로 오른쪽 wrap 시 prev 자리) -->
+              <img
+                v-if="place.coverImageUrls.length > 1"
+                :src="place.coverImageUrls[place.coverImageUrls.length - 1]"
+                :alt="`${place.name} 커버 ${place.coverImageUrls.length} (clone)`"
+                class="hero-img"
+                draggable="false"
+                aria-hidden="true"
+              />
+              <!-- 진짜 슬라이드들 -->
               <img
                 v-for="(url, i) in place.coverImageUrls"
                 :key="i"
@@ -31,6 +46,15 @@
                 class="hero-img"
                 draggable="false"
               />
+              <!-- clone of first slide (마지막 + 1 자리, 오른쪽 wrap 시 도착점) -->
+              <img
+                v-if="place.coverImageUrls.length > 1"
+                :src="place.coverImageUrls[0]"
+                :alt="`${place.name} 커버 1 (clone)`"
+                class="hero-img"
+                draggable="false"
+                aria-hidden="true"
+              />
             </div>
           </div>
           <span
@@ -38,7 +62,7 @@
             class="hero-counter"
             data-testid="pd-hero-counter"
           >
-            {{ heroSlide + 1 }} / {{ place.coverImageUrls.length }}
+            {{ realHeroSlide + 1 }} / {{ place.coverImageUrls.length }}
           </span>
           <button
             v-if="place.coverImageUrls.length > 1"
@@ -70,7 +94,7 @@
               v-for="(_, i) in place.coverImageUrls"
               :key="i"
               type="button"
-              :class="['hero-dot', i === heroSlide ? 'active' : '']"
+              :class="['hero-dot', i === realHeroSlide ? 'active' : '']"
               :aria-label="`커버 ${i + 1} 보기`"
               @click="onHeroDotClick(i)"
             />
@@ -419,54 +443,99 @@ function formatNearby(n: KakaoNearbyDto): string {
   return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
 }
 
-// Hero carousel — transform 기반 슬라이드.
-// heroSlide 가 source of truth. heroPanning 은 사용자가 손가락을 카로우셀 위에
-// 누르고 있을 때만 true → CSS transition 을 끄고 손가락 따라 즉시 따라가게 한다.
-// pointer up 시 heroPanning=false 로 돌아오면서 transition 이 다시 켜져 finish
-// position 까지 부드럽게 흐른다. ShotDetail 의 carousel 과 동일 톤이지만 거기
-// 컴포넌트는 native scroll, 여기는 명시적 transform 으로 차이.
+// Hero carousel — transform 기반 무한 슬라이드.
+// heroSlide 는 "track 안에서 어느 진짜 슬라이드를 보고 있는가" 를 나타내는
+// 카운터지만 modulo 안 해서 순간적으로 -1 (clone-of-last 자리) 또는 len
+// (clone-of-first 자리) 까지 갈 수 있다. transitionend 가 발생하면 clone 자리에
+// 도달했는지 검사해 instant snap (`skipHeroTransition`=true 한 프레임) 으로
+// 진짜 자리로 옮긴다 — 사용자 시각적으론 끊김 없는 무한 회전.
 const heroCarouselEl = ref<HTMLElement | null>(null);
 const heroSlide = ref(0);
 const heroPanning = ref(false);
+const skipHeroTransition = ref(false);
 const heroDragOffset = ref(0); // 손가락 이동 중 px (음수=오른쪽으로 슬라이드, 양수=왼쪽)
 
-// panning 중엔 손가락 픽셀이동을 그대로 반영해야 하니 px, 평상시엔 % 단위로
-// 두면 viewport 가 resize 되어도 transform 이 자동으로 따라간다 (clientWidth
-// 는 reactive 가 아니라 별도 resize 트래킹이 필요해지는 걸 회피).
+// dot active / counter 가 참조하는 진짜 슬라이드 인덱스. heroSlide 가 -1 또는
+// len 같은 transient 값이어도 사용자에게 보이는 "현재 슬라이드" 는 wrap 된
+// 정수로 노출.
+const realHeroSlide = computed<number>(() => {
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 0) return 0;
+  return ((heroSlide.value % len) + len) % len;
+});
+
+// track 의 transform. clone 슬라이드가 있는 경우 (len>1) 진짜 슬라이드들은
+// position [1..len] 에 있으니 offset 1 추가. single-cover 면 clone 없으므로
+// 평이하게 0.
 const heroTrackStyle = computed<Record<string, string>>(() => {
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return { transform: 'none' };
+  const offset = 1; // prepended clone of last
   if (heroPanning.value) {
     const el = heroCarouselEl.value;
     const width = el?.clientWidth ?? 0;
-    const tx = -heroSlide.value * width + heroDragOffset.value;
+    const tx = -(heroSlide.value + offset) * width + heroDragOffset.value;
     return { transform: `translate3d(${tx}px, 0, 0)` };
   }
-  const tx = -heroSlide.value * 100;
+  const tx = -(heroSlide.value + offset) * 100;
   return { transform: `translate3d(${tx}%, 0, 0)` };
 });
 
-function onHeroDotClick(i: number): void {
-  goHeroSlide(i);
+// transition 이 끝나는 시점에 heroSlide 가 clone 자리에 있다면 진짜 자리로
+// instant 점프. browser 한 프레임 동안 transition 을 꺼서 jump 가 보이지
+// 않게 하고, 다음 프레임에 다시 켠다.
+function onHeroTrackTransitionEnd(e: TransitionEvent): void {
+  // transform 트랜지션만 — 다른 속성(예: opacity 같은 건 없지만 안전 장치)에
+  // 의해 콜백이 한 번 더 부르지는 걸 막는다.
+  if (e.propertyName !== 'transform') return;
+  const len = place.value?.coverImageUrls.length ?? 0;
+  if (len <= 1) return;
+  if (heroSlide.value >= len) {
+    skipHeroTransition.value = true;
+    heroSlide.value = heroSlide.value - len; // 보통 0
+    requestAnimationFrame(() => {
+      // 두 프레임 후 transition 다시 켜야 jump 가 시각적으로 일어남 — 같은 프레임에
+      // 켜면 브라우저가 두 transform 을 묶어서 다시 transition 을 그릴 수 있음.
+      requestAnimationFrame(() => {
+        skipHeroTransition.value = false;
+      });
+    });
+  } else if (heroSlide.value < 0) {
+    skipHeroTransition.value = true;
+    heroSlide.value = heroSlide.value + len; // 보통 len-1
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        skipHeroTransition.value = false;
+      });
+    });
+  }
 }
 
+// dot 클릭은 modulo 거리로 시작점을 맞춰 절대 인덱스에 도달 — 예를 들어
+// realSlide=2 (heroSlide=2) 에서 dot 0 을 누르면 heroSlide 0 으로 점프 (왼쪽).
+// 단순한 절대 점프라 wrap 방향성 의미는 없다 (한 칸 차이가 아니니까). 원하면
+// nearest-direction 으로도 갈 수 있지만 디자인상 dot 점프는 modal-style 직접
+// 이동이라 그대로 유지.
+function onHeroDotClick(i: number): void {
+  heroSlide.value = i;
+  startHeroAutoAdvance();
+}
+
+// prev/next 는 modulo 없이 그냥 -1/+1. 끝점에 도달하면 heroSlide 가 -1 또는
+// len 이 되고, 그 자리에 clone 슬라이드가 있어 transition 이 자연스럽게 흐른다.
+// transition 끝에서 onHeroTrackTransitionEnd 가 instant snap 으로 진짜 자리에
+// 정렬한다. 결과적으로 어느 방향이든 항상 진행 방향으로 이동.
 function onHeroPrev(): void {
   const len = place.value?.coverImageUrls.length ?? 0;
   if (len <= 1) return;
-  goHeroSlide((heroSlide.value - 1 + len) % len);
+  heroSlide.value -= 1;
+  startHeroAutoAdvance();
 }
 
 function onHeroNext(): void {
   const len = place.value?.coverImageUrls.length ?? 0;
   if (len <= 1) return;
-  goHeroSlide((heroSlide.value + 1) % len);
-}
-
-// dot/arrow 클릭/auto-advance 공통 진입점. 사용자가 수동으로 슬라이드를 옮기면
-// auto-advance 타이머도 재시작 — 그렇지 않으면 막 본 슬라이드가 1~2초만에
-// 자동으로 다시 넘어가서 사용자 인터랙션이 의미 없어진다. heroSlide 만 갱신하면
-// transform watch 가 자동으로 transition 을 그린다.
-function goHeroSlide(i: number): void {
-  heroSlide.value = i;
-  // 길이가 1 이하면 startHeroAutoAdvance 가 알아서 no-op 한다.
+  heroSlide.value += 1;
   startHeroAutoAdvance();
 }
 
@@ -518,12 +587,13 @@ function onHeroPointerUp(e: PointerEvent): void {
   }
   const el = heroCarouselEl.value;
   const width = el?.clientWidth ?? 0;
-  const len = place.value?.coverImageUrls.length ?? 0;
   const dx = heroDragOffset.value;
   let next = heroSlide.value;
+  // 임계값(width 의 15%) 초과면 진행 방향으로 한 칸 이동. heroSlide 는 modulo
+  // 안 하므로 끝점에서도 -1 / len 로 흘러가 clone 슬라이드 자리에 도달하고,
+  // transitionend 가 진짜 자리로 instant snap.
   if (width > 0 && Math.abs(dx) > width * HERO_SWIPE_RATIO) {
-    if (dx < 0 && heroSlide.value < len - 1) next = heroSlide.value + 1;
-    else if (dx > 0 && heroSlide.value > 0) next = heroSlide.value - 1;
+    next = heroSlide.value + (dx < 0 ? 1 : -1);
   }
   // panning 끄기 → transition 다시 켜진다 → snap 위치까지 부드럽게.
   heroPanning.value = false;
@@ -545,15 +615,10 @@ let heroAutoTimer: ReturnType<typeof setInterval> | null = null;
 function advanceHeroSlide(): void {
   const len = place.value?.coverImageUrls.length ?? 0;
   if (len <= 1) return;
-  const next = (heroSlide.value + 1) % len;
-  // heroSlide 를 즉시 갱신 → dot/counter 가 바로 반응. scrollTo 는 부드러운
-  // 시각 전환용. scroll 이벤트가 다시 listener 를 호출하지만 동일 인덱스라
-  // no-op.
-  heroSlide.value = next;
-  const el = heroCarouselEl.value;
-  if (el && el.clientWidth > 0) {
-    el.scrollTo({ left: el.clientWidth * next, behavior: 'smooth' });
-  }
+  // 진행 방향은 항상 forward (+1). modulo 없이 두면 마지막에서 한 번 더
+  // 증가했을 때 clone-of-first 자리로 흘러 transition 이 오른쪽으로 자연스럽게
+  // 이어지고, transitionend 가 instant snap 으로 진짜 첫 슬라이드로 정렬한다.
+  heroSlide.value += 1;
 }
 
 function startHeroAutoAdvance(): void {
@@ -778,9 +843,17 @@ watch(placeId, (next, prev) => {
   if (next !== prev) {
     void load(next);
     // 다른 place 로 이동할 때 hero carousel 위치/인덱스를 초기화 — 이전 place 에서
-    // 끝 슬라이드까지 넘긴 상태가 그대로 남아있으면 dot 활성이 어긋난다.
+    // 끝 슬라이드까지 넘긴 상태(예: heroSlide=3 등)가 그대로 남아있으면 새 place
+    // 첫 진입 시 transform 이 -300% 같은 위치로 점프한다. transition 도 한 프레임
+    // 끄고 0 으로 보내서 reset 자체가 슬라이드 애니메이션으로 잘못 보이지 않게.
+    skipHeroTransition.value = true;
     heroSlide.value = 0;
-    if (heroCarouselEl.value) heroCarouselEl.value.scrollLeft = 0;
+    heroDragOffset.value = 0;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        skipHeroTransition.value = false;
+      });
+    });
   }
 });
 
@@ -834,7 +907,8 @@ ion-content.pd-content {
   will-change: transform;
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.hero-track.panning {
+.hero-track.panning,
+.hero-track.no-transition {
   transition: none;
 }
 .hero-img {

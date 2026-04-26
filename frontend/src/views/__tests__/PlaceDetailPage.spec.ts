@@ -192,9 +192,16 @@ describe('PlaceDetailPage.vue', () => {
     });
     await flushPromises();
 
+    // Track 안에는 진짜 슬라이드 3장 + 양 끝 clone 2장(aria-hidden) = 5장.
+    // clone 은 forward / backward wrap 시 transition 이 진행 방향으로 이어지도록
+    // 두는 자리표지일 뿐 사용자 시각상으론 무한 회전.
     const imgs = wrapper.findAll('[data-testid="pd-hero-carousel"] img.hero-img');
-    expect(imgs.length).toBe(3);
-    expect(imgs.map((i) => i.attributes('src'))).toEqual([
+    expect(imgs.length).toBe(5);
+    const realImgs = wrapper.findAll(
+      '[data-testid="pd-hero-carousel"] img.hero-img:not([aria-hidden="true"])',
+    );
+    expect(realImgs.length).toBe(3);
+    expect(realImgs.map((i) => i.attributes('src'))).toEqual([
       'https://img/cover-0.jpg',
       'https://img/cover-1.jpg',
       'https://img/cover-2.jpg',
@@ -366,6 +373,55 @@ describe('PlaceDetailPage.vue', () => {
     await flushPromises();
     expect(multi.wrapper.find('[data-testid="pd-hero-prev"]').exists()).toBe(true);
     expect(multi.wrapper.find('[data-testid="pd-hero-next"]').exists()).toBe(true);
+  });
+
+  it('forward wrap on next: track transitions into the appended clone (rightward) before snapping to real index 0', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+
+    const nextBtn = wrapper.find('[data-testid="pd-hero-next"]');
+    const trackEl = (): HTMLElement =>
+      wrapper.find('[data-testid="pd-hero-carousel"] .hero-track').element as HTMLElement;
+    const transformOf = (): string => trackEl().style.transform;
+
+    // 0 → 1 → 2 (마지막 진짜 슬라이드).
+    await nextBtn.trigger('click');
+    await nextBtn.trigger('click');
+    expect(transformOf()).toContain('-300%'); // -(2 + 1) * 100% = -300%
+
+    // 2 → forward wrap. transition 은 clone-of-first(visible position 4)
+    // 자리로 흘러 -400% 까지 간다. transitionend 가 발동하기 전엔 이 위치 그대로.
+    await nextBtn.trigger('click');
+    expect(transformOf()).toContain('-400%'); // 오른쪽으로 한 칸 더 — 사용자 시점엔 0 으로 자연스럽게 흐름
+
+    // counter / dot 은 이미 realHeroSlide 기준이라 사용자 perspective 의 첫 슬라이드.
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('1 / 3');
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[0].classes()).toContain('active');
+  });
+
+  it('backward wrap on prev: track transitions into the prepended clone (leftward) before snapping to real index N-1', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+
+    const prevBtn = wrapper.find('[data-testid="pd-hero-prev"]');
+    const trackEl = (): HTMLElement =>
+      wrapper.find('[data-testid="pd-hero-carousel"] .hero-track').element as HTMLElement;
+
+    // 0 에서 prev → -1 (= clone-of-last 자리, visible position 0).
+    // transform = -(−1 + 1) * 100% = 0%. 진짜 슬라이드 0 자리(-100%) 에서 0% 으로
+    // 왼쪽으로 흐른다 — 사용자 시점에선 마지막 슬라이드로 자연스럽게 이동.
+    await prevBtn.trigger('click');
+    expect(trackEl().style.transform).toContain('translate3d(0%');
+
+    // counter / dot 은 realHeroSlide → ((-1 % 3) + 3) % 3 = 2.
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('3 / 3');
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[2].classes()).toContain('active');
   });
 
   it('next button advances to the following slide and wraps from the last back to the first', async () => {
