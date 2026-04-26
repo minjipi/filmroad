@@ -191,6 +191,20 @@
           <div class="date">{{ takenAtFullLabel }}</div>
         </section>
 
+        <div class="cmt-input-wrap">
+          <div class="me-av">
+            <img
+              v-if="meAvatarUrl"
+              :src="meAvatarUrl"
+              alt="me"
+            />
+          </div>
+          <div class="box">댓글을 남겨보세요…</div>
+          <button type="button" class="send" aria-label="send">
+            <ion-icon :icon="paperPlaneOutline" class="ic-18" />
+          </button>
+        </div>
+
         <section class="loc-card" @click="onOpenPlace">
           <div class="loc-map-thumb" />
           <div class="meta">
@@ -268,20 +282,6 @@
             댓글 {{ shot.moreCommentsCount }}개 더 보기
           </div>
         </section>
-      </div>
-
-      <div v-if="shot" class="cmt-input-wrap">
-        <div class="me-av">
-          <img
-            v-if="meAvatarUrl"
-            :src="meAvatarUrl"
-            alt="me"
-          />
-        </div>
-        <div class="box">댓글을 남겨보세요…</div>
-        <button type="button" class="send" aria-label="send">
-          <ion-icon :icon="paperPlaneOutline" class="ic-18" />
-        </button>
       </div>
     </ion-content>
   </ion-page>
@@ -476,7 +476,7 @@ ion-content.sd-content {
 
 .sd-scroll {
   overflow-y: auto;
-  padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
 }
 
 .sd-top {
@@ -997,17 +997,16 @@ ion-content.sd-content {
   cursor: pointer;
 }
 
-/* Sticky comment input */
+/* Inline comment-compose row — sd-caption 과 loc-card 사이에 끼어
+   사용자가 본문 읽은 직후 자연스럽게 댓글을 남기게. Instagram/Threads/YouTube
+   처럼 외곽 라운드/보더 없이, 위쪽 구분선만으로 섹션 분리. 안쪽 input 만
+   살짝 라운드(10px) 줘서 입력란임을 시각적으로 표시. */
 .cmt-input-wrap {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: env(safe-area-inset-bottom);
-  z-index: 40;
-  padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(16px);
+  margin: 8px 0 0;
+  padding: 12px 16px;
+  background: #ffffff;
   border-top: 1px solid var(--fr-line);
+  border-bottom: 1px solid var(--fr-line);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1024,7 +1023,7 @@ ion-content.sd-content {
 .cmt-input-wrap .box {
   flex: 1;
   background: var(--fr-bg-muted);
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 9px 14px;
   font-size: 13px;
   color: var(--fr-ink-4);
