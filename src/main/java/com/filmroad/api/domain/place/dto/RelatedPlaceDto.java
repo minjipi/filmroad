@@ -1,15 +1,18 @@
 package com.filmroad.api.domain.place.dto;
 
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlaceCoverImage;
 import lombok.Builder;
 import lombok.Getter;
+
+import java.util.List;
 
 @Getter
 @Builder
 public class RelatedPlaceDto {
     private Long id;
     private String name;
-    private String coverImageUrl;
+    private List<String> coverImageUrls;
     private String workEpisode;
     private String regionShort;
     private Long workId;
@@ -18,7 +21,7 @@ public class RelatedPlaceDto {
         return RelatedPlaceDto.builder()
                 .id(place.getId())
                 .name(place.getName())
-                .coverImageUrl(place.getCoverImageUrl())
+                .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .workEpisode(place.getWorkEpisode())
                 .regionShort(shortenRegion(place.getRegionLabel()))
                 .workId(place.getWork().getId())

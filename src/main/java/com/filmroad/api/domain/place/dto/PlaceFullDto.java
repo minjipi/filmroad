@@ -1,8 +1,11 @@
 package com.filmroad.api.domain.place.dto;
 
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlaceCoverImage;
 import lombok.Builder;
 import lombok.Getter;
+
+import java.util.List;
 
 @Getter
 @Builder
@@ -12,7 +15,7 @@ public class PlaceFullDto {
     private String regionLabel;
     private Double latitude;
     private Double longitude;
-    private String coverImageUrl;
+    private List<String> coverImageUrls;
     private Long workId;
     private String workTitle;
     private String workEpisode;
@@ -36,7 +39,7 @@ public class PlaceFullDto {
                 .regionLabel(place.getRegionLabel())
                 .latitude(place.getLatitude())
                 .longitude(place.getLongitude())
-                .coverImageUrl(place.getCoverImageUrl())
+                .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .workId(place.getWork().getId())
                 .workTitle(place.getWork().getTitle())
                 .workEpisode(place.getWorkEpisode())

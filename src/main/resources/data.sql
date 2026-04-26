@@ -10,37 +10,56 @@
 ALTER TABLE place_photo DROP COLUMN IF EXISTS image_url;
 ALTER TABLE place_photo DROP COLUMN IF EXISTS group_key;
 
+-- Migration (place cover 1:N): legacy `cover_image_url` 컬럼이 새 `place_cover_image`
+-- 1:N 테이블로 분리됨. ddl-auto=update 가 알아서 drop 하지 않으므로 IF EXISTS 로 한 번만 제거.
+ALTER TABLE place DROP COLUMN IF EXISTS cover_image_url;
+
 INSERT IGNORE INTO work (id, title, poster_url, type, CREATE_DATE, UPDATE_DATE) VALUES
   (1, '도깨비', NULL, 'DRAMA', NOW(), NOW()),
   (2, '이태원 클라쓰', NULL, 'DRAMA', NOW(), NOW()),
   (3, '호텔 델루나', NULL, 'DRAMA', NOW(), NOW()),
   (4, '미스터션샤인', NULL, 'DRAMA', NOW(), NOW());
 
-INSERT IGNORE INTO place (id, name, region_label, latitude, longitude, cover_image_url, work_id, trending_score, photo_count, like_count, rating, CREATE_DATE, UPDATE_DATE) VALUES
+INSERT IGNORE INTO place (id, name, region_label, latitude, longitude, work_id, trending_score, photo_count, like_count, rating, CREATE_DATE, UPDATE_DATE) VALUES
   (10, '주문진 영진해변 방파제', '강릉시 주문진읍', 37.8928, 128.8347,
-   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
    1, 98, 1204, 3200, 4.8, NOW(), NOW()),
   (11, '논산 선샤인 스튜디오', '충남 논산시 연무읍', 36.1349, 127.0983,
-   'https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=600&q=80',
    4, 92, 870, 2100, 4.6, NOW(), NOW()),
   (12, '청하공진시장', '경북 포항시 청하면', 36.1943, 129.3567,
-   'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80',
    3, 84, 542, 1650, 4.5, NOW(), NOW()),
   (13, '단밤 포차 (서울밤)', '서울 용산구 이태원동', 37.5347, 126.9947,
-   'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=600&q=80',
    2, 90, 1980, 4100, 4.7, NOW(), NOW()),
   (14, '덕수궁 돌담길', '서울 중구 정동', 37.5658, 126.9751,
-   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
    1, 80, 820, 2400, 4.7, NOW(), NOW()),
   (15, '호텔 델루나 외경 촬영지', '경북 포항시 호미곶면', 36.0760, 129.5666,
-   'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80',
    3, 75, 410, 1210, 4.4, NOW(), NOW()),
   (16, '이태원 녹사평 거리', '서울 용산구 이태원동', 37.5345, 126.9881,
-   'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=600&q=80',
    2, 70, 720, 1880, 4.5, NOW(), NOW()),
   (17, '합천 영상테마파크', '경남 합천군 용주면', 35.5668, 128.1668,
-   'https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=600&q=80',
    4, 65, 390, 1040, 4.3, NOW(), NOW());
+
+-- Place 별 커버 이미지 1:N 시드. imageOrderIndex=0 이 대표(primary). 각 place 마다 추가 1~2장 더
+-- 넣어 List<String> coverImageUrls 응답이 실제로 다중 이미지로 내려가는지 확인 가능하게 함.
+INSERT IGNORE INTO place_cover_image (id, place_id, image_url, image_order_index, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 10, 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (2, 10, 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (3, 10, 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=600&q=80', 2, NOW(), NOW()),
+  (4, 11, 'https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (5, 11, 'https://images.unsplash.com/photo-1518544801976-3e188ea7cce5?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (6, 12, 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (7, 12, 'https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (8, 13, 'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (9, 13, 'https://images.unsplash.com/photo-1528702748617-c64d49f918af?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (10, 13, 'https://images.unsplash.com/photo-1496483648148-47c686dc86a8?auto=format&fit=crop&w=600&q=80', 2, NOW(), NOW()),
+  (11, 14, 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (12, 14, 'https://images.unsplash.com/photo-1502635385003-ee1e6a1a742d?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (13, 15, 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (14, 15, 'https://images.unsplash.com/photo-1505228395891-9a51e7e86bf6?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (15, 16, 'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (16, 16, 'https://images.unsplash.com/photo-1502514276747-de8d3fc3a2cb?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW()),
+  (17, 16, 'https://images.unsplash.com/photo-1518544801976-3e188ea7cce5?auto=format&fit=crop&w=600&q=80', 2, NOW(), NOW()),
+  (18, 17, 'https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=600&q=80', 0, NOW(), NOW()),
+  (19, 17, 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80', 1, NOW(), NOW());
 
 -- Backfill stats for rows seeded before these columns existed (dev DBs only).
 UPDATE place SET photo_count = 1204, like_count = 3200, rating = 4.8 WHERE id = 10;

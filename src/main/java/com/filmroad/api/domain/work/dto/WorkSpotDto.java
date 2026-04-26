@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Builder
@@ -11,7 +12,7 @@ public class WorkSpotDto {
     private Long placeId;
     private String name;
     private String regionShort;
-    private String coverImageUrl;
+    private List<String> coverImageUrls;
     private String workEpisode;
     private String sceneTimestamp;
     private String sceneDescription;
