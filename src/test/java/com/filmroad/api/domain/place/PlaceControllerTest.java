@@ -71,4 +71,41 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40050)));
     }
+
+    @Test
+    @DisplayName("GET /api/places/10/kakao-info: 키 비활성(test profile) + data.sql 캐시 → available=true 로 시드 데이터 반환")
+    void getKakaoInfo_disabledKeyButCached_returnsCachedPayload() throws Exception {
+        // application-test.yml 의 kakao.rest-api-key=disabled-kakao 이지만 data.sql 의
+        // kakao_place_info 시드 행(place_id=10) 이 24h 내 lastSyncedAt 으로 박혀 있어
+        // 외부 호출 없이 캐시된 값으로 응답한다.
+        mockMvc.perform(get("/api/places/10/kakao-info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.available", is(true)))
+                .andExpect(jsonPath("$.results.roadAddress", containsString("주문진")))
+                .andExpect(jsonPath("$.results.kakaoPlaceUrl", startsWith("https://place.map.kakao.com")))
+                // 키 비활성이라 nearby 외부 호출은 빈 결과 반환.
+                .andExpect(jsonPath("$.results.nearby", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/places/12/kakao-info: 시드 캐시 없음 + 키 비활성 → available=false 로 200 응답")
+    void getKakaoInfo_noCacheAndDisabledKey_returnsUnavailable() throws Exception {
+        // place_id=12 에는 data.sql kakao_place_info 시드 행이 없음. 키도 비활성이라
+        // 외부 호출도 빈 결과 → available=false 로 떨어져야 함 (404 X).
+        mockMvc.perform(get("/api/places/12/kakao-info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.available", is(false)))
+                .andExpect(jsonPath("$.results.nearby", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/places/99999/kakao-info: 존재하지 않는 placeId → 404 PLACE_NOT_FOUND")
+    void getKakaoInfo_unknownId_returnsNotFound() throws Exception {
+        mockMvc.perform(get("/api/places/99999/kakao-info"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40050)));
+    }
 }

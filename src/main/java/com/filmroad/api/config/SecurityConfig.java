@@ -53,6 +53,7 @@ public class SecurityConfig {
                                 "/api/home",
                                 "/api/map/places",
                                 "/api/places/*",
+                                "/api/places/*/kakao-info",
                                 "/api/places/*/photos",
                                 "/api/photos/*",
                                 "/api/photos/*/comments",

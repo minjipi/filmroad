@@ -208,6 +208,108 @@
             </div>
           </section>
 
+          <!-- 카카오맵 정보 — 백엔드 /api/places/:id/kakao-info 가 available=true 일 때만
+               렌더한다. 영업시간/리뷰는 카카오 로컬 API 가 안줘서 "카카오맵에서 확인" CTA
+               로 대체. 미매핑 place 또는 dev 환경(키 없음)에서는 v-if 로 통째로 숨김. -->
+          <section
+            v-if="kakaoInfo?.available"
+            class="kakao-section"
+            data-testid="pd-kakao-section"
+          >
+            <div class="kakao-head">
+              <span class="kakao-badge"><span class="k">K</span>카카오맵</span>
+              <span v-if="kakaoInfo.lastSyncedAt" class="sync">
+                <ion-icon :icon="refreshOutline" class="ic-16" />{{ syncLabel }}
+              </span>
+            </div>
+
+            <div v-if="kakaoInfo.kakaoPlaceUrl" class="k-hours">
+              <span class="open-chip">
+                <ion-icon :icon="ellipse" class="ic-12" style="color:#16a34a;" />카카오맵 정보
+              </span>
+              <span class="time">영업시간 / 리뷰는 카카오맵에서 확인</span>
+            </div>
+
+            <div v-if="kakaoInfo.roadAddress || kakaoInfo.jibunAddress" class="k-info-row">
+              <ion-icon :icon="locationOutline" class="ic-20 ico" />
+              <div class="txt">
+                {{ kakaoInfo.roadAddress ?? kakaoInfo.jibunAddress }}
+                <div v-if="kakaoInfo.jibunAddress && kakaoInfo.roadAddress" class="sub">
+                  지번 · {{ kakaoInfo.jibunAddress }}
+                </div>
+              </div>
+              <button type="button" class="act" @click="onCopyAddress">복사</button>
+            </div>
+
+            <div v-if="kakaoInfo.phone" class="k-info-row">
+              <ion-icon :icon="callOutline" class="ic-20 ico" />
+              <div class="txt">
+                {{ kakaoInfo.phone }}
+                <div v-if="kakaoInfo.category" class="sub">{{ kakaoInfo.category }}</div>
+              </div>
+              <a :href="`tel:${kakaoInfo.phone}`" class="act">전화</a>
+            </div>
+
+            <div v-if="kakaoInfo.kakaoPlaceUrl" class="k-info-row">
+              <ion-icon :icon="globeOutline" class="ic-20 ico" />
+              <div class="txt">카카오맵에서 보기<div class="sub">영업시간 · 리뷰 · 메뉴</div></div>
+              <a :href="kakaoInfo.kakaoPlaceUrl" target="_blank" rel="noopener" class="act">열기</a>
+            </div>
+
+            <div class="k-actions">
+              <button type="button" class="k-act-btn" @click="onKakaoNavigate">
+                <ion-icon :icon="navigateOutline" class="ic-22" />길찾기
+              </button>
+              <button
+                type="button"
+                class="k-act-btn"
+                :class="{ on: isSaved(place.id) }"
+                @click="onToggleSave"
+              >
+                <ion-icon
+                  :icon="isSaved(place.id) ? bookmark : bookmarkOutline"
+                  class="ic-22"
+                />저장
+              </button>
+              <button type="button" class="k-act-btn" @click="onShare">
+                <ion-icon :icon="shareSocialOutline" class="ic-22" />공유
+              </button>
+              <a
+                :href="kakaoInfo.kakaoPlaceUrl ?? '#'"
+                target="_blank"
+                rel="noopener"
+                class="k-act-btn"
+              >
+                <ion-icon :icon="openOutline" class="ic-22" />카카오맵
+              </a>
+            </div>
+
+            <div v-if="kakaoInfo.nearby.length > 0" class="k-nearby">
+              <h4>주변 맛집 · 카페</h4>
+              <div class="k-nearby-row no-scrollbar">
+                <a
+                  v-for="(n, i) in kakaoInfo.nearby"
+                  :key="i"
+                  :href="n.kakaoPlaceUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="k-nearby-card"
+                >
+                  <div class="th">
+                    <ion-icon
+                      :icon="n.categoryGroupCode === 'CE7' ? cafeOutline : restaurantOutline"
+                      class="ic-22"
+                    />
+                  </div>
+                  <div class="nm">{{ n.name }}</div>
+                  <div class="d">{{ formatNearby(n) }}</div>
+                </a>
+              </div>
+            </div>
+
+            <div class="kakao-foot">카카오맵 정보 제공 · 실시간 동기화</div>
+          </section>
+
           <div class="tail" />
         </div>
       </div>
@@ -233,6 +335,13 @@ import {
   heart,
   heartOutline,
   cameraOutline,
+  refreshOutline,
+  ellipse,
+  callOutline,
+  globeOutline,
+  openOutline,
+  cafeOutline,
+  restaurantOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -242,7 +351,12 @@ import { useUploadStore } from '@/stores/upload';
 import { useMapStore } from '@/stores/map';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
+import {
+  useKakaoInfoStore,
+  type KakaoNearbyDto,
+} from '@/stores/kakaoInfo';
 import { useToast } from '@/composables/useToast';
+import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const props = defineProps<{ id: string | number }>();
 
@@ -252,8 +366,9 @@ const uploadStore = useUploadStore();
 const mapStore = useMapStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const kakaoInfoStore = useKakaoInfoStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
-const { showError } = useToast();
+const { showError, showInfo } = useToast();
 
 const isLiked = (id: number): boolean => detailStore.isLiked(id);
 // Saved state is global (used on Feed / Gallery / Map / Profile too); route
@@ -262,6 +377,35 @@ const isLiked = (id: number): boolean => detailStore.isLiked(id);
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 const placeId = computed(() => Number(props.id));
+
+// 카카오맵 정보 — placeId 별로 캐싱된 응답을 그대로 노출. available=false 또는
+// 아직 fetch 전이면 null. 컴포넌트는 v-if="kakaoInfo?.available" 로 섹션 자체를 숨긴다.
+const kakaoInfo = computed(() => kakaoInfoStore.infoFor(placeId.value));
+const syncLabel = computed(() => {
+  const at = kakaoInfo.value?.lastSyncedAt;
+  if (!at) return '';
+  // formatRelativeTime 의 "방금 전"/"5분 전"/... 라더에 "동기화" suffix 를 붙여
+  // 의미를 명확히. 1일 이상이면 "어제" 같은 자체 라벨을 그대로 사용한다.
+  const rel = formatRelativeTime(at);
+  if (!rel) return '';
+  if (rel === '방금 전') return '방금 동기화';
+  if (rel === '어제') return '어제 동기화';
+  return `${rel} 동기화`;
+});
+
+// 카카오 카테고리는 "한식 > 해물,생선" 같이 ">" 로 깊이가 들어와서, 카드 안에서는
+// 첫 토큰만 보여 정보 밀도를 낮춘다. 빈 문자열이면 "주변" 으로 fallback.
+function shortCategoryLabel(categoryName: string): string {
+  const head = categoryName.split('>')[0]?.trim();
+  return head && head.length > 0 ? head : '주변';
+}
+
+// 도보 거리는 평균 보행 속도 80m/min 기준 (네이버지도/카카오맵 표기와 동일).
+// 0 분이 나오는 매우 가까운 경우는 1 분으로 round-up — UX 상 "0분" 은 어색.
+function formatNearby(n: KakaoNearbyDto): string {
+  const minutes = Math.max(1, Math.round(n.distanceMeters / 80));
+  return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
+}
 
 // Hero carousel scroll tracking — scroll-snap 만으로는 dot 활성 상태/인디케이터를
 // 보여줄 수가 없어서 scroll position 으로 현재 slide index 를 계산한다.
@@ -442,6 +586,37 @@ async function onViewMap(): Promise<void> {
   });
 }
 
+// 주소 복사 — roadAddress 우선, 없으면 jibun. clipboard API 가 막혀있는
+// (HTTP 페이지 / 권한 거부) 환경에서는 catch 로 떨어져 사용자에게 알린다.
+async function onCopyAddress(): Promise<void> {
+  const k = kakaoInfo.value;
+  if (!k) return;
+  const addr = k.roadAddress ?? k.jibunAddress ?? '';
+  if (!addr) return;
+  try {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      throw new Error('clipboard unavailable');
+    }
+    await navigator.clipboard.writeText(addr);
+    await showInfo('주소를 복사했어요');
+  } catch {
+    await showError('주소 복사에 실패했어요');
+  }
+}
+
+// 카카오맵 길찾기 딥링크 — 모바일 앱이 깔려있으면 앱이 catch 하고, 없으면
+// 모바일 웹/데스크톱 카카오맵으로 폴백. 이름은 좌표와 함께 보내야 핀이 정확히
+// 찍힌다 (이름만 보내면 임의의 동명 장소로 매칭될 수 있음).
+function onKakaoNavigate(): void {
+  const p = place.value;
+  if (!p) return;
+  const name = encodeURIComponent(p.name);
+  const url = `https://map.kakao.com/link/to/${name},${p.latitude},${p.longitude}`;
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
 async function onCapture(): Promise<void> {
   const p = place.value;
   if (!p) return;
@@ -471,6 +646,9 @@ async function onOpenRelated(id: number): Promise<void> {
 }
 
 async function load(id: number): Promise<void> {
+  // 카카오 정보는 메인 place fetch 와 병렬 실행 — 보조 정보라 실패/지연이
+  // place 본문 렌더를 막지 않게 한다. fetch 안에서 자체 try/catch 로 swallow.
+  void kakaoInfoStore.fetch(id);
   await detailStore.fetch(id);
   if (error.value) {
     await showError(error.value);
@@ -889,5 +1067,194 @@ ion-content.pd-content {
 .pd-loading {
   height: 100%;
   background: var(--fr-bg-muted);
+}
+
+/* ----- 카카오맵 정보 섹션 -----
+   design/pages/02-map.html 의 .kakao-section 톤을 그대로 옮겨오되, 다른 .section
+   들과 시각 일관(상단 border + 동일 padding) 을 위해 padding-top 을 통일.
+   브랜드 컬러(노란 배지 #FEE500)는 카카오 가이드라인 그대로 유지. */
+.kakao-section {
+  padding: 22px 0;
+  border-top: 1px solid var(--fr-line);
+}
+.kakao-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.kakao-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #fee500;
+  color: #3c1e1e;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.kakao-badge .k {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3c1e1e;
+  color: #fee500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 10px;
+}
+.kakao-head .sync {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fr-ink-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.k-hours {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.k-hours .open-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.k-hours .time {
+  color: var(--fr-ink-2);
+  font-weight: 600;
+}
+
+.k-info-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--fr-line-soft);
+  align-items: flex-start;
+  font-size: 13px;
+}
+.k-info-row .ico {
+  flex-shrink: 0;
+  width: 20px;
+  color: var(--fr-ink-3);
+  padding-top: 1px;
+}
+.k-info-row .txt {
+  flex: 1;
+  color: var(--fr-ink);
+  line-height: 1.5;
+}
+.k-info-row .txt .sub {
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+.k-info-row .act {
+  font-size: 11.5px;
+  color: var(--fr-primary);
+  font-weight: 700;
+  padding: 4px 8px;
+  background: var(--fr-primary-soft);
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.k-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.k-act-btn {
+  background: var(--fr-bg-muted);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--fr-ink);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.k-act-btn ion-icon {
+  color: var(--fr-primary);
+}
+.k-act-btn.on {
+  background: var(--fr-primary-soft);
+  color: var(--fr-primary);
+}
+
+.k-nearby {
+  padding: 14px 0;
+  border-top: 1px solid var(--fr-line-soft);
+}
+.k-nearby h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.k-nearby-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+.k-nearby-card {
+  flex-shrink: 0;
+  width: 140px;
+  text-decoration: none;
+  color: inherit;
+}
+.k-nearby-card .th {
+  width: 100%;
+  height: 90px;
+  border-radius: 10px;
+  background: #eef2f6;
+  overflow: hidden;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fr-ink-3);
+}
+.k-nearby-card .nm {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fr-ink);
+}
+.k-nearby-card .d {
+  font-size: 11px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+
+.kakao-foot {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--fr-ink-4);
+  text-align: center;
 }
 </style>

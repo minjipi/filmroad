@@ -6,3 +6,11 @@ spring:
       # 개별 파일 10MB 상한 유지. 멀티 파일 업로드(최대 5장)까지 커버하도록 전체 요청 30MB.
       max-file-size: 10MB
       max-request-size: 30MB
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:disabled-kakao}
+  local:
+    base-url: https://dapi.kakao.com
+    timeout-ms: 3000
+    cache-ttl-hours: 24
+    nearby-radius-meters: 500

@@ -29,6 +29,7 @@ import {
   type PlaceDetailResponse,
 } from '@/stores/placeDetail';
 import { useSavedStore } from '@/stores/saved';
+import type { PlaceKakaoInfoResponse } from '@/stores/kakaoInfo';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: PlaceDetailResponse = {
@@ -79,8 +80,17 @@ const fixture: PlaceDetailResponse = {
 };
 
 function mountPlaceDetailPage(
-  overrides: { coverImageUrls?: string[] } = {},
+  overrides: {
+    coverImageUrls?: string[];
+    kakaoInfo?: PlaceKakaoInfoResponse | null;
+  } = {},
 ) {
+  // kakaoInfo override 가 들어오면 placeId 키로 prefill — store 의 fetch 가
+  // 캐시 hit 으로 즉시 return 하니 mock api 없이도 렌더 시점에 값이 보인다.
+  const kakaoInfoState = overrides.kakaoInfo
+    ? { infoByPlace: { [fixture.place.id]: overrides.kakaoInfo } }
+    : { infoByPlace: {} };
+
   const { wrapper } = mountWithStubs(PlaceDetailPage, {
     props: { id: fixture.place.id },
     initialState: {
@@ -109,6 +119,7 @@ function mountPlaceDetailPage(
         center: { lat: 37.5, lng: 127.0 },
         visitedIds: [],
       },
+      kakaoInfo: kakaoInfoState,
     },
     stubs: {
       'ion-router-outlet': true,
@@ -116,6 +127,22 @@ function mountPlaceDetailPage(
   });
 
   return { wrapper, store: usePlaceDetailStore() };
+}
+
+function makeKakaoInfo(
+  overrides: Partial<PlaceKakaoInfoResponse> = {},
+): PlaceKakaoInfoResponse {
+  return {
+    roadAddress: '강원 강릉시 주문진읍 해안로 1737',
+    jibunAddress: '강원 강릉시 주문진읍 교항리 산51-2',
+    phone: '033-662-3639',
+    category: '여행 > 관광지 > 명소',
+    kakaoPlaceUrl: 'https://place.map.kakao.com/12345',
+    lastSyncedAt: '2026-04-26T00:00:00Z',
+    nearby: [],
+    available: true,
+    ...overrides,
+  };
 }
 
 describe('PlaceDetailPage.vue', () => {
@@ -462,5 +489,150 @@ describe('PlaceDetailPage.vue', () => {
         lng: String(fixture.place.longitude),
       },
     });
+  });
+
+  // ----- 카카오맵 정보 섹션 (task: feat/place-kakao-info) -----
+
+  it('hides the kakao section entirely when kakaoInfo is missing or available=false', async () => {
+    // case 1: 응답이 아예 없음 (fetch 전 / 실패)
+    const noInfo = mountPlaceDetailPage();
+    await flushPromises();
+    expect(noInfo.wrapper.find('[data-testid="pd-kakao-section"]').exists()).toBe(
+      false,
+    );
+    noInfo.wrapper.unmount();
+
+    // case 2: available=false (미매핑 place 또는 dev 환경 placeholder)
+    const unavailable = mountPlaceDetailPage({
+      kakaoInfo: makeKakaoInfo({
+        available: false,
+        roadAddress: null,
+        jibunAddress: null,
+        phone: null,
+        category: null,
+        kakaoPlaceUrl: null,
+        lastSyncedAt: null,
+      }),
+    });
+    await flushPromises();
+    expect(
+      unavailable.wrapper.find('[data-testid="pd-kakao-section"]').exists(),
+    ).toBe(false);
+  });
+
+  it('renders address, phone and the kakao-map CTA when kakaoInfo is available', async () => {
+    const info = makeKakaoInfo();
+    const { wrapper } = mountPlaceDetailPage({ kakaoInfo: info });
+    await flushPromises();
+
+    const section = wrapper.find('[data-testid="pd-kakao-section"]');
+    expect(section.exists()).toBe(true);
+
+    const text = section.text();
+    // 도로명주소가 메인, 지번은 sub 라인.
+    expect(text).toContain(info.roadAddress!);
+    expect(text).toContain(info.jibunAddress!);
+    expect(text).toContain(info.phone!);
+    expect(text).toContain(info.category!);
+    // 4개 CTA: 길찾기 / 저장 / 공유 / 카카오맵
+    const actions = section.findAll('.k-act-btn');
+    expect(actions.length).toBe(4);
+    expect(actions.map((a) => a.text())).toEqual([
+      '길찾기',
+      '저장',
+      '공유',
+      '카카오맵',
+    ]);
+    // 카카오맵 링크는 응답의 kakaoPlaceUrl 그대로 사용.
+    const kakaoCta = section
+      .findAll('a.k-act-btn')
+      .find((a) => a.attributes('href') === info.kakaoPlaceUrl);
+    expect(kakaoCta).toBeDefined();
+  });
+
+  it('hides .k-nearby header when nearby is empty and renders one card per nearby item otherwise', async () => {
+    const empty = mountPlaceDetailPage({
+      kakaoInfo: makeKakaoInfo({ nearby: [] }),
+    });
+    await flushPromises();
+    expect(empty.wrapper.find('[data-testid="pd-kakao-section"] .k-nearby').exists()).toBe(
+      false,
+    );
+    empty.wrapper.unmount();
+
+    const withNearby = mountPlaceDetailPage({
+      kakaoInfo: makeKakaoInfo({
+        nearby: [
+          {
+            name: '주문진 활어회센터',
+            categoryGroupCode: 'FD6',
+            categoryName: '음식점 > 한식 > 해물,생선',
+            distanceMeters: 240,
+            kakaoPlaceUrl: 'https://place.map.kakao.com/aaa',
+            lat: 37.89,
+            lng: 128.83,
+            phone: null,
+          },
+          {
+            name: '영진해변 카페',
+            categoryGroupCode: 'CE7',
+            categoryName: '카페',
+            distanceMeters: 80,
+            kakaoPlaceUrl: 'https://place.map.kakao.com/bbb',
+            lat: 37.892,
+            lng: 128.834,
+            phone: null,
+          },
+        ],
+      }),
+    });
+    await flushPromises();
+    const section = withNearby.wrapper.find('[data-testid="pd-kakao-section"]');
+    expect(section.find('.k-nearby').exists()).toBe(true);
+    const cards = section.findAll('.k-nearby-card');
+    expect(cards.length).toBe(2);
+    expect(cards[0].find('.nm').text()).toBe('주문진 활어회센터');
+    // 첫 카드: 음식점 240m → 240/80=3분
+    expect(cards[0].find('.d').text()).toContain('도보 3분');
+    // 두 번째 카드: 80m → 1분 (clamp 안 적용되는 경계)
+    expect(cards[1].find('.d').text()).toContain('도보 1분');
+  });
+
+  it('clicking the address copy button writes roadAddress to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // jsdom 은 navigator.clipboard 를 안 깔아주므로 직접 stub.
+    const originalClipboard = (navigator as unknown as { clipboard?: unknown })
+      .clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    try {
+      const info = makeKakaoInfo();
+      const { wrapper } = mountPlaceDetailPage({ kakaoInfo: info });
+      await flushPromises();
+
+      const section = wrapper.find('[data-testid="pd-kakao-section"]');
+      // 첫 .k-info-row 가 주소행 — .act 가 button 이므로 직접 클릭.
+      const copyBtn = section.find('.k-info-row button.act');
+      expect(copyBtn.exists()).toBe(true);
+      await copyBtn.trigger('click');
+      await flushPromises();
+
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(writeText).toHaveBeenCalledWith(info.roadAddress);
+    } finally {
+      // 다른 테스트가 navigator 를 더럽히지 않게 원복.
+      if (originalClipboard === undefined) {
+        // 원래 없었던 경우 — defineProperty 한 키만 다시 지운다.
+        delete (navigator as unknown as { clipboard?: unknown }).clipboard;
+      } else {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: originalClipboard,
+          configurable: true,
+        });
+      }
+    }
   });
 });
