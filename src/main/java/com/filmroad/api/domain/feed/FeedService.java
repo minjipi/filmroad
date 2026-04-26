@@ -73,8 +73,17 @@ public class FeedService {
         Set<Long> likedPhotoIds = photoIds.isEmpty()
                 ? Set.of()
                 : new HashSet<>(photoLikeRepository.findPhotoIdsLikedByUser(viewerId, photoIds));
+        // 페이지 내 distinct author 들에 대해 viewer 가 follow 중인 ID 만 한번에 조회
+        // — N개 포스트 = 1 쿼리. viewer 비로그인이거나 author 없는 케이스는 빈 set.
+        Set<Long> authorIds = page.stream()
+                .map(p -> p.getUser() == null ? null : p.getUser().getId())
+                .filter(id -> id != null && !id.equals(viewerId))
+                .collect(Collectors.toSet());
+        Set<Long> followedAuthorIds = (viewerId == null || authorIds.isEmpty())
+                ? Set.of()
+                : new HashSet<>(userFollowRepository.findFolloweeIdsByFollowerAndFolloweeIdIn(viewerId, authorIds));
         List<FeedPostDto> posts = page.stream()
-                .map(p -> toPostDto(p, viewerId, likedPhotoIds.contains(p.getId())))
+                .map(p -> toPostDto(p, viewerId, likedPhotoIds.contains(p.getId()), followedAuthorIds))
                 .toList();
 
         return FeedResponse.builder()
@@ -140,7 +149,7 @@ public class FeedService {
                 .toList();
     }
 
-    private FeedPostDto toPostDto(PlacePhoto photo, Long viewerId, boolean liked) {
+    private FeedPostDto toPostDto(PlacePhoto photo, Long viewerId, boolean liked, Set<Long> followedAuthorIds) {
         Place place = photo.getPlace();
         Work work = place.getWork();
         boolean sceneCompare = place.getSceneImageUrl() != null && photo.getId() % 2L == 0L;
@@ -154,7 +163,7 @@ public class FeedService {
                 .createdAt(photo.getCreatedAt())
                 .sceneCompare(sceneCompare)
                 .dramaSceneImageUrl(sceneCompare ? place.getSceneImageUrl() : null)
-                .author(resolveAuthor(photo))
+                .author(resolveAuthor(photo, followedAuthorIds))
                 .place(FeedPlaceDto.builder()
                         .id(place.getId())
                         .name(place.getName())
@@ -174,7 +183,7 @@ public class FeedService {
                 .build();
     }
 
-    private FeedAuthorDto resolveAuthor(PlacePhoto photo) {
+    private FeedAuthorDto resolveAuthor(PlacePhoto photo, Set<Long> followedAuthorIds) {
         User u = photo.getUser();
         if (u != null) {
             return FeedAuthorDto.builder()
@@ -183,6 +192,7 @@ public class FeedService {
                     .nickname(u.getNickname())
                     .avatarUrl(u.getAvatarUrl())
                     .verified(u.isVerified())
+                    .following(followedAuthorIds.contains(u.getId()))
                     .build();
         }
         String nickname = photo.getAuthorNickname();
@@ -192,6 +202,7 @@ public class FeedService {
                 .nickname(nickname)
                 .avatarUrl(null)
                 .verified(false)
+                .following(false)
                 .build();
     }
 }

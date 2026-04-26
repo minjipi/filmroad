@@ -57,6 +57,7 @@ function makePost(id: number, sceneCompare = false): FeedPost {
       nickname: `닉${id}`,
       avatarUrl: `https://img/ava${id}.jpg`,
       verified: id === 1,
+      following: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시' },
     work: { id: 1, title: '도깨비', workEpisode: '1회', sceneTimestamp: '00:24:10' },

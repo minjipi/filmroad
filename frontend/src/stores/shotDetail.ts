@@ -13,6 +13,8 @@ export interface ShotAuthor {
   avatarUrl: string | null;
   verified: boolean;
   isMe: boolean;
+  /** viewer 가 author 를 follow 중인지. isMe / fallback 작성자 면 false. */
+  following: boolean;
 }
 
 export interface ShotPlace {
@@ -129,6 +131,32 @@ export const useShotDetailStore = defineStore('shotDetail', {
         }
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to toggle like';
+      }
+    },
+    /**
+     * Author 의 follow 상태 토글. optimistic — 즉시 flip + rollback. isMe 또는
+     * author 자체가 fallback (id 없음) 이면 noop.
+     */
+    async toggleAuthorFollow(): Promise<void> {
+      if (!this.shot) return;
+      const author = this.shot.author;
+      if (author.isMe || author.id == null) return;
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('팔로우는 로그인 후 이용할 수 있어요.');
+        return;
+      }
+      const wasFollowing = author.following;
+      author.following = !wasFollowing;
+      try {
+        const { data } = await api.post<{
+          following: boolean;
+          followersCount: number;
+          followingCount: number;
+        }>(`/api/users/${author.id}/follow`);
+        if (this.shot) this.shot.author.following = data.following;
+      } catch (e) {
+        if (this.shot) this.shot.author.following = wasFollowing;
+        this.error = e instanceof Error ? e.message : 'Failed to toggle follow';
       }
     },
     reset(): void {
