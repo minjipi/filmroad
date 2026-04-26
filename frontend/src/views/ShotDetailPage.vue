@@ -6,9 +6,8 @@
           <ion-icon :icon="chevronBack" class="ic-22" />
         </button>
         <div class="right">
-          <button type="button" class="ic-btn" aria-label="share" @click="onShare">
-            <ion-icon :icon="shareSocialOutline" class="ic-20" />
-          </button>
+          <!-- 공유 버튼은 sd-stats row 의 종이비행기 하나로 통일 — 헤더 + 액션 -->
+          <!-- row 양쪽에 두 개 있던 게 중복이라 헤더쪽을 제거. -->
           <button type="button" class="ic-btn" aria-label="more" @click="onMore">
             <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
           </button>
@@ -323,7 +322,6 @@ import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
   chevronForwardOutline,
-  shareSocialOutline,
   ellipsisHorizontal,
   swapHorizontal,
   checkmark,
