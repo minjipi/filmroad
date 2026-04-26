@@ -285,7 +285,7 @@ describe('PlaceDetailPage.vue', () => {
     }
   });
 
-  it('updates the active dot when the carousel scrolls to the next slide', async () => {
+  it('horizontal swipe past the threshold (15% of width) advances to the next slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
       coverImageUrls: [
         'https://img/cover-0.jpg',
@@ -295,20 +295,62 @@ describe('PlaceDetailPage.vue', () => {
     });
     await flushPromises();
 
-    const carouselEl = wrapper.find('[data-testid="pd-hero-carousel"]')
-      .element as HTMLElement;
-    // jsdom doesn't lay things out — fake the dimensions used by the index calc.
+    const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
+    const carouselEl = carousel.element as HTMLElement;
+    // jsdom 은 layout 을 안 해서 clientWidth=0. swipe 임계값(15%)을 계산하려면
+    // width 가 필요하니 stub.
     Object.defineProperty(carouselEl, 'clientWidth', { value: 320, configurable: true });
-    Object.defineProperty(carouselEl, 'scrollLeft', { value: 320, configurable: true });
-    await wrapper.find('[data-testid="pd-hero-carousel"]').trigger('scroll');
+
+    // pointerdown @ x=200, pointermove @ x=120 (왼쪽으로 80px → next slide 임계값
+    // 320 * 0.15 = 48 초과). 그리고 pointerup.
+    await carousel.trigger('pointerdown', { pointerId: 1, clientX: 200, clientY: 100 });
+    await carousel.trigger('pointermove', { pointerId: 1, clientX: 120, clientY: 100 });
+    await carousel.trigger('pointerup', { pointerId: 1, clientX: 120, clientY: 100 });
     await flushPromises();
 
     const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
     expect(dots[0].classes()).not.toContain('active');
     expect(dots[1].classes()).toContain('active');
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain(
-      '2 / 3',
-    );
+    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('2 / 3');
+  });
+
+  it('vertical pointer move (page-scroll intent) does not change the carousel slide', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
+    });
+    await flushPromises();
+
+    const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
+    Object.defineProperty(carousel.element, 'clientWidth', { value: 320, configurable: true });
+
+    // dy >> dx — axis lock decides "y", carousel ignores the gesture.
+    await carousel.trigger('pointerdown', { pointerId: 1, clientX: 200, clientY: 100 });
+    await carousel.trigger('pointermove', { pointerId: 1, clientX: 195, clientY: 250 });
+    await carousel.trigger('pointerup', { pointerId: 1, clientX: 195, clientY: 250 });
+    await flushPromises();
+
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[0].classes()).toContain('active');
+  });
+
+  it('a small horizontal pointer move under the threshold snaps back without changing slide', async () => {
+    const { wrapper } = mountPlaceDetailPage({
+      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+    });
+    await flushPromises();
+
+    const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
+    Object.defineProperty(carousel.element, 'clientWidth', { value: 320, configurable: true });
+
+    // dx = -20 (under 15% × 320 = 48) → no commit, slide stays at 0.
+    await carousel.trigger('pointerdown', { pointerId: 1, clientX: 200, clientY: 100 });
+    await carousel.trigger('pointermove', { pointerId: 1, clientX: 180, clientY: 100 });
+    await carousel.trigger('pointerup', { pointerId: 1, clientX: 180, clientY: 100 });
+    await flushPromises();
+
+    const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
+    expect(dots[0].classes()).toContain('active');
+    expect(dots[1].classes()).not.toContain('active');
   });
 
   it('shows prev/next arrows for a multi-cover place and hides them for a single-cover one', async () => {
