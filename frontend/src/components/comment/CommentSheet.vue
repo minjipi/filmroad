@@ -1,9 +1,16 @@
 <template>
+  <!--
+    Sheet sizing 메모: 5% top 갭은 디자인 요구사항. 이전엔 breakpoint=0.95 로
+    표현했는데, 이 모드는 panel 을 100% 높이로 잡되 5% 만큼 아래로 슬라이드해
+    숨기는 방식이라 panel 의 하단 5% (= footer) 가 viewport 밖으로 떨어졌다.
+    initial-breakpoint=1 + --height:95% 조합으로 panel 자체를 viewport 의 95%
+    로 만들어, breakpoint 1 에서 panel 전체가 viewport 안에 들어오게 했다.
+  -->
   <ion-modal
     :is-open="open"
-    :breakpoints="[0, 0.5, 0.95]"
-    :initial-breakpoint="0.95"
-    :style="modalStyle"
+    :breakpoints="[0, 0.5, 1]"
+    :initial-breakpoint="1"
+    style="--height: 95%; --max-height: 95%;"
     handle-behavior="cycle"
     @did-dismiss="onDismiss"
     @did-present="onDidPresent"
@@ -200,46 +207,28 @@ function focusTextInput(): void {
   textInput.value?.focus();
 }
 
-// OS 키보드 / 모바일 브라우저 URL bar 가 footer 를 가리지 않도록 visualViewport
-// 를 따라간다. 두 값을 노출:
-//  1) keyboardOffset — innerHeight - vv.height - vv.offsetTop. .cs-foot 의
-//     padding-bottom 에 더해 input 을 키보드 위로 띄운다.
-//  2) sheetMaxHeight — vv.height. .cs-root 의 max-height 에 박아 layout
-//     viewport 가 visual viewport 보다 길어 패널 하단이 화면 밖으로 잘리는
-//     케이스(iOS Safari URL bar 등)에서 foot 이 visible 영역 안에 들어오게.
-// CSS 커스텀 프로퍼티로 노출하므로 scoped style 에서 그대로 받아 쓴다.
+// OS 키보드가 input 을 가리지 않도록 visualViewport 로 보정한 키보드 높이를
+// CSS 커스텀 프로퍼티로 노출. .cs-foot padding-bottom 에 더해 input 이 키보드
+// 위로 떠 있게 한다. 이전 버전은 ion-modal --height 까지 vv.height 로 강제했는데,
+// breakpoint 0.95 와 곱해지며 cs-root 가 visible 영역보다 길어져 foot 이 화면
+// 밖으로 잘리는 부작용 — Ionic native sheet sizing 에 맡기는 게 안전.
 const keyboardOffset = ref(0);
-const sheetMaxHeight = ref<string>('100%');
 
 function recomputeKeyboardOffset(): void {
   if (typeof window === 'undefined') return;
   const vv = window.visualViewport;
   if (!vv) {
     keyboardOffset.value = 0;
-    sheetMaxHeight.value = '100%';
     return;
   }
   // pinch-zoom 케이스에서 visualViewport 가 위로 올라가 있을 수 있어 offsetTop
   // 도 차감 — 그냥 innerHeight - height 로만 잡으면 zoom 상황에서 오버보정.
   const diff = window.innerHeight - vv.height - vv.offsetTop;
   keyboardOffset.value = Math.max(0, Math.round(diff));
-  sheetMaxHeight.value = `${Math.round(vv.height)}px`;
 }
 
 const rootStyle = computed<Record<string, string>>(() => ({
   '--cs-keyboard-offset': `${keyboardOffset.value}px`,
-  '--cs-sheet-max-height': sheetMaxHeight.value,
-}));
-
-// ion-modal 호스트의 --height / --max-height 를 visual viewport 높이로 묶는다.
-// sheet 모드는 패널 높이를 layout viewport (`100%` = innerHeight) 기준으로
-// 잡기 때문에, layout > visual 인 모바일 브라우저(URL bar 가시 시 iOS Safari,
-// Android Chrome 등) 에서는 패널 하단(=foot 위치) 이 visible 영역 밖으로
-// 떨어진다. 호스트의 --height 를 visualViewport.height 로 강제해서 패널
-// 자체가 visible 영역 안에 들어오게 한다.
-const modalStyle = computed<Record<string, string>>(() => ({
-  '--height': sheetMaxHeight.value,
-  '--max-height': sheetMaxHeight.value,
 }));
 
 function onViewportChange(): void {
@@ -266,15 +255,23 @@ onBeforeUnmount(() => {
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
 
-const items = computed<Comment[]>(() =>
-  props.photoId != null ? commentStore.itemsFor(props.photoId) : [],
-);
-const hasMore = computed<boolean>(() =>
-  props.photoId != null ? commentStore.hasMoreFor(props.photoId) : false,
-);
-const loading = computed<boolean>(() =>
-  props.photoId != null ? commentStore.loadingFor(props.photoId) : false,
-);
+// Pinia getter 가 함수를 리턴하는 패턴(`itemsFor(id)`)은 외부 closure 가
+// state.commentsByPhoto[id] 를 한 번만 capture 하면서 반응성이 끊기는 케이스가
+// 있다 (실제로 modal 첫 mount 시 items 가 [] 로 머무르는 회귀가 있었음).
+// store 의 reactive state 객체에 직접 access 하면 Vue 의 proxy tracking 이
+// computed 안에서 바로 잡혀서 안전하다. 동작은 동일.
+const items = computed<Comment[]>(() => {
+  if (props.photoId == null) return [];
+  return commentStore.commentsByPhoto[props.photoId]?.items ?? [];
+});
+const hasMore = computed<boolean>(() => {
+  if (props.photoId == null) return false;
+  return commentStore.commentsByPhoto[props.photoId]?.hasMore ?? false;
+});
+const loading = computed<boolean>(() => {
+  if (props.photoId == null) return false;
+  return commentStore.commentsByPhoto[props.photoId]?.loading ?? false;
+});
 const authReady = computed<boolean>(() => user.value !== null);
 // 텍스트가 있을 때만 전송 가능. 이미지만 첨부하고 텍스트 비어있는 케이스는
 // 백엔드가 NotBlank 로 reject 하므로 클라에서도 같이 막는다.
@@ -425,7 +422,6 @@ watch(
       revokePreview();
       viewerSrc.value = null;
       keyboardOffset.value = 0;
-      sheetMaxHeight.value = '100%';
     }
   },
   { immediate: true },
@@ -442,13 +438,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* layout viewport 가 visual viewport 보다 길 때(iOS Safari address bar
-     visible, Android Chrome 등) ion-modal 패널의 하단이 화면 밖으로 잘리고
-     foot 이 보이지 않는 문제를 막는다. JS 가 visualViewport.height 를
-     --cs-sheet-max-height 로 박아 .cs-root 가 visible 영역까지로 줄어들면
-     foot 이 자동으로 visible bottom 위에 붙는다. visualViewport 미지원
-     환경은 100% 폴백으로 기존 동작 유지. */
-  max-height: var(--cs-sheet-max-height, 100%);
   background: #ffffff;
 }
 

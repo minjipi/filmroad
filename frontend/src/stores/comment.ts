@@ -42,12 +42,22 @@ interface State {
 const DEFAULT_LIMIT = 20;
 
 function ensure(state: State, photoId: number): PhotoCommentState {
-  let s = state.commentsByPhoto[photoId];
-  if (!s) {
-    s = { items: [], hasMore: false, nextCursor: null, loading: false, error: null };
-    state.commentsByPhoto[photoId] = s;
+  // 새 슬롯을 만들 때 로컬 raw 객체를 그대로 리턴하면, 호출자가 그걸로
+  // s.loading = true 같은 mutation 을 하면 Pinia 의 reactive proxy 를 우회해서
+  // 알림이 안 간다. SET 으로 commentsByPhoto[id] 를 채운 뒤 다시 GET 으로
+  // 받아오면 Vue 가 raw 를 reactive proxy 로 wrap 한 결과가 와서, 이후 모든
+  // mutation 이 proxy SET trap 을 거쳐 컴포넌트 computed 가 정상적으로
+  // 재평가된다.
+  if (!state.commentsByPhoto[photoId]) {
+    state.commentsByPhoto[photoId] = {
+      items: [],
+      hasMore: false,
+      nextCursor: null,
+      loading: false,
+      error: null,
+    };
   }
-  return s;
+  return state.commentsByPhoto[photoId];
 }
 
 export const useCommentStore = defineStore('comment', {
