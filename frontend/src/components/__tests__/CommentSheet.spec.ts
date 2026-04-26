@@ -290,6 +290,57 @@ describe('CommentSheet.vue', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it('updates --cs-keyboard-offset when visualViewport shrinks (keyboard overlay fix)', async () => {
+    // jsdom 에는 visualViewport 가 없으므로 mount 전에 stub 을 박는다. EventTarget
+    // 으로 만들어서 'resize' dispatch 를 컴포넌트가 그대로 받게 한다.
+    const vvStub = new EventTarget() as EventTarget & {
+      height: number;
+      offsetTop: number;
+    };
+    vvStub.height = 800;
+    vvStub.offsetTop = 0;
+    const origVV = (window as unknown as { visualViewport?: unknown }).visualViewport;
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: vvStub,
+    });
+    const origInner = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    });
+
+    try {
+      const { wrapper } = mountSheet({ open: true, photoId: 10, userId: 7 });
+      await flushPromises();
+
+      // 초기 상태 — 키보드 안 올라옴, offset 0px.
+      const root = wrapper.find('.cs-root').element as HTMLElement;
+      expect(root.style.getPropertyValue('--cs-keyboard-offset')).toBe('0px');
+
+      // 키보드 시뮬레이션: visualViewport.height 가 800 → 500 으로 줄어듦.
+      vvStub.height = 500;
+      vvStub.dispatchEvent(new Event('resize'));
+      await flushPromises();
+
+      // innerHeight(800) - vv.height(500) - vv.offsetTop(0) = 300.
+      expect(root.style.getPropertyValue('--cs-keyboard-offset')).toBe('300px');
+    } finally {
+      if (origVV === undefined) {
+        delete (window as unknown as { visualViewport?: unknown }).visualViewport;
+      } else {
+        Object.defineProperty(window, 'visualViewport', {
+          configurable: true,
+          value: origVV,
+        });
+      }
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: origInner,
+      });
+    }
+  });
+
   it('renders the attach thumbnail on a comment whose imageUrl is set', async () => {
     const items = [
       makeComment(1, 7, '/uploads/comments/abc.jpg'),
