@@ -85,41 +85,56 @@ const KakaoMapStub = {
 
 type SheetMode = 'closed' | 'peek' | 'full';
 
-function mountMapPage(opts: { firstEntry?: boolean; sheetMode?: SheetMode } = {}) {
+interface KakaoSeed {
+  // initialState 에 박을 kakaoInfo store 의 infoByPlace 슬라이스. 키 = placeId.
+  // null 은 "이미 fetch 시도했지만 정보 없음" 의미. 시드 안 하면 store 가
+  // 비어있으므로 v-if="kakaoInfo?.available" 로 섹션이 통째 숨겨진다.
+  infoByPlace?: Record<number, unknown>;
+}
+
+function mountMapPage(opts: {
+  firstEntry?: boolean;
+  sheetMode?: SheetMode;
+  kakao?: KakaoSeed;
+} = {}) {
   const firstEntry = opts.firstEntry ?? false;
   const sheetMode: SheetMode = opts.sheetMode ?? 'peek';
+  const initialState: Record<string, unknown> = {
+    map: firstEntry
+      ? {
+          markers: [],
+          selected: null,
+          loading: false,
+          error: null,
+          filter: 'SPOTS',
+          workId: null,
+          q: '',
+          center: { ...KOREA_CENTER },
+          zoom: COUNTRY_ZOOM,
+          hasBeenViewed: false,
+          sheetMode,
+          visitedIds: [10],
+        }
+      : {
+          markers: [...fixture.markers],
+          selected: { ...fixture.selected! },
+          loading: false,
+          error: null,
+          filter: 'SPOTS',
+          workId: null,
+          q: '',
+          center: { lat: 37.8928, lng: 128.8347 },
+          zoom: DETAIL_ZOOM,
+          hasBeenViewed: true,
+          sheetMode,
+          visitedIds: [10],
+        },
+  };
+  if (opts.kakao) {
+    initialState.kakaoInfo = { infoByPlace: opts.kakao.infoByPlace ?? {} };
+  }
   const { wrapper } = mountWithStubs(MapPage, {
-    initialState: {
-      map: firstEntry
-        ? {
-            markers: [],
-            selected: null,
-            loading: false,
-            error: null,
-            filter: 'SPOTS',
-            workId: null,
-            q: '',
-            center: { ...KOREA_CENTER },
-            zoom: COUNTRY_ZOOM,
-            hasBeenViewed: false,
-            sheetMode,
-            visitedIds: [10],
-          }
-        : {
-            markers: [...fixture.markers],
-            selected: { ...fixture.selected! },
-            loading: false,
-            error: null,
-            filter: 'SPOTS',
-            workId: null,
-            q: '',
-            center: { lat: 37.8928, lng: 128.8347 },
-            zoom: DETAIL_ZOOM,
-            hasBeenViewed: true,
-            sheetMode,
-            visitedIds: [10],
-          },
-    },
+    initialState,
     stubs: {
       KakaoMap: KakaoMapStub,
     },
@@ -237,17 +252,86 @@ describe('MapPage.vue', () => {
     expect(wrapper.find('.sheet').exists()).toBe(true);
   });
 
-  it('kakao section rendered inside sheet body (full-state content)', async () => {
+  it('kakao section is hidden when no kakao-info has been fetched / available=false', async () => {
+    // 기본 mountMapPage 는 kakaoInfo store 를 시드하지 않으므로 selected 는
+    // 있어도 kakaoInfo 는 null → v-if 로 섹션이 통째 사라진다. 이전엔 디자인 mock
+    // 이 강제로 그려져 어떤 place 를 골라도 같은 주소가 나오는 버그였다.
     const { wrapper } = mountMapPage();
     await flushPromises();
+    expect(wrapper.find('[data-testid="map-kakao-section"]').exists()).toBe(false);
+  });
 
-    const section = wrapper.find('.kakao-section');
+  it('kakao section renders the selected place\'s real Kakao Local data when fetched', async () => {
+    const { wrapper } = mountMapPage({
+      kakao: {
+        infoByPlace: {
+          10: {
+            roadAddress: '강원 강릉시 주문진읍 교항리 산51-2',
+            jibunAddress: '교항리 산51-2',
+            phone: '033-662-3639',
+            category: '여행 > 관광지',
+            kakaoPlaceUrl: 'https://place.map.kakao.com/12345',
+            lastSyncedAt: '2026-04-26T00:00:00Z',
+            nearby: [
+              {
+                name: '영진회집',
+                categoryGroupCode: 'FD6',
+                categoryName: '한식 > 해물,생선',
+                distanceMeters: 240,
+                kakaoPlaceUrl: 'https://place.map.kakao.com/1',
+                lat: 37.89,
+                lng: 128.83,
+                phone: null,
+              },
+              {
+                name: '테라로사 커피',
+                categoryGroupCode: 'CE7',
+                categoryName: '카페 > 커피전문점',
+                distanceMeters: 640,
+                kakaoPlaceUrl: 'https://place.map.kakao.com/2',
+                lat: 37.89,
+                lng: 128.83,
+                phone: null,
+              },
+            ],
+            available: true,
+          },
+        },
+      },
+    });
+    await flushPromises();
+
+    const section = wrapper.find('[data-testid="map-kakao-section"]');
     expect(section.exists()).toBe(true);
-    // Mock content from design doc surfaces for the demo:
     expect(section.text()).toContain('강원 강릉시 주문진읍 교항리 산51-2');
+    expect(section.text()).toContain('지번 · 교항리 산51-2');
     expect(section.text()).toContain('033-662-3639');
-    expect(wrapper.findAll('.k-rev-item').length).toBe(2);
-    expect(wrapper.findAll('.k-nearby-card').length).toBe(3);
+    expect(section.text()).toContain('카카오맵에서 보기');
+    // nearby 카드는 시드 2건 → 두 개만 그려진다 (예전엔 mock 으로 항상 3개였음).
+    expect(wrapper.findAll('.k-nearby-card').length).toBe(2);
+    expect(section.text()).toContain('영진회집');
+    expect(section.text()).toContain('테라로사 커피');
+  });
+
+  it('kakao section stays hidden when the response shape says available=false (e.g. unmapped place)', async () => {
+    const { wrapper } = mountMapPage({
+      kakao: {
+        infoByPlace: {
+          10: {
+            roadAddress: null,
+            jibunAddress: null,
+            phone: null,
+            category: null,
+            kakaoPlaceUrl: null,
+            lastSyncedAt: null,
+            nearby: [],
+            available: false,
+          },
+        },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="map-kakao-section"]').exists()).toBe(false);
   });
 
   it('deep-link entry (?lat=&lng=) resets sheetMode to peek even if the session left it at full', async () => {
