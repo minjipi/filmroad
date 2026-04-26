@@ -31,8 +31,8 @@
         <section v-if="stats" class="stats">
           <div class="stat"><div class="n">{{ formatCount(stats.visitedCount) }}</div><div class="l">방문 성지</div></div>
           <div class="stat"><div class="n">{{ formatCount(stats.photoCount) }}</div><div class="l">인증샷</div></div>
-          <div class="stat"><div class="n">{{ formatCount(stats.followersCount) }}</div><div class="l">팔로워</div></div>
-          <div class="stat"><div class="n">{{ formatCount(stats.followingCount) }}</div><div class="l">팔로잉</div></div>
+          <div class="stat clickable" data-testid="profile-followers-stat" @click="onOpenFollowers"><div class="n">{{ formatCount(stats.followersCount) }}</div><div class="l">팔로워</div></div>
+          <div class="stat clickable" data-testid="profile-following-stat" @click="onOpenFollowing"><div class="n">{{ formatCount(stats.followingCount) }}</div><div class="l">팔로잉</div></div>
         </section>
 
         <section class="cta">
@@ -358,6 +358,16 @@ async function onEdit(): Promise<void> {
   await router.push('/profile/edit');
 }
 
+function onOpenFollowers(): void {
+  if (!user.value) return;
+  void router.push(`/user/${user.value.id}/followers`);
+}
+
+function onOpenFollowing(): void {
+  if (!user.value) return;
+  void router.push(`/user/${user.value.id}/following`);
+}
+
 async function onShare(): Promise<void> {
   await showInfo('공유 기능은 곧 공개됩니다');
 }
@@ -505,6 +515,7 @@ ion-content.pf-content {
   text-align: center;
   padding: 10px 0;
 }
+.stat.clickable { cursor: pointer; }
 .stat .n { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--fr-ink); }
 .stat .l { font-size: 11.5px; color: var(--fr-ink-3); margin-top: 2px; }
 .stat + .stat { border-left: 1px solid var(--fr-line); }
