@@ -145,5 +145,7 @@ class NearbyRestaurantServiceTest {
         // mapX → longitude, mapY → latitude 매핑 검증 (필드명 단위/의미 명시)
         assertThat(item.getLongitude()).isEqualTo(128.8350);
         assertThat(item.getLatitude()).isEqualTo(37.8927);
+        // categoryName 은 TourAPI cat3 매핑 도입 전까지 항상 null (frontend contract 의 nullable 가정 충족)
+        assertThat(item.getCategoryName()).isNull();
     }
 }

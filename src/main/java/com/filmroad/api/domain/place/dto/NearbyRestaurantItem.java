@@ -24,6 +24,13 @@ public class NearbyRestaurantItem {
     private String imageUrl;
     private Double latitude;
     private Double longitude;
+    /**
+     * 카테고리 한글 라벨 (예: "한식 > 해물,생선"). 현재 백엔드는 항상 null —
+     * TourAPI `locationBasedList2` 응답이 cat1/cat2/cat3 코드만 주고 한글 라벨은
+     * 별도 매핑 데이터(`categoryCode2` API) 가 필요. 후속 task 에서 매핑 lookup 추가
+     * 시 본 필드만 채워주면 contract 변경 없음. 프론트는 nullable 로 받아 표시 생략 가능.
+     */
+    private String categoryName;
 
     public static NearbyRestaurantItem from(KoreaTourismItem raw) {
         return NearbyRestaurantItem.builder()
@@ -35,6 +42,7 @@ public class NearbyRestaurantItem {
                 .imageUrl(raw.imageUrl())
                 .latitude(raw.mapY())
                 .longitude(raw.mapX())
+                .categoryName(null)  // TourAPI cat3 매핑 데이터 도입 시 실제 라벨 세팅
                 .build();
     }
 }
