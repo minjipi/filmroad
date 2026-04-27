@@ -161,7 +161,37 @@ class PhotoControllerTest {
                         .file(buildMeta(req))
                         .cookie(demoAccessCookie()))
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.code", is(40060)));
+                .andExpect(jsonPath("$.code", is(40060)))
+                // 사용자가 다음 행동을 결정할 수 있도록 지원 포맷 안내가 메시지에 포함.
+                .andExpect(jsonPath("$.message", containsString("JPG")))
+                .andExpect(jsonPath("$.message", containsString("PNG")))
+                .andExpect(jsonPath("$.message", containsString("WebP")));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 확장자만 .png 인 HEIC 파일은 매직 바이트에서 차단되고 안내 메시지에 'HEIC' 포함")
+    void upload_heicWithPngExtension_returnsHelpfulMessage() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false, null, null);
+        // ftyp box + heic 브랜드 — 실제 iPhone HEIC 파일 시그니처. 확장자만
+        // .png 로 위장했지만 magic-byte 단계에서 PNG 시그니처(0x89 'P' 'N' 'G')
+        // 와 어긋나 차단되어야.
+        byte[] heicBytes = new byte[]{
+                0x00, 0x00, 0x00, 0x20, // box length
+                'f', 't', 'y', 'p',     // box type
+                'h', 'e', 'i', 'c',     // major brand
+                0x00, 0x00, 0x00, 0x00,
+                'm', 'i', 'f', '1', 'm', 'i', 'a', 'f',
+        };
+        MockMultipartFile heic = new MockMultipartFile(
+                "files", "고양이양말.png", MediaType.IMAGE_PNG_VALUE, heicBytes);
+
+        mockMvc.perform(multipart("/api/photos")
+                        .file(heic)
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40060)))
+                .andExpect(jsonPath("$.message", containsString("HEIC")));
     }
 
     @Test

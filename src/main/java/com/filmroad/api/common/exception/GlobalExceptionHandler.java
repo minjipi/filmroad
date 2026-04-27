@@ -36,9 +36,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<BaseResponse<Object>> handleBaseException(BaseException ex) {
         BaseResponseStatus status = ex.getStatus();
 
+        // 호출부가 `new BaseException(status, customMessage)` 로 명시적 메시지를
+        // 던졌을 땐 그 메시지를 클라이언트에 그대로 전달. 기본 enum 메시지와 다를
+        // 때만 override — 기본값과 동일하면 표준 응답을 사용해 분기를 단순하게.
+        // 이전엔 BaseResponse.error(status) 만 호출해서 호출부의 사용자 정의
+        // 메시지가 전달 경로 중간에서 통째로 사라지는 잠재 버그가 있었음.
+        String customMessage = ex.getMessage();
+        boolean hasCustom = customMessage != null && !customMessage.equals(status.getMessage());
+
         return ResponseEntity
                 .status(mapToHttpStatus(status.getCode()))
-                .body(BaseResponse.error(status));
+                .body(hasCustom
+                        ? BaseResponse.error(status, customMessage)
+                        : BaseResponse.error(status));
     }
 
     @ExceptionHandler(DisabledException.class)
