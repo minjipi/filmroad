@@ -314,7 +314,7 @@ describe('UploadPage.vue', () => {
     }
   });
 
-  it('scoring stage keeps stamp-card and rewards on screen alongside the count-up once the response lands (task #10)', async () => {
+  it('stamp-card / rewards 는 인증완료 헤더가 자리 잡은 뒤 EXTRAS_REVEAL_DELAY_MS 후에 노출 (task #10 → 정책 변경)', async () => {
     vi.useFakeTimers();
     try {
       const { wrapper } = mountUpload();
@@ -349,6 +349,7 @@ describe('UploadPage.vue', () => {
           currentPoints: 400,
           streakDays: 7,
           level: 5,
+          previousLevel: 5,
           levelName: '성지 순례자',
           newBadges: [],
         },
@@ -363,25 +364,30 @@ describe('UploadPage.vue', () => {
       await wrapper.find('button.post').trigger('click');
       await flushPromises();
 
-      // Still in scoring stage (the 700ms beat hasn't elapsed) — but the
-      // response has arrived so stamp-card / rewards should already render.
+      // scoring 단계: 응답이 도착해도 stamp-card / rewards 는 미노출.
       expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(false);
-      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
-      // 인증 완료 타이틀 / sub / 액션 버튼은 stage B 전용 — 아직 안 뜸.
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(false);
       expect(wrapper.find('[data-testid="completion-place-name"]').exists()).toBe(false);
       expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(false);
       expect(wrapper.find('[data-testid="upload-boast"]').exists()).toBe(false);
 
-      // After the 700ms beat → stage B, but stamp-card / rewards remain.
+      // STAGE_BEAT_MS(700) 만 경과: authenticated 진입했지만 extras 는 아직.
       await vi.advanceTimersByTimeAsync(800);
       await flushPromises();
 
       expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(false);
+
+      // EXTRAS_REVEAL_DELAY_MS(500) 추가 경과 → stamp-card / rewards fade-up 진입.
+      await vi.advanceTimersByTimeAsync(600);
+      await flushPromises();
+
       expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -587,7 +593,9 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
 
     await wrapper.find('button.post').trigger('click');
     await flushPromises();
-    await vi.advanceTimersByTimeAsync(800);
+    // STAGE_BEAT_MS(700) + EXTRAS_REVEAL_DELAY_MS(500) + 버퍼.
+    // authenticated 진입 후 stamp-card/rewards 가 fade-up 으로 들어올 때까지 기다림.
+    await vi.advanceTimersByTimeAsync(1400);
     await flushPromises();
     return wrapper;
   }
@@ -638,7 +646,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
     }
   });
 
-  it('U6: rewards 카드 3종 — pointsEarned / streakDays / level/levelName 텍스트', async () => {
+  it('U6: rewards 카드 4종 — score / pointsEarned / streakDays / level 텍스트', async () => {
     vi.useFakeTimers();
     try {
       const wrapper = await reachAuthenticatedStage(baseResponse({
@@ -647,7 +655,8 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
           currentPoints: 350,
           streakDays: 7,
           level: 3,
-          levelName: '여행 중급자',
+          previousLevel: 3,
+          levelName: '성실 순례자',
           newBadges: [],
         },
       }));
@@ -655,11 +664,12 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       const rewardsContainer = wrapper.find('[data-testid="completion-rewards"]');
       expect(rewardsContainer.exists()).toBe(true);
       const rewards = rewardsContainer.findAll('.reward');
-      expect(rewards).toHaveLength(3);
-      expect(rewards[0].find('.n').text()).toBe('+50');
-      expect(rewards[1].find('.n').text()).toBe('7일');
-      expect(rewards[2].find('.n').text()).toBe('LV.3');
-      expect(rewards[2].find('.l').text()).toBe('여행 중급자');
+      expect(rewards).toHaveLength(4);
+      expect(rewards[0].find('.n').text()).toBe('84점');
+      expect(rewards[1].find('.n').text()).toBe('+50');
+      expect(rewards[2].find('.n').text()).toBe('7일');
+      expect(rewards[3].find('.n').text()).toBe('LV.3');
+      expect(rewards[3].find('.l').text()).toBe('성실 순례자');
     } finally {
       vi.useRealTimers();
     }
@@ -778,11 +788,11 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
     }
   });
 
-  // task #10 — stamp/rewards 가 scoring 단계에도 노출되도록 변경됐다.
-  // showCompletionExtras = (stage==='authenticated') || (stage==='scoring' && !scoreLoading)
-  // 핵심 분기 2건을 회귀로 고정.
+  // 정책 — stamp/rewards 는 인증완료 헤더가 자리 잡은 뒤(EXTRAS_REVEAL_DELAY_MS)
+  // fade-up 으로 따라 들어온다. scoring 단계에서는 미노출.
+  // showCompletionExtras = (stage==='authenticated') && extrasVisible
 
-  it('U12: scoring 단계 + 응답 도착(loaded) → stamp-card / rewards 노출, 액션 버튼은 미노출', async () => {
+  it('U12: scoring 단계 — 응답이 도착해도 stamp-card / rewards 는 미노출', async () => {
     vi.useFakeTimers();
     try {
       const { wrapper } = mountUpload();
@@ -797,7 +807,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
         },
         reward: {
           pointsEarned: 50, currentPoints: 350, streakDays: 7,
-          level: 3, levelName: '여행 중급자', newBadges: [],
+          level: 3, previousLevel: 3, levelName: '성실 순례자', newBadges: [],
         },
       });
       vi.spyOn(store, 'submit').mockImplementation(async () => {
@@ -808,15 +818,13 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       await wrapper.find('button.post').trigger('click');
       await flushPromises();
       // 700ms beat 전 — 아직 stage='scoring' (아직 advanceTimers 안 함).
-      // ScoreRevealOverlayStub 가 mount 시 count-up-complete 즉시 emit 하지만 부모의 700ms
-      // setTimeout 이 vi.useFakeTimers 안에서 멈춰있음 → stage='scoring' 그대로.
 
       expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(false);
 
-      // task #10 핵심: scoring(loaded) 단계에도 stamp/rewards 가 노출.
-      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
+      // 정책 변경 — scoring 단계에서는 stamp/rewards 모두 미노출.
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(false);
 
       // 액션 버튼 / placeName 문장은 단계 B 전용 → 아직 미노출.
       expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(false);

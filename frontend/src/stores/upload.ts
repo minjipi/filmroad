@@ -55,6 +55,8 @@ export interface RewardDelta {
   currentPoints: number;
   streakDays: number;
   level: number;
+  // 업로드 직전 레벨 — level !== previousLevel 일 때만 레벨업 연출을 띄운다.
+  previousLevel: number;
   levelName: string;
   newBadges: RewardBadge[];
 }

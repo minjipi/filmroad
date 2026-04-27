@@ -195,6 +195,7 @@ public class PhotoUploadService {
                         .build());
             }
 
+            int previousLevel = user.getLevel();
             int newStreakDays = Math.max(1, user.getStreakDays() + 1);
             int newPoints = user.getPoints() + POINTS_PER_UPLOAD;
             int newLevel = Math.min(MAX_LEVEL, newPoints / POINTS_PER_LEVEL + 1);
@@ -221,6 +222,7 @@ public class PhotoUploadService {
                     .currentPoints(user.getPoints())
                     .streakDays(user.getStreakDays())
                     .level(user.getLevel())
+                    .previousLevel(previousLevel)
                     .levelName(UserMeDto.levelName(user.getLevel()))
                     .newBadges(newBadges)
                     .build();

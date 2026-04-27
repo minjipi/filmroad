@@ -62,6 +62,7 @@ const rewardedResponse: PhotoResponse = {
     currentPoints: 400,
     streakDays: 7,
     level: 5,
+    previousLevel: 5,
     levelName: '성지 순례자',
     newBadges: [
       {
