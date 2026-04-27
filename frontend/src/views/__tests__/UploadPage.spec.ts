@@ -44,7 +44,7 @@ function mountUpload(overrides: Partial<{
   photos: string[];
   selectedIndex: number;
   caption: string;
-  visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+  visibility: 'PUBLIC' | 'PRIVATE';
   addToStampbook: boolean;
   targetPlace: CaptureTarget | null;
   homePlaces: Array<{
@@ -128,30 +128,40 @@ describe('UploadPage.vue', () => {
     expect(store.caption).toBe('첫 방문이에요');
   });
 
-  it('toggle buttons reflect the on/off binding from the store', async () => {
+  it('stampbook toggle + visibility segmented control reflect store state', async () => {
     const { wrapper } = mountUpload({
       addToStampbook: false,
-      visibility: 'FOLLOWERS',
+      visibility: 'PRIVATE',
     });
     await flushPromises();
 
-    const toggles = wrapper.findAll('button.toggle');
-    // Two toggles: stampbook + visibility — both off in this fixture.
-    expect(toggles.length).toBe(2);
-    expect(toggles[0].classes()).toContain('off');
-    expect(toggles[1].classes()).toContain('off');
+    // 스탬프북 / 공개 범위는 고급 설정 안에 들어가 기본 접힘이라 먼저 expand.
+    await wrapper.find('[data-testid="advanced-toggle"]').trigger('click');
+
+    // 스탬프북은 토글 버튼 — 단일 .toggle.
+    const stampbookToggle = wrapper.find('button.toggle');
+    expect(stampbookToggle.exists()).toBe(true);
+    expect(stampbookToggle.classes()).toContain('off');
+
+    // 공개 범위는 segmented control (radio). PRIVATE 가 선택되어 있어야.
+    const publicSeg = wrapper.find('[data-testid="visibility-public"]');
+    const privateSeg = wrapper.find('[data-testid="visibility-private"]');
+    expect(publicSeg.classes()).not.toContain('on');
+    expect(privateSeg.classes()).toContain('on');
+    expect(privateSeg.attributes('aria-checked')).toBe('true');
 
     const store = useUploadStore();
 
-    // Tap the stampbook toggle → flips to on (no .off).
-    await toggles[0].trigger('click');
+    // 스탬프북 토글 → on.
+    await stampbookToggle.trigger('click');
     expect(store.addToStampbook).toBe(true);
-    expect(wrapper.findAll('button.toggle')[0].classes()).not.toContain('off');
+    expect(wrapper.find('button.toggle').classes()).not.toContain('off');
 
-    // Tap the visibility toggle → switches to PUBLIC (no .off).
-    await toggles[1].trigger('click');
+    // 전체 공개 라디오 탭 → store.visibility 'PUBLIC'.
+    await publicSeg.trigger('click');
     expect(store.visibility).toBe('PUBLIC');
-    expect(wrapper.findAll('button.toggle')[1].classes()).not.toContain('off');
+    expect(wrapper.find('[data-testid="visibility-public"]').classes()).toContain('on');
+    expect(wrapper.find('[data-testid="visibility-private"]').classes()).not.toContain('on');
   });
 
   it('bottom-nav entry with no targetPlace: renders the "장소 선택" CTA and disables 공유하기', async () => {

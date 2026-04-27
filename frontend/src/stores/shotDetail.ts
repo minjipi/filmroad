@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 
 // Matches backend `PhotoDetailResponse` (task #39 final shape).
-export type PhotoVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+export type PhotoVisibility = 'PUBLIC' | 'PRIVATE';
 
 export interface ShotAuthor {
   id: number;

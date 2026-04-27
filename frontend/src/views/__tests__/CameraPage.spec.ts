@@ -39,7 +39,7 @@ const baseUploadState: {
   selectedIndex: number;
   caption: string;
   tags: string[];
-  visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+  visibility: 'PUBLIC' | 'PRIVATE';
   addToStampbook: boolean;
   loading: boolean;
   error: string | null;

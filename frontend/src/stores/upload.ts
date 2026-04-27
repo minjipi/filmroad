@@ -14,7 +14,9 @@ const MAX_BATCH_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Mirror of the backend's per-batch file count limit (task #44).
 export const MAX_PHOTOS_PER_POST = 5;
 
-export type Visibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+// 제품 사양: 인증샷 공개 범위는 "전체공개 / 비공개" 두 가지. FOLLOWERS 는
+// 초기 디자인에서 잠깐 검토됐다가 제외 — 토글 UI 도 PUBLIC ↔ PRIVATE.
+export type Visibility = 'PUBLIC' | 'PRIVATE';
 
 export interface CaptureTarget {
   placeId: number;
