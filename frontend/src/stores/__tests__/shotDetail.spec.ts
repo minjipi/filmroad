@@ -7,6 +7,7 @@ vi.mock('@/services/api', () => ({
 
 import api from '@/services/api';
 import { useShotDetailStore, type ShotDetail } from '@/stores/shotDetail';
+import type { FeedPost } from '@/stores/feed';
 import { signInForTest } from './__helpers__/auth';
 
 const mockApi = api as unknown as {
@@ -39,7 +40,6 @@ const fixture: ShotDetail = {
     id: 10,
     name: '주문진 영진해변 방파제',
     regionLabel: '강원 강릉시 주문진읍',
-    address: '강원 강릉시 주문진읍 교항리 산51-2',
     latitude: 37.89,
     longitude: 128.83,
   },
@@ -137,5 +137,225 @@ describe('shotDetail store', () => {
     expect(store.shot).toBeNull();
     expect(store.error).toBeNull();
     expect(store.loading).toBe(false);
+    // task #15: infinite-scroll state also wiped on reset.
+    expect(store.appendedShots).toEqual([]);
+    expect(store.nextLoading).toBe(false);
+    expect(store.nextEndReached).toBe(false);
+    expect(store.nextError).toBeNull();
+    expect(store.nextCursor).toBeNull();
+  });
+
+  // task #15 — infinite-scroll loadNext action. Backend reuses the existing
+  // /api/feed?tab=RECENT&cursor=<id>&limit=N endpoint with auto-dedupe of
+  // the seed shot. Response shape matches the main feed: { posts, hasMore,
+  // nextCursor }.
+  describe('loadNext (infinite scroll, task #15)', () => {
+    const post1: FeedPost = {
+      id: 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: 'next post 1',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: true,
+      dramaSceneImageUrl: 'https://cdn/scene/76.jpg',
+      author: {
+        userId: 2,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: false,
+        following: false,
+      },
+      place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+      likeCount: 100,
+      commentCount: 12,
+      liked: false,
+      saved: false,
+      visitedAt: null,
+    };
+    const post2: FeedPost = { ...post1, id: 75, imageUrl: 'https://cdn/p/75.jpg' };
+
+    it('GET /api/feed?tab=RECENT&cursor=<seedId>&limit=10 with the primary shot id as initial cursor', async () => {
+      mockApi.get.mockResolvedValueOnce({ data: fixture });
+      const store = useShotDetailStore();
+      await store.fetchShot(77);
+
+      mockApi.get.mockResolvedValueOnce({
+        data: { posts: [post1, post2], hasMore: true, nextCursor: '74' },
+      });
+      await store.loadNext();
+
+      const calls = mockApi.get.mock.calls;
+      const [url, opts] = calls[calls.length - 1];
+      expect(url).toBe('/api/feed');
+      expect(opts).toEqual({ params: { tab: 'RECENT', cursor: 77, limit: 10 } });
+
+      expect(store.appendedShots).toEqual([post1, post2]);
+      expect(store.nextCursor).toBe('74');
+      expect(store.nextEndReached).toBe(false);
+      expect(store.nextLoading).toBe(false);
+      expect(store.nextError).toBeNull();
+    });
+
+    it('uses nextCursor on subsequent loads (cursor pagination)', async () => {
+      mockApi.get.mockResolvedValueOnce({ data: fixture });
+      const store = useShotDetailStore();
+      await store.fetchShot(77);
+
+      mockApi.get.mockResolvedValueOnce({
+        data: { posts: [post1], hasMore: true, nextCursor: '75' },
+      });
+      await store.loadNext();
+      mockApi.get.mockResolvedValueOnce({
+        data: { posts: [post2], hasMore: false, nextCursor: null },
+      });
+      await store.loadNext();
+
+      const calls = mockApi.get.mock.calls;
+      // 2nd loadNext should use nextCursor='75', not the original shot id.
+      const [, opts] = calls[calls.length - 1];
+      expect(opts).toEqual({ params: { tab: 'RECENT', cursor: '75', limit: 10 } });
+      expect(store.appendedShots).toEqual([post1, post2]);
+      // hasMore=false → end-of-feed.
+      expect(store.nextEndReached).toBe(true);
+    });
+
+    it('empty posts[] with hasMore=false sets nextEndReached=true without appending', async () => {
+      mockApi.get.mockResolvedValueOnce({ data: fixture });
+      const store = useShotDetailStore();
+      await store.fetchShot(77);
+
+      mockApi.get.mockResolvedValueOnce({
+        data: { posts: [], hasMore: false, nextCursor: null },
+      });
+      await store.loadNext();
+
+      expect(store.appendedShots).toEqual([]);
+      expect(store.nextEndReached).toBe(true);
+    });
+
+    it('endpoint failure sets nextEndReached + nextError, never throws', async () => {
+      mockApi.get.mockResolvedValueOnce({ data: fixture });
+      const store = useShotDetailStore();
+      await store.fetchShot(77);
+
+      mockApi.get.mockRejectedValueOnce(new Error('Network error'));
+      await store.loadNext();
+
+      expect(store.appendedShots).toEqual([]);
+      expect(store.nextEndReached).toBe(true);
+      expect(store.nextError).toBe('Network error');
+    });
+
+    it('no-ops when nextLoading is in-flight or nextEndReached is true (guards)', async () => {
+      const store = useShotDetailStore();
+      // No primary shot loaded → no seed → no fetch.
+      await store.loadNext();
+      expect(mockApi.get).not.toHaveBeenCalled();
+
+      // After end reached, additional calls are silent.
+      mockApi.get.mockResolvedValueOnce({ data: fixture });
+      await store.fetchShot(77);
+      mockApi.get.mockReset();
+      store.nextEndReached = true;
+      await store.loadNext();
+      expect(mockApi.get).not.toHaveBeenCalled();
+    });
+  });
+
+  // task #18 — appended-card interaction store actions.
+  describe('toggleAppendedLike / toggleAppendedFollow (task #18)', () => {
+    const post: FeedPost = {
+      id: 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: '',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: false,
+      dramaSceneImageUrl: null,
+      author: {
+        userId: 9,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: false,
+        following: false,
+      },
+      place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: null, sceneTimestamp: null },
+      likeCount: 100,
+      commentCount: 0,
+      liked: false,
+      saved: false,
+      visitedAt: null,
+    };
+
+    it('toggleAppendedLike posts /api/photos/:id/like and applies optimistic flip', async () => {
+      const store = useShotDetailStore();
+      store.appendedShots.push({ ...post });
+
+      mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 101 } });
+      await store.toggleAppendedLike(76);
+
+      const [url] = mockApi.post.mock.calls[0];
+      expect(url).toBe('/api/photos/76/like');
+      expect(store.appendedShots[0].liked).toBe(true);
+      expect(store.appendedShots[0].likeCount).toBe(101);
+    });
+
+    it('toggleAppendedLike rolls back liked + likeCount on failure', async () => {
+      const store = useShotDetailStore();
+      store.appendedShots.push({ ...post });
+      const before = { ...store.appendedShots[0] };
+
+      mockApi.post.mockRejectedValueOnce(new Error('boom'));
+      await store.toggleAppendedLike(76);
+
+      // 롤백 — 모든 값이 원래 상태.
+      expect(store.appendedShots[0].liked).toBe(before.liked);
+      expect(store.appendedShots[0].likeCount).toBe(before.likeCount);
+      expect(store.error).toBe('boom');
+    });
+
+    it('toggleAppendedLike no-ops for an unknown postId', async () => {
+      const store = useShotDetailStore();
+      store.appendedShots.push({ ...post });
+      await store.toggleAppendedLike(999);
+      expect(mockApi.post).not.toHaveBeenCalled();
+      // 기존 카드는 무변.
+      expect(store.appendedShots[0].liked).toBe(false);
+    });
+
+    it('toggleAppendedFollow posts /api/users/:userId/follow + flips ALL cards from same author', async () => {
+      const store = useShotDetailStore();
+      // 같은 작성자의 카드 두 장 (각 카드는 author 사본 — Pinia 의 deep proxy
+      // 가 공유 객체를 어떻게 다루는지에 의존하지 않도록 분리).
+      store.appendedShots.push({ ...post, id: 76, author: { ...post.author } });
+      store.appendedShots.push({ ...post, id: 75, author: { ...post.author } });
+
+      mockApi.post.mockResolvedValueOnce({
+        data: { following: true, followersCount: 1, followingCount: 1 },
+      });
+      await store.toggleAppendedFollow(9);
+
+      const [url] = mockApi.post.mock.calls[0];
+      expect(url).toBe('/api/users/9/follow');
+      expect(store.appendedShots[0].author.following).toBe(true);
+      expect(store.appendedShots[1].author.following).toBe(true);
+    });
+
+    it('toggleAppendedFollow rolls back ALL matching cards on failure', async () => {
+      const store = useShotDetailStore();
+      // Independent author objects per card so the test isolates the rollback
+      // logic rather than accidentally testing shared-reference quirks.
+      store.appendedShots.push({ ...post, id: 76, author: { ...post.author } });
+      store.appendedShots.push({ ...post, id: 75, author: { ...post.author } });
+
+      mockApi.post.mockRejectedValueOnce(new Error('boom'));
+      await store.toggleAppendedFollow(9);
+
+      expect(store.appendedShots[0].author.following).toBe(false);
+      expect(store.appendedShots[1].author.following).toBe(false);
+      expect(store.error).toBe('boom');
+    });
   });
 });

@@ -99,13 +99,6 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/reward/:placeId',
-    name: 'Reward',
-    component: () => import('../views/RewardPage.vue'),
-    props: true,
-    meta: { requiresAuth: true },
-  },
-  {
     path: '/gallery/:placeId',
     name: 'Gallery',
     component: () => import('../views/GalleryPage.vue'),

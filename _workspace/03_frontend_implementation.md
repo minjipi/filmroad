@@ -301,3 +301,319 @@
 - (M) `frontend/src/views/ShotDetailPage.vue`
 - (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #13 — ShotDetailPage 의 loc-card, scene-card 섹션 제거
+
+## 완료 항목
+
+### 템플릿 / 스크립트 / CSS 일괄 제거
+- `<section class="loc-card">` (지도 썸네일 + 장소명/주소 + 외부 이동 버튼) 마크업 삭제.
+- `<section class="scene-card">` (원본 장면 보기 카드 — 드라마 정보 + 가이드 이미지 + play 버튼) 마크업 삭제.
+- 핸들러 정리: `onOpenPlace`, `onOpenScene` 함수 삭제.
+- 아이콘 import 정리: `arrowForward`, `play`, `chevronForwardOutline` 제거 (모두 제거된 두 섹션에서만 쓰임). `filmOutline` 은 compare 의 scene-meta 에서 계속 사용 중이라 유지.
+- CSS 정리: `.loc-card`, `.loc-map-thumb`, `.loc-map-thumb::after`, `.loc-card .meta`, `.loc-card .pl`, `.loc-card .ad`, `.loc-card .go`, `.scene-card`, `.scene-card .head`, `.scene-card .head .drama-ic`, `.scene-card .head .title-block`, `.scene-card .head .t/.s/.chev`, `.scene-card .body`, `.scene-card .play`, `.scene-card .play::after`, `.scene-card .play-btn`, `.scene-card .play-time` 룰 모두 삭제.
+- 제거 위치에 추적용 주석만 남김 ("task #13: loc-card / scene-card 두 섹션은 사용자 결정으로 제거…").
+
+### compare 토글 / 좋아요·저장·팔로우 / 댓글 시트 / 라우터 가드 / 멀티 이미지 캐러셀 / scene-meta / sd-user / sd-stats / sd-caption / .comments / .cmt-input-wrap — **전부 보존**.
+
+### 단위 테스트
+- `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+  - **제거**: `loc-card click pushes /place/:id for the shot's place` 케이스 (해당 요소 부재로 회귀 무의미).
+  - **추가**: `task #13: loc-card and scene-card sections are no longer rendered` — 두 셀렉터 부재 검증 (회귀 안전망 — 향후 누군가 실수로 다시 추가하면 fail).
+  - 토글/좋아요/저장/댓글 등 다른 16 케이스 그대로 PASS.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **520 tests** 통과 (제거 1 + 신규 1, 다른 케이스 영향 없음).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건.
+- **Dev 서버 헬스체크** (`npm run dev`):
+  - Vite v5.4.21 ready in 1827ms, 콘솔 에러/경고 0건.
+  - `GET /shot/15` → HTTP 200 (954 bytes SPA shell).
+  - `GET /src/views/ShotDetailPage.vue` → HTTP 200, **101 770 bytes** (이전 117 130 bytes 대비 약 15 KB 감소).
+  - 변환 산출물 토큰 검증: `onOpenPlace=0`, `onOpenScene=0`, `drama-ic=0`, `play-btn=0` (모두 제거 확인). `compareMode=11`, `compare-toggle=6`, `is-shot=2`, `is-guide=2` (task #12 토글 유지). 남은 `loc-card/scene-card` 매칭 1건씩은 모두 SFC 주석(`_createCommentVNode("task #13: loc-card / scene-card 두 섹션은…")`) 내부 — 마크업/CSS 부재 확인.
+- 실행 중이던 stale Vite 인스턴스 3개(이전 세션 잔류)를 발견해 정리 후 단일 fresh 서버에서 재검증.
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #15 — ShotDetailPage 무한 스크롤 UI
+
+## 백엔드 통합 결정 (task #14 결과)
+- backend-dev 가 별도 엔드포인트 신설 대신 **`GET /api/feed?tab=RECENT&cursor=<id>&limit=<n>`** 재사용 — 기존 cursor 기반 페이지네이션 + visibility 필터 + ID-DESC 정렬이 무한 스크롤 요건을 그대로 충족.
+- 응답 shape: `{ posts: FeedPost[], hasMore: boolean, nextCursor: string | null }` (메인 피드 store 와 동일).
+- 시드 cursor 는 primary shot id — 서버가 시드 자체를 자동 dedupe.
+
+## 완료 항목
+
+### 1. `frontend/src/stores/shotDetail.ts` 무한 스크롤 상태 + 액션
+- 신규 state: `appendedShots: FeedPost[]` (메인 feed store 의 `FeedPost` 재사용 import), `nextLoading`, `nextEndReached`, `nextError`, `nextCursor: string | null`.
+- 신규 action `loadNext()`:
+  - guards: `nextLoading` / `nextEndReached` / 시드 부재 시 silent no-op.
+  - 첫 호출은 primary shot id 를 cursor 로, 이후 호출은 서버가 내려준 `nextCursor` 사용.
+  - 페이지 사이즈 상수 `NEXT_PAGE_SIZE = 3` (코드 주석으로 결정 근거 명시).
+  - `hasMore=false` 또는 `nextCursor=null` → `nextEndReached=true`.
+  - 네트워크 / 5xx 실패 → catch 블록에서 `nextEndReached=true` + `nextError` 기록 (재호출 spam 방지).
+- `reset()` 에 새 state 5종 모두 초기화 추가.
+
+### 2. `frontend/src/views/ShotDetailPage.vue` UI
+- 신규 마크업: `<section class="sd-feed">` 하위에 `appendedShots` 를 `<article class="sd-feed-card">` 로 v-for. 13-feed-detail.html 의 `.post` 패턴 1:1 이식 (post-head + compare-wrap + 토글 + post-actions + caption).
+- 각 카드는 자체 토글 상태 — `feedCardModes: Record<number, 'shot'|'guide'>` (keyed by shot id), 클릭 시 immutable 업데이트.
+- 카드 하단: 신규 sentinel `<div ref="sentinelEl" data-testid="sd-infinite-sentinel">` + 로딩 인디케이터 (`더 불러오는 중…`) + 끝 도달 표시 (`마지막 인증샷이에요`).
+- IntersectionObserver 셋업: `rootMargin: '300px 0px'` (뷰포트 진입 300px 전에 미리 트리거 → 자연스러운 끊김 없는 스크롤). shot 변경 시 watch 에서 재설정 (immediate=true + nextTick — DOM mount 후), `nextEndReached=true` 시 즉시 disconnect, `onUnmounted` 시 cleanup.
+- testid 추가: `sd-feed`, `sd-feed-card`, `sd-feed-toggle`, `sd-infinite-sentinel`, `sd-infinite-loading`, `sd-infinite-end`.
+- jsdom 안전: `window.IntersectionObserver` 부재 시 silent skip.
+- 기존 primary shot 의 `compareMode`, 좋아요/저장/팔로우, 댓글 시트, 라우터 가드, 캐러셀 — 100% 보존.
+- 신규 CSS: `.sd-feed`, `.sd-feed-card`, post-head/compare-wrap/post-actions/post-caption (13-feed-detail 톤 + scoped), `.sd-infinite-sentinel`, `.sd-infinite-status`.
+
+### 3. 단위 테스트
+- `src/stores/__tests__/shotDetail.spec.ts` — 신규 5 케이스 (총 11):
+  - 첫 호출 cursor 시드 = primary shot id 검증 + URL/params 검증.
+  - 후속 호출이 서버 issued nextCursor 사용 검증.
+  - 빈 posts + hasMore=false → nextEndReached=true.
+  - 엔드포인트 실패 → nextEndReached + nextError, throw 안 함.
+  - guards (nextLoading / nextEndReached / 시드 부재) silent no-op.
+  - 기존 reset 케이스에 무한 스크롤 state 5종 초기화 검증 추가.
+- `src/views/__tests__/ShotDetailPage.spec.ts` — 신규 2 케이스 (총 19):
+  - IntersectionObserver mock 으로 sentinel 진입 → loadNext 호출 → feed-card 렌더 검증 (caption + handle 텍스트 포함).
+  - end-of-feed 상태에서 `[data-testid="sd-infinite-end"]` 노출 + "마지막" 카피 검증.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **527 tests** 통과 (이전 520 + 신규 7).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건 (사전 3 error 그대로).
+- **Dev 서버 헬스체크**:
+  - `pkill -f vite` 선행 (task #13 lesson).
+  - Vite v5.4.21 ready in 2142ms, 콘솔 에러/경고 0건.
+  - `GET /shot/15` → HTTP 200 (954 bytes SPA shell).
+  - `GET /src/views/ShotDetailPage.vue` → HTTP 200, 134 585 bytes (이전 task #13 후 101 770 → +33 KB, 무한 스크롤 마크업 / CSS / 핸들러 추가).
+  - 토큰 검증: `appendedShots=5`, `loadNext=1`, `nextEndReached=6`, `sd-feed-card=2`, `sd-feed-toggle=1`, `sd-infinite-sentinel=2`, `sd-infinite-end=1`, `sd-infinite-loading=1` — 모두 정상 transform.
+
+## 변경 파일
+- (M) `frontend/src/stores/shotDetail.ts`
+- (M) `frontend/src/stores/__tests__/shotDetail.spec.ts`
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #16 — ShotDetailPage `.sd-top` 헤더 sticky 적용
+
+## 완료 항목
+
+### 템플릿 재구성 (sticky 작동을 위한 컨테이너 정리)
+- 기존: `.sd-top` 이 `<ion-content>` 의 absolute-positioned 헤더, `.sd-scroll` 은 shot 로드 후에만 렌더되는 conditional 스크롤 컨테이너 — sticky 적용 불가능 (`.sd-top` 이 스크롤 컨테이너 밖).
+- 신규: `.sd-scroll` 이 항상 렌더되는 outer wrapper 가 되고, 그 안에 `.sd-top` (sticky) + 상태별 placeholder/loaded 분기가 들어감.
+- `data-testid="sd-loaded"` 는 새 inner wrapper `.sd-loaded` 로 이동 — 기존 spec 의 `.exists()` 단언 그대로 통과.
+
+### CSS — sticky + 톤 변경
+- `.sd-top`: `position: sticky; top: 0; z-index: 30;` + `padding: calc(8px + env(safe-area-inset-top)) 16px 8px;` (iOS 노치 대응).
+- 배경: `rgba(255,255,255,0.85) + backdrop-filter: blur(14px) saturate(160%)` — 스크롤 시 콘텐츠가 비치지 않으면서 배경 미세하게 살짝 보이는 frosted glass.
+- 하단 1px 흐린 보더 (rgba(15,23,42,0.06)) — 스크롤 영역과의 시각적 경계.
+- `.ic-btn`: 기존 다크 원형(`rgba(15,23,42,0.55)`) → 13-feed-detail 톤의 `rounded square + var(--fr-bg-muted)` neutral chip — sticky bg 가 light 라 dark 컨트라스트 불필요.
+- `.lbl-chip.l/r`: `top: calc(60px + env(safe-area-inset-top))` → `top: 12px` — sticky 헤더가 layout space 를 가져가서 photo 가 헤더 아래에 시작하므로 정상 offset 으로 충분.
+- `.sd-scroll`: `height: 100%` 추가 (ion-content 안에서 외부 스크롤 자식이 명시적 높이를 가져야 자체 overflow 가 동작).
+
+### z-index 충돌 검증
+- `.sd-top z-index: 30`.
+- CommentSheet — Ionic modal 패턴, Ionic 자체 오버레이 z-index (1000+) 사용.
+- ScoreRevealOverlay — UploadPage 전용이라 ShotDetail 과 무관.
+- 결론: 스티키 헤더는 모든 모달 아래로 명확히 정렬됨.
+
+### 비즈니스 로직 보존
+- 좋아요/저장/팔로우, 댓글 시트, 라우터 가드, 캐러셀, compare 토글, 무한 스크롤(#15), back/more 버튼 — 100% 보존.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **527 tests** 통과 (변경 없음).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건 (사전 3 error 그대로).
+- **Dev 서버 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 2089ms, 콘솔 에러/경고 0건.
+  - `GET /shot/15` → HTTP 200.
+  - `GET /src/views/ShotDetailPage.vue` → HTTP 200, 138 928 bytes (이전 134 585 → +4 KB sticky 마크업/CSS).
+  - 토큰 검증: `position: sticky` × 1, `sd-scroll` × 2, `sd-loaded` × 4 — 모두 정상.
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #17 — 무한 스크롤 추가 카드 마크업을 primary shot과 동일하게
+
+## 완료 항목
+
+### 마크업 통일
+- 기존 task #15 의 `.sd-feed-card` 는 13-feed-detail 의 `.post` 패턴(post-head + .compare-wrap + post-actions + post-caption) — primary shot 의 5-section 구조와 다른 visual.
+- task #17 에서 추가 카드를 **primary 와 동일한 5-section 마크업** 으로 재작성:
+  1. `<section class="compare" data-mode>` — 두 이미지 absolute 겹침 + lbl-chip + scene-meta + compare-toggle
+  2. `<section class="sd-user">` — avatar + nickname/verified + place·date + 팔로우 버튼
+  3. `<section class="sd-stats">` — 좋아요 / 댓글 / 저장 / 공유 4종
+  4. `<section class="sd-caption">` — caption + date (FeedPost 는 tags 미보유 → 미렌더)
+  5. `<button class="cmt-input-wrap">` — 댓글 작성 트리거
+- primary 와 동일한 CSS 클래스를 그대로 사용 → 기존 `.compare`, `.lbl-chip`, `.scene-meta`, `.compare-toggle`, `.sd-user`, `.sd-stats`, `.sd-stat-btn`, `.sd-caption`, `.cmt-input-wrap` 룰이 그대로 적용. 별도 inner CSS 추가 거의 없음.
+
+### 데이터 차이 처리 (FeedPost vs ShotDetail)
+- 추가 카드는 `/api/feed` 응답의 `FeedPost` 사용 — 필드 이름 약간 다름:
+  - `dramaSceneImageUrl` ↔ primary `sceneImageUrl`
+  - `work.workEpisode` ↔ primary `work.episode`
+  - `author.userId` ↔ primary `author.id`, `author.isMe` 부재 (서버 분기 안 함, 항상 다른 사용자)
+  - tags / topComments / address 부재
+- 템플릿에서 v-for 루프 내 직접 바인딩 — 어댑터 함수 없이 마크업이 명확.
+
+### 인터랙션 정책 (재량)
+- 좋아요/저장/팔로우/댓글 등 모든 액션 버튼: **read-only (`disabled`)**. 시각만 일치, 동작은 primary 만.
+- 사용자가 추가 카드의 인증샷을 자세히 보려면 카드를 탭해 `/shot/<id>` 진입 — task description 에 명시된 흐름.
+- 추후 인터랙티브로 확장 시 backend 와 협의 후 별도 task.
+- 시각: `disabled` 버튼이 ghosted 처럼 보이지 않도록 `opacity:1 + cursor:default` override 추가.
+
+### testid 충돌 회피
+- 카드 내부 testid 부여 안 함 — 외곽 `[data-testid="sd-feed-card"]` 만. 기존 spec 의 `[data-testid="sd-like-btn"]` / `sd-save-btn` / `sd-author-action` / `sd-cmt-trigger` / `sd-compare-toggle` 등은 모두 primary 에만 존재.
+- 회귀 테스트가 카드 내부를 검증할 땐 `card.find('section.compare')`, `card.find('.sd-stat-btn')` 등 카드별 스코프 셀렉터 사용 (신규 task #17 spec 참고).
+
+### CSS 정리
+- `.sd-feed-card .post-head/.post-actions/.post-caption/.compare-wrap/.compare-img/.compare-lbl-top/.compare-lbl-bot/.compare-toggle` 룰 모두 삭제. primary 의 동명 클래스 룰이 그대로 적용되어 중복 제거.
+- 신규 추가: `.sd-feed-card .sd-user .nm:disabled / .follow:disabled / .sd-stat-btn:disabled / .cmt-input-wrap:disabled { cursor:default; opacity:1 }` — read-only 상태 시각 보정.
+
+### 단위 테스트
+- `frontend/src/views/__tests__/ShotDetailPage.spec.ts` 신규 1 케이스 (총 20):
+  - `appended feed cards render the same 5-section structure as the primary shot (task #17)` — store 에 FeedPost 1개 push → 카드 1개 렌더 → 5 섹션(`section.compare`/`section.sd-user`/`section.sd-stats`/`section.sd-caption`/`button.cmt-input-wrap`) 존재 검증 + compare 두 이미지 src 검증 + scene-meta work info 검증 + sd-user nickname/verified/place 검증 + sd-stat-btn 4개 모두 disabled 검증 + sd-caption .body/.tag (tags 0개) + cmt-input-wrap disabled.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **528 tests** 통과 (이전 527 + 신규 1).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건.
+- **Dev 서버 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 1880ms, 콘솔 클린.
+  - `GET /shot/15` → HTTP 200.
+  - `GET /src/views/ShotDetailPage.vue` → 150 214 bytes (이전 task #16 후 138 928 → +12 KB, 5-section 마크업 펼침 + 일부 CSS 삭제 상쇄).
+  - 토큰 검증: `post-head`, `post-actions`, `post-caption` × 0 (모두 제거 확인) / `sd-user` × 5, `sd-stats` × 5, `sd-caption` × 4, `cmt-input-wrap` × 3, `sd-feed-card` × 3 — 정상.
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #18 — 무한 스크롤 추가 카드의 좋아요/댓글/저장/팔로우 인터랙션 활성화
+
+## 활성화된 인터랙션
+- **좋아요**: 카드 하트 클릭 → optimistic 토글 + `POST /api/photos/:id/like` + 실패 rollback.
+- **저장(북마크)**: 카드 북마크 클릭 → primary 와 동일 정책 (saved 면 `savedStore.toggleSave(placeId)`, unsaved 면 `uiStore.openCollectionPicker(placeId)`).
+- **팔로우**: 작성자 팔로우 버튼 → optimistic 토글 + `POST /api/users/:userId/follow`. 같은 작성자의 다른 카드 (피드에 같은 사람이 여러 장 올렸을 때) 도 함께 flip + 실패 시 일괄 rollback.
+- **댓글**: 카드 댓글 stat 또는 cmt-input-wrap 클릭 → CommentSheet 가 그 카드의 post id 로 열림.
+- **닉네임 클릭**: `router.push('/user/<userId>')` → 작성자 프로필.
+- 공유 버튼: `disabled` 유지 (primary 도 share endpoint 가 stub `showInfo` 라 동등).
+
+## 구현 요약
+
+### `frontend/src/stores/shotDetail.ts`
+- 신규 action `toggleAppendedLike(postId)`:
+  - optimistic flip on matching `appendedShots` entry — `liked`, `likeCount` 동시 갱신.
+  - 성공 시 server response (`liked`, `likeCount`) 로 sync.
+  - 실패 시 originalLiked + originalCount 로 정확히 복원.
+  - 미로그인 시 `useUiStore().showLoginPrompt(...)` 후 early return.
+- 신규 action `toggleAppendedFollow(userId)`:
+  - 같은 userId 의 카드 모두에 optimistic flip 적용 (피드 내 한 작성자가 여러 카드를 가질 수 있음).
+  - 성공 시 server response 로 sync, 실패 시 wasFollowing 으로 일괄 rollback.
+
+### `frontend/src/views/ShotDetailPage.vue`
+- 신규 ref `commentSheetPhotoId: number | null` — 시트가 어떤 post 의 댓글을 보여주는지 트래킹.
+- `onOpenComments()` (primary) / `onOpenAppendedComments(post)` 둘 다 `commentSheetPhotoId` 를 set 후 시트 open.
+- `onCommentCreated()`: 새 댓글 알림 시 `commentSheetPhotoId` 와 매치되는 post (primary 또는 appended) 의 `commentCount += 1`.
+- 신규 핸들러 5종: `onToggleAppendedLike`, `onToggleAppendedSave`, `onToggleAppendedFollow`, `onOpenAppendedComments`, `onOpenAppendedAuthor`.
+- 신규 helper `feedCardSaved(post)` — `savedStore.isSaved(post.place.id)` 로 클라이언트 store 의 single source 보장 (primary 와 동일 패턴).
+- 카드 마크업: 이전 `disabled` 속성 모두 제거 + `@click` 핸들러 wired. 공유 버튼만 `disabled` 유지.
+- `<CommentSheet :photo-id="commentSheetOpen ? commentSheetPhotoId : null">` 로 변경 — primary `shot.id` hardcode 제거.
+
+### CSS
+- 기존 read-only 룰 정리: `.sd-feed-card .sd-stat-btn:disabled { cursor: default; opacity: 1 }` 만 유지 (공유 버튼 전용).
+
+## 단위 테스트
+
+### `frontend/src/stores/__tests__/shotDetail.spec.ts` 신규 5 케이스 (총 16)
+- toggleAppendedLike: POST URL + optimistic flip + likeCount 갱신 검증.
+- toggleAppendedLike: 실패 rollback (liked / likeCount 둘 다 원복).
+- toggleAppendedLike: unknown postId 시 silent no-op.
+- toggleAppendedFollow: 같은 작성자의 카드 두 장 동시 flip + POST URL.
+- toggleAppendedFollow: 실패 시 모든 매칭 카드 일괄 rollback.
+
+### `frontend/src/views/__tests__/ShotDetailPage.spec.ts` 신규 5 케이스 (총 25)
+- 좋아요 버튼 click → POST `/api/photos/:id/like` + appendedShots[idx] liked/likeCount 갱신.
+- 저장 버튼 click (unsaved place) → `uiStore.openCollectionPicker(placeId)` 호출.
+- 팔로우 버튼 click → POST `/api/users/:userId/follow` + author.following=true.
+- cmt-input-wrap click → CommentSheet open + photo-id 가 primary 가 아닌 appended post id (76) 로 표시.
+- 닉네임 click → `router.push('/user/<userId>')`.
+- 기존 task #17 spec 갱신: 모든 stat 버튼 disabled → 좋아요/댓글/저장 enabled, 공유만 disabled.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **538 tests** 통과 (이전 528 + 신규 10).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건.
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 2137ms, 콘솔 클린.
+  - `GET /shot/15` → HTTP 200.
+  - `GET /src/views/ShotDetailPage.vue` → 155 973 bytes (이전 150 214 → +5.7 KB, 신규 핸들러 5종 + 댓글 시트 trakcing + helper).
+  - 토큰 검증: `toggleAppendedLike/Follow` × 1 each (store 액션 setup expose), `onOpenAppendedComments` × 4, `onOpenAppendedAuthor` × 3, `onToggleAppendedSave` × 3, `feedCardSaved` × 4, `disabled` × 4 (공유 button).
+
+## Pinia 반응성 노트 (개인 메모)
+- 처음 follow rollback 테스트 작성 시 `{ ...post, id: 76 }` 로 두 카드를 push 했다가 `author` 객체가 두 카드 간에 공유되어 Pinia 의 deep proxy 가 mutation 을 unexpectedly 처리. 테스트는 pass→fail 사이를 오갔음.
+- 해결: 테스트에서 `{ ...post, id: 76, author: { ...post.author } }` 로 author 도 사본 분리. production 데이터는 JSON 파싱 결과라 자동 분리되므로 무관.
+
+## 변경 파일
+- (M) `frontend/src/stores/shotDetail.ts`
+- (M) `frontend/src/stores/__tests__/shotDetail.spec.ts`
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #19 — RewardPage dead route/component/spec 제거 + ShotPlace.address 필드 제거
+
+## 1. RewardPage 완전 제거 (audit High Risk 1)
+- `frontend/src/router/index.ts` 의 `/reward/:placeId` 라우트 매핑 제거 (이전 라인 102~107). dynamic import 도 함께 사라져 RewardPage chunk 가 번들에서 자동 누락.
+- `frontend/src/views/RewardPage.vue` 파일 삭제 (477 lines).
+- `frontend/src/views/__tests__/RewardPage.spec.ts` 파일 삭제 (4 케이스).
+- task #8/12 작업 시점에 "dead route 보존(옵션 C)" 결정했었으나, audit 검토 결과 안전하게 제거 결정 (UploadPage 가 인증완료까지 호스트, 외부 진입점 없음).
+
+### `/reward/*` 도달 시 동작
+- Vite dev/prod 모두 SPA fallback 으로 index.html (HTTP 200) 반환 — 클라이언트 라우터가 클라이언트 측에서 매칭.
+- Vue router 에 catch-all 없음 → 매칭 실패 시 router-view 가 비어 사용자에게 빈 화면. 명시적 NotFoundPage 가 필요해지면 별도 task 로 catch-all redirect (`/:pathMatch(.*)*` → /home) 또는 NotFoundPage 컴포넌트 추가 가능. **현 task 스코프 외**.
+
+## 2. ShotPlace.address 필드 제거 (audit Med Risk)
+- `frontend/src/stores/shotDetail.ts` 의 `ShotPlace.address: string | null` 필드 제거 + "loc-card when present" docstring 삭제.
+- task #13 에서 loc-card 마크업 제거 후 UI 어디에서도 사용 안 했음 (audit 확인). 백엔드 task #20 (PhotoDetailResponse 의 address 필드 제거) 와 동기화.
+- 테스트 fixture 에서도 `address: '...'` 라인 제거: `frontend/src/views/__tests__/ShotDetailPage.spec.ts`, `frontend/src/stores/__tests__/shotDetail.spec.ts`.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — **49 files / 534 tests** 통과 (이전 50/538 → -1 file -4 tests, 정확히 RewardPage.spec.ts 누락분).
+- `npm run build` 그린, dist 산출물에 `RewardPage-*.js` chunk 없음 (이전엔 별도 chunk 였음).
+- `npm run lint` — 신규 위반 0건 (사전 3 error 그대로).
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready.
+  - `GET /shot/15` → 200 (정상).
+  - `GET /reward/10` → 200 (Vite SPA fallback — index.html 반환, Vue router 가 클라이언트 매칭 실패).
+  - 컴파일된 router/index.ts 에 `RewardPage` × 0, `/reward/` × 0 — 모두 제거 확인.
+
+## 변경 파일
+- (M) `frontend/src/router/index.ts` (라우트 + dynamic import 제거, 5 lines 삭제)
+- (D) `frontend/src/views/RewardPage.vue` (477 lines 삭제)
+- (D) `frontend/src/views/__tests__/RewardPage.spec.ts` (4 케이스 삭제)
+- (M) `frontend/src/stores/shotDetail.ts` (address 필드 + docstring 삭제)
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (fixture address 라인 삭제)
+- (M) `frontend/src/stores/__tests__/shotDetail.spec.ts` (fixture address 라인 삭제)
+- (M) `_workspace/03_frontend_implementation.md`

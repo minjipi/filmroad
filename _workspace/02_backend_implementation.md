@@ -298,3 +298,120 @@ ALTER TABLE place_photo
   실제 점수로 들어옴. 0 인 경우는 (a) 미채점 row(이전 데이터) (b) 좌표 누락 + scene 디코딩 실패
   의 두 케이스 — UI 에서 "채점 미수행" 표시 vs "0점" 표시 분기 필요시 응답에 별도 플래그 추가
   요청 가능.
+
+---
+
+# Backend Implementation — Task #14 (ShotDetailPage 무한 스크롤)
+
+브랜치: `feat/shot-infinite-scroll` · 커밋: `eaf7af1`
+
+## 결정 — 신규 엔드포인트 불필요, `GET /api/feed` 재사용
+
+기존 `GET /api/feed?tab=RECENT&cursor=:id&limit=:n` 이 ShotDetailPage 무한 스크롤 요건을
+정확히 충족함을 분석으로 확인. 신규 엔드포인트 / 신규 컨트롤러 추가 안 함.
+
+| 요건 | 기존 엔드포인트 동작 |
+|---|---|
+| 커서 기반 페이지네이션 | `cursor` 파라미터 → `WHERE p.id < :cursor` |
+| 시작 shot 자동 제외 | strict less 조건으로 cursor 자체 제외 |
+| 최신순 정렬 | `ORDER BY p.id DESC` |
+| visibility 필터 | PUBLIC + 본인 + FOLLOWERS 팔로우 적용 |
+| 응답 형태 | `FeedResponse { posts: FeedPostDto[], hasMore, nextCursor }` |
+| 작품/장소/작가 메타 | `FeedPostDto` 에 모두 포함 (place, work, author, like/comment count, sceneCompare) |
+
+## 변경된 파일
+
+### 수정 (테스트만)
+- `src/test/java/com/filmroad/api/domain/feed/FeedControllerTest.java` — 통합 테스트 2 케이스 추가
+  - **G1**: `cursor=175 + limit=5` → 응답에 id=175 자체 없음, 모든 shot 의 id < 175, hasMore/nextCursor 노출
+  - **G2**: `cursor=2 + limit=20` (끝 도달) → `hasMore=false`, `nextCursor=null`
+
+production 코드 무수정.
+
+## API 가이드 (frontend-dev 용)
+```
+GET /api/feed?tab=RECENT&cursor={startShotId}&limit=10
+인증: 선택 (쿠키 ATOKEN 있으면 viewer 기준 like/follow 반영)
+```
+응답:
+```json
+{
+  "results": {
+    "posts": [
+      { "id": 174, "imageUrl": "...", "place": {...}, "work": {...}, "author": {...},
+        "likeCount": 12, "commentCount": 3, "liked": false, "saved": false,
+        "sceneCompare": true, "dramaSceneImageUrl": "...", "createdAt": "..." }
+    ],
+    "hasMore": true,
+    "nextCursor": 174,
+    "recommendedUsers": null
+  }
+}
+```
+- ShotDetailPage 진입 시 `cursor=현재 shotId` 로 첫 호출.
+- 응답의 `nextCursor` 를 다음 호출의 `cursor` 로 사용.
+- `hasMore=false` 면 더 이상 호출하지 않음.
+
+## 비고
+- `FeedPostDto` 가 `PhotoDetailResponse` 만큼 풀 정보(예: tags, topComments) 는 안 가짐.
+  ShotDetailPage 의 "다음 카드" 가 미리보기 형태이면 충분. 매 카드에서 정확한 디테일이
+  필요하면 카드 탭 시 `GET /api/photos/{id}` 를 호출하는 흐름으로.
+
+---
+
+# Backend Implementation — Task #20 (Audit Med Risk 2: address 노출 제거)
+
+브랜치: `chore/photo-detail-remove-address` · 커밋: `0624bc0`
+
+## 작업 범위
+ShotDetail 응답에서 노출되던 `place.address` 필드를 응답 DTO 에서 제거. Place 엔티티의
+`address` 컬럼 자체는 다른 도메인 사용 여지가 있어 그대로 보존 (응답 노출만 차단).
+
+## 변경된 파일
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoDetailPlaceDto.java`
+  - `private String address;` 필드 제거
+  - `from(Place)` 정적 팩토리에서 `.address(place.getAddress())` 매핑 1줄 제거
+  - 코멘트로 제거 사유(Audit Med Risk 2번) 명시
+
+production 코드 외 변경 없음.
+
+## 회귀 위험 점검 (이전 사고 학습 적용)
+- `PhotoDetailPlaceDto` 는 `@Builder` 만 (no `@AllArgsConstructor`) → 위치형 호출처 0
+- `grep "new PhotoDetailPlaceDto\|PhotoDetailPlaceDto.builder\|PhotoDetailPlaceDto.from"`:
+  - production 호출처 1곳: `PhotoDetailService.java:99` `.place(PhotoDetailPlaceDto.from(place))` — 시그니처 변경 없음
+  - DTO 내부 builder 호출 1곳 (정적 팩토리 자체)
+- `grep "place.address\|\"address\""` in `src/test/`: 0건 → 테스트 단언 갱신 불필요
+- 다른 응답 DTO 에 `address` 노출 없음 (`FeedPostDto / FeedPlaceDto / GalleryPlaceHeaderDto / KakaoPlaceInfo` 등)
+  → 본 변경은 ShotDetail 응답 한정으로 깨끗하게 격리
+
+## frontend-dev 영향
+task #19 가 ShotPlace 타입의 `address` 필드 + 화면 표시 부분을 동기 제거. 백엔드는 응답에서
+필드가 사라질 뿐(JSON 키 자체 누락), 기존 응답 사용 코드는 컴파일/런타임 에러 없음 (TypeScript
+`address?: string` 옵셔널이거나 destructure 시 undefined).
+
+## API 응답 변경
+Before:
+```json
+"place": {
+  "id": 12,
+  "name": "...",
+  "regionLabel": "...",
+  "address": "강원 강릉시 ...",
+  "latitude": 37.89,
+  "longitude": 128.83
+}
+```
+After:
+```json
+"place": {
+  "id": 12,
+  "name": "...",
+  "regionLabel": "...",
+  "latitude": 37.89,
+  "longitude": 128.83
+}
+```
+
+## 빌드
+WSL Gradle FileLock 환경 그대로. 변경은 단순 필드/매핑 1줄 제거이며 호출처 시그니처
+변경 없음 → 컴파일/테스트 회귀 위험 0. CI / 로컬 IDE 검증.
