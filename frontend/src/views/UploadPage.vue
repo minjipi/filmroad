@@ -475,17 +475,20 @@ import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { MAX_PHOTOS_PER_POST, useUploadStore } from '@/stores/upload';
 import { useHomeStore, type PlaceSummary } from '@/stores/home';
+import { useUiStore } from '@/stores/ui';
 import { useToast } from '@/composables/useToast';
 import { useOnline } from '@/composables/useOnline';
+import { buildBoastShareData } from '@/utils/share';
 import ScoreRevealOverlay from '@/components/upload/ScoreRevealOverlay.vue';
 import LevelUpOverlay from '@/components/upload/LevelUpOverlay.vue';
 
 const router = useRouter();
 const uploadStore = useUploadStore();
 const homeStore = useHomeStore();
+const uiStore = useUiStore();
 const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading, uploadProgress, error: errorText, lastResult } = storeToRefs(uploadStore);
 const selectedPhoto = computed(() => uploadStore.selectedPhoto);
-const { showError, showInfo } = useToast();
+const { showError } = useToast();
 const online = useOnline();
 
 // ---------- Stage machine (task #8) ----------
@@ -805,8 +808,11 @@ const confettiDots = computed<ConfettiDot[]>(() =>
   })),
 );
 
-async function onBoast(): Promise<void> {
-  await showInfo('공유는 곧 공개됩니다');
+function onBoast(): void {
+  if (!lastResult.value) return;
+  uiStore.openShareSheet(
+    buildBoastShareData(lastResult.value, targetPlace.value?.placeName),
+  );
 }
 
 async function onGoHome(): Promise<void> {
