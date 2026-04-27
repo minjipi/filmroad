@@ -192,4 +192,16 @@ describe('GalleryPage.vue', () => {
     expect(sheetAfter.attributes('data-open')).toBe('true');
     expect(sheetAfter.attributes('data-photo-id')).toBe(String(galleryState.photos[1].id));
   });
+
+  // task #25: 페이지 언마운트 시 store 가 reset 되어 다른 placeId 갤러리 진입
+  // 시 이전 데이터가 잠시 잔류하지 않게.
+  it('unmount → galleryStore.reset() called (task #25 stale-data guard)', async () => {
+    const { wrapper } = mountGallery();
+    await flushPromises();
+    const store = useGalleryStore();
+    const resetSpy = vi.spyOn(store, 'reset');
+
+    wrapper.unmount();
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+  });
 });

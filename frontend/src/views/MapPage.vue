@@ -740,6 +740,36 @@ watch(selected, (next, prev) => {
   }
 });
 
+// task #25: 같은 MapPage 가 이미 마운트된 상태에서 query 만 바뀌는 케이스
+// (예: ShotDetail #A 의 sub → /map?selectedId=10, 그 후 ShotDetail #B 의 sub
+// → /map?selectedId=20) 에 대응. 첫 mount 의 onMounted 가 처리하지 못하는
+// 후속 변경을 catch-up 한다. Deep-link 좌표 또는 selected marker 만 다시
+// 적용 — country-view / hasBeenViewed 같은 first-entry 분기는 대상 아님.
+async function applyQueryEntry(): Promise<void> {
+  const qLat = pickQueryNumber(route.query.lat);
+  const qLng = pickQueryNumber(route.query.lng);
+  const qSelected = pickQueryNumber(route.query.selectedId);
+  if (qLat !== null && qLng !== null) {
+    mapStore.setZoom(DETAIL_ZOOM);
+    mapStore.setSheetMode('peek');
+    await mapStore.setCenter(qLat, qLng);
+  }
+  if (qSelected !== null) await mapStore.selectMarker(qSelected);
+}
+
+watch(
+  () => [route.query.selectedId, route.query.lat, route.query.lng, route.query.collectionId],
+  (next, prev) => {
+    // Initial value of `watch` doesn't fire by default; this watcher only runs
+    // on actual changes — onMounted seeds the first state. Skip when both
+    // arrays are deep-equal (Vue's array compare uses reference, so the
+    // watcher fires whenever the route object updates even without value
+    // change → guard with explicit string compare).
+    if (JSON.stringify(next) === JSON.stringify(prev)) return;
+    void applyQueryEntry();
+  },
+);
+
 onMounted(async () => {
   const qLat = pickQueryNumber(route.query.lat);
   const qLng = pickQueryNumber(route.query.lng);

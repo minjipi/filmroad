@@ -797,6 +797,72 @@ describe('ShotDetailPage.vue', () => {
     expect(wrapper.find('[data-testid="sd-infinite-end"]').text()).toContain('마지막');
   });
 
+  // task #26 — sticky header 의 more 버튼 제거 + 카드별 .card-more 신설.
+  // primary 와 추가 카드 모두 우상단 .card-more 가 렌더되고, 헤더에는 back 만 남는다.
+  it('sticky header has no more button (task #26)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const sticky = wrapper.find('.sd-top');
+    expect(sticky.exists()).toBe(true);
+    // back 버튼 1개만 — 우측 more 영역 사라짐.
+    expect(sticky.findAll('button').length).toBe(1);
+    expect(sticky.find('button[aria-label="back"]').exists()).toBe(true);
+    expect(sticky.find('button[aria-label="more"]').exists()).toBe(false);
+  });
+
+  it('primary card renders .card-more button at top-right with Korean aria-label (task #26)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const compare = wrapper.find('section.compare');
+    expect(compare.exists()).toBe(true);
+    const more = compare.find('[data-testid="sd-card-more"]');
+    expect(more.exists()).toBe(true);
+    expect(more.attributes('aria-label')).toBe('더보기');
+    // 기존 "내 인증샷" 라벨은 사라졌어야 함.
+    expect(compare.find('.lbl-chip.r').exists()).toBe(false);
+  });
+
+  it('appended feed cards each render their own .card-more button (task #26)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push({
+      id: 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: 'next',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: true,
+      dramaSceneImageUrl: 'https://cdn/scene/76.jpg',
+      author: {
+        userId: 2,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: false,
+        following: false,
+      },
+      place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+      likeCount: 0,
+      commentCount: 0,
+      liked: false,
+      saved: false,
+      visitedAt: null,
+    });
+    await flushPromises();
+
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    expect(card.exists()).toBe(true);
+    // 카드 내부의 .card-more — 셀렉터를 카드로 좁혀 primary 와 충돌 회피.
+    const more = card.find('.card-more');
+    expect(more.exists()).toBe(true);
+    expect(more.attributes('aria-label')).toBe('더보기');
+  });
+
   it('back button calls router.back()', async () => {
     const { wrapper } = mountPage();
     await flushPromises();

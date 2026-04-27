@@ -11,13 +11,8 @@
           <button type="button" class="ic-btn" aria-label="back" @click="onBack">
             <ion-icon :icon="chevronBack" class="ic-22" />
           </button>
-          <div class="right">
-            <!-- 공유 버튼은 sd-stats row 의 종이비행기 하나로 통일 — 헤더 + 액션 -->
-            <!-- row 양쪽에 두 개 있던 게 중복이라 헤더쪽을 제거. -->
-            <button type="button" class="ic-btn" aria-label="more" @click="onMore">
-              <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
-            </button>
-          </div>
+          <!-- task #26: 우측 more 버튼 제거 — 카드별 .card-more 가 자리 대체.
+               중복된 진입점 회피. 헤더는 back 만 남는 minimal 형태. -->
         </header>
 
         <!-- Loading placeholder — shown while the first /api/photos/:id fetch
@@ -65,9 +60,16 @@
                   :alt="shot.place.name"
                 />
                 <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
-                <span class="lbl-chip r">
-                  <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
-                </span>
+                <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
+                <button
+                  type="button"
+                  class="card-more"
+                  data-testid="sd-card-more"
+                  aria-label="더보기"
+                  @click="onCardMore"
+                >
+                  <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
+                </button>
                 <div class="scene-meta">
                   <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
                   <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
@@ -127,9 +129,16 @@
             :alt="shot.place.name"
           />
           <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
-          <span class="lbl-chip r">
-            <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
-          </span>
+          <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
+          <button
+            type="button"
+            class="card-more"
+            data-testid="sd-card-more"
+            aria-label="더보기"
+            @click="onCardMore"
+          >
+            <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
+          </button>
           <div class="scene-meta">
             <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
             <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
@@ -357,9 +366,15 @@
                 :alt="s.place.name"
               />
               <span v-if="s.dramaSceneImageUrl" class="lbl-chip l">드라마 원본</span>
-              <span class="lbl-chip r">
-                <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
-              </span>
+              <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 (appended) -->
+              <button
+                type="button"
+                class="card-more"
+                aria-label="더보기"
+                @click="onCardMore"
+              >
+                <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
+              </button>
               <div class="scene-meta">
                 <ion-icon :icon="filmOutline" class="ic-16" />{{ s.work.title }}
                 <template v-if="s.work.workEpisode"> · {{ s.work.workEpisode }}</template>
@@ -528,7 +543,6 @@ import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
   ellipsisHorizontal,
-  checkmark,
   checkmarkCircle,
   filmOutline,
   timeOutline,
@@ -721,8 +735,12 @@ function onShare(): void {
   });
 }
 
-async function onMore(): Promise<void> {
-  await showInfo('메뉴는 곧 공개됩니다');
+// task #26: sticky header 의 more 버튼이 사라지면서 onMore → onCardMore 로
+// 이름 변경. 카드별 우상단 더보기 버튼 핸들러 — primary 와 추가 카드 모두
+// 같은 stub 동작 (실 메뉴 시트는 별도 task 로). 추후 카드별 컨텍스트(예:
+// 내 카드 = 삭제/수정 / 남 카드 = 신고/숨기기)가 필요해지면 인자 추가.
+async function onCardMore(): Promise<void> {
+  await showInfo('더보기 메뉴는 곧 공개됩니다');
 }
 
 async function onOpenAuthor(): Promise<void> {
@@ -908,7 +926,7 @@ ion-content.sd-content {
   justify-content: center;
   cursor: pointer;
 }
-.sd-top .right { display: flex; gap: 8px; }
+/* task #26: sticky header 우측 액션 영역 사라짐 — `.sd-top .right` 룰도 정리. */
 
 /* Multi-image carousel hero */
 .sd-carousel {
@@ -1013,20 +1031,33 @@ ion-content.sd-content {
   background: rgba(0, 0, 0, 0.7);
   color: #ffffff;
 }
-.lbl-chip.r {
+/* task #26: lbl-chip.r ("내 인증샷") 자리는 .card-more 버튼이 차지.
+   .lbl-chip.l ("드라마 원본") 만 mode-bind 로 노출/숨김. */
+.compare[data-mode="shot"] .lbl-chip.l { display: none; }
+
+/* task #26: 카드별 더보기 버튼 — primary + 추가 카드 우상단 공통.
+   primary blue chip 톤은 라벨에서 더이상 안 쓰므로 검정 반투명 ic-btn
+   톤으로 통일 (compare-toggle 과 같은 visual 무게). */
+.card-more {
+  position: absolute;
   top: 12px;
   right: 14px;
-  background: rgba(20, 188, 237, 0.95);
+  z-index: 4;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
   color: #ffffff;
+  border: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 160ms ease-out;
 }
-
-/* Active-side label only — keep both labels in DOM (so the markup mirrors
-   13-feed-detail) but mode-bind their visibility to the active image. */
-.compare[data-mode="shot"] .lbl-chip.l { display: none; }
-.compare[data-mode="guide"] .lbl-chip.r { display: none; }
+.card-more:hover { background: rgba(0, 0, 0, 0.72); }
+.card-more:active { transform: translateY(1px); }
 
 /* Floating "가이드 보기" / "원본으로" toggle — bottom-right above scene-meta. */
 .compare-toggle {

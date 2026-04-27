@@ -9,8 +9,10 @@ const { pushSpy, backSpy } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
 }));
+// task #25: useRoute also needed (SearchPage seeds rawQuery from route.query.q).
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: pushSpy, back: backSpy }),
+  useRouter: () => ({ push: pushSpy, back: backSpy, replace: vi.fn().mockResolvedValue(undefined) }),
+  useRoute: () => ({ path: '/search', query: {} }),
 }));
 
 import SearchPage from '@/views/SearchPage.vue';

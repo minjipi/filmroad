@@ -162,6 +162,16 @@ watch(
     }
   },
 );
+// task #25: route 가 같은 컴포넌트 instance 를 재사용하면서 initialTab prop
+// 만 바뀔 때 (예: /user/1/followers → /user/1/following 같은 사용자 내 탭
+// 전환) activeTab 동기. 이전엔 onMounted 시점의 props.initialTab 만 반영하고
+// 후속 prop 변경을 무시해 탭 UI 가 stale 되는 문제.
+watch(
+  () => props.initialTab,
+  (next) => {
+    if (next !== activeTab.value) activeTab.value = next;
+  },
+);
 </script>
 
 <style scoped>

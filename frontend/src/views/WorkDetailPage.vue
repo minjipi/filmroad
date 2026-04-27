@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -276,6 +276,9 @@ async function load(): Promise<void> {
 }
 
 onMounted(load);
+// task #25: stale-data 가드 — 다른 workId 진입 시 이전 work / spots /
+// progress 가 잠시 잔류하지 않도록 store 초기화.
+onUnmounted(() => workStore.reset());
 watch(workIdNum, (next, prev) => {
   if (next !== prev) void load();
 });

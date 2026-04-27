@@ -81,5 +81,17 @@ export const useWorkDetailStore = defineStore('workDetail', {
     setChip(c: WorkDetailChip): void {
       this.activeChip = c;
     },
+    /**
+     * task #25: clear stale state on page leave so a re-entry into a
+     * different `/work/:id` doesn't flash the previous work's spots.
+     */
+    reset(): void {
+      this.work = null;
+      this.progress = null;
+      this.spots = [];
+      this.activeChip = 'SPOTS';
+      this.loading = false;
+      this.error = null;
+    },
   },
 });

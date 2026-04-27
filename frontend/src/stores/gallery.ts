@@ -106,5 +106,21 @@ export const useGalleryStore = defineStore('gallery', {
         this.loading = false;
       }
     },
+    /**
+     * task #25: clear stale state when leaving the page so a re-entry to a
+     * different `/gallery/:placeId` doesn't briefly flash the previous
+     * place's photos. Mirrors the pattern in shotDetail / userProfile.
+     */
+    reset(): void {
+      this.placeHeader = null;
+      this.photos = [];
+      this.total = 0;
+      this.sort = 'RECENT';
+      this.viewMode = 'FEED';
+      this.page = 0;
+      this.size = 20;
+      this.loading = false;
+      this.error = null;
+    },
   },
 });

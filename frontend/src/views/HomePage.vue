@@ -255,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   locationOutline,
@@ -265,7 +265,7 @@ import {
   heart,
   heartOutline,
 } from 'ionicons/icons';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useHomeStore, type HomeScope } from '@/stores/home';
 import FrChip from '@/components/ui/FrChip.vue';
@@ -283,6 +283,7 @@ const { hero, works, places, popularWorks, loading, error, selectedWorkId, scope
   storeToRefs(homeStore);
 const { showError } = useToast();
 const router = useRouter();
+const route = useRoute();
 
 // 위치 요청 결과 상태. 'idle' / 'pending' 은 아직 결과가 없는 UI 상태이고,
 // 'granted' + coords 나 'fail' + reason 이 확정된 결과를 들고 있다. 실패
@@ -323,7 +324,54 @@ function markPrimed(): void {
 async function onSelectWork(id: number | null): Promise<void> {
   await homeStore.setWork(id);
   if (error.value) await showError(error.value);
+  // task #25: 작품 탭 상태를 URL query 에 동기. id=null 이면 query 제거.
+  syncQueryFromState();
 }
+
+// task #25: scope/selectedWorkId 의 라우트 query 동기화 helpers.
+// FeedPage 와 동일 패턴 — 새로고침/공유 URL 시 같은 상태로 복원.
+const VALID_SCOPES: ReadonlySet<HomeScope> = new Set([
+  'NEAR', 'TRENDING', 'POPULAR_WORKS',
+]);
+function pickQueryScope(): HomeScope | null {
+  const raw = route.query.scope;
+  const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : null;
+  if (typeof value !== 'string') return null;
+  return VALID_SCOPES.has(value as HomeScope) ? (value as HomeScope) : null;
+}
+function pickQueryWorkId(): number | null {
+  const raw = route.query.workId;
+  const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function syncQueryFromState(): void {
+  const next: Record<string, string> = { ...route.query as Record<string, string> };
+  if (homeStore.scope === 'NEAR') delete next.scope; else next.scope = homeStore.scope;
+  if (homeStore.selectedWorkId === null) delete next.workId; else next.workId = String(homeStore.selectedWorkId);
+  // 변경 없으면 push 안 함 — Vue Router 가 noop 처리하지만 명시적 가드.
+  const cur = route.query;
+  if (cur.scope === next.scope && cur.workId === next.workId) return;
+  void router.replace({ path: route.path, query: next });
+}
+
+// 외부 ?scope=POPULAR_WORKS / ?workId=3 진입 또는 brower history navigation
+// 시 store 상태 catch-up. push 한 본인이 부른 watch 는 store 가 이미 같은
+// 값이라 무시되므로 무한 루프 없음.
+watch(
+  () => [route.query.scope, route.query.workId] as const,
+  (next, prev) => {
+    // navigation 으로 query 가 실제로 바뀐 경우만. (Vue Router 가 같은
+    // 객체를 재사용하면 watch 가 fire 하지 않지만 안전망.)
+    if (JSON.stringify(next) === JSON.stringify(prev)) return;
+    const s = pickQueryScope();
+    const w = pickQueryWorkId();
+    if (s !== null && s !== homeStore.scope) void homeStore.setScope(s);
+    // workId 는 명시적으로 비워질 수도 있음 (?workId 제거) — 그땐 모두 탭으로.
+    // prev 에 값이 있었고 next 에 없으면 의도된 clear 로 해석.
+    if (w !== homeStore.selectedWorkId) void homeStore.setWork(w);
+  },
+);
 
 async function loadNearWithRadius(km: number): Promise<void> {
   // 이미 granted 상태로 받아둔 좌표가 있으면 그걸로, 없으면 지금 요청.
@@ -369,10 +417,12 @@ async function onSelectScope(s: HomeScope): Promise<void> {
     }
     await loadNearWithRadius(radiusKm.value);
     if (error.value) await showError(error.value);
+    syncQueryFromState();
     return;
   }
   await homeStore.setScope(s);
   if (error.value) await showError(error.value);
+  syncQueryFromState();
 }
 
 async function onRetryLocation(): Promise<void> {
@@ -433,6 +483,13 @@ function posterInitial(title: string): string {
 }
 
 onMounted(async () => {
+  // task #25: URL query 로 첫 진입 시 store 시드 — 새로고침/공유 URL 복원.
+  // query 가 비어있으면 store 기본값 / 외부 시드를 그대로 존중. 명시적 query
+  // 값(null 이 아닌 값)만 override 한다.
+  const seedScope = pickQueryScope();
+  const seedWork = pickQueryWorkId();
+  if (seedScope !== null && seedScope !== homeStore.scope) homeStore.scope = seedScope;
+  if (seedWork !== null && seedWork !== homeStore.selectedWorkId) homeStore.selectedWorkId = seedWork;
   await homeStore.fetchHome();
   if (error.value) await showError(error.value);
 });

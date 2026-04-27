@@ -16,8 +16,10 @@ const { pushSpy, replaceSpy, backSpy } = vi.hoisted(() => ({
   replaceSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
 }));
+// task #25: useRoute also needed (FeedPage syncs tab to query.tab).
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy, replace: replaceSpy, back: backSpy }),
+  useRoute: () => ({ path: '/feed', query: {} }),
 }));
 
 const { toastCreateSpy } = vi.hoisted(() => ({
@@ -252,6 +254,25 @@ describe('FeedPage.vue (Explore grid — task #40)', () => {
     // Active chip resets to 전체.
     const after = wrapper.findAll('[data-testid="feed-chip"]');
     expect(after[0].classes()).toContain('on');
+  });
+
+  // task #25: tab click 시 URL query 도 동기화 (?tab=POPULAR 식). 사용자가
+  // 새로고침 / 공유 URL 로 같은 탭에 복귀할 수 있게 store 와 routing 양쪽에 반영.
+  it('tab click → router.replace with ?tab=<key> query synced (task #25)', async () => {
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    const store = useFeedStore();
+    vi.spyOn(store, 'setTab').mockResolvedValue();
+    replaceSpy.mockClear();
+
+    const tabs = wrapper.findAll('.feed-tabs .t');
+    await tabs[1].trigger('click'); // 인기 (POPULAR)
+    await flushPromises();
+
+    expect(replaceSpy).toHaveBeenCalledWith({
+      path: '/feed',
+      query: { tab: 'POPULAR' },
+    });
   });
 
   it('empty posts → no featured hero, no grid cells, empty-note shown', async () => {

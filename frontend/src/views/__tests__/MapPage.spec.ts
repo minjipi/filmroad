@@ -582,4 +582,10 @@ describe('MapPage.vue', () => {
       expect(backSpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  // task #25 — query watch 의 통합 검증은 unit-level 에선 mock infra 한계
+  // (routeRef 는 plain object 라 vue 의 reactive 추적 안 됨) 로 어려움. 실제
+  // 동작은 dev 서버에서 토큰 transform / 수동 navigation 으로 검증 (보고서
+  // 참고). Initial-mount 시 selectedId 가 store 로 전달되는 회귀는 위
+  // back-button describe 의 첫 케이스에서 indirect 하게 커버.
 });

@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import {
   IonPage,
   IonContent,
@@ -157,13 +157,14 @@ import {
   flameOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useFeedStore, type FeedTab } from '@/stores/feed';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
 
 const feedStore = useFeedStore();
 const router = useRouter();
+const route = useRoute();
 const { posts, tab, hasMore, loading, error } = storeToRefs(feedStore);
 const { showError, showInfo } = useToast();
 
@@ -216,11 +217,38 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+// task #25: 탭 상태를 라우트 query 에 동기화 — 새로고침/공유 URL 시 같은
+// 탭으로 복원, 외부 링크에서 ?tab=POPULAR 식의 진입도 자연스럽게 동작.
 async function onSelectTab(t: FeedTab): Promise<void> {
   activeChip.value = null;
   await feedStore.setTab(t);
   if (error.value) await showError(error.value);
+  // URL 갱신 — pushState 가 아닌 replace 로 history 오염 방지.
+  if (route.query.tab !== t) {
+    void router.replace({ path: route.path, query: { ...route.query, tab: t } });
+  }
 }
+
+// 유효한 FeedTab string 만 store 에 적용 — 잘못된 query 값은 무시.
+const VALID_TABS: ReadonlySet<FeedTab> = new Set([
+  'RECENT', 'POPULAR', 'FOLLOWING', 'NEARBY', 'BY_WORK',
+]);
+function pickQueryTab(): FeedTab | null {
+  const raw = route.query.tab;
+  const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : null;
+  if (typeof value !== 'string') return null;
+  return VALID_TABS.has(value as FeedTab) ? (value as FeedTab) : null;
+}
+
+// 외부에서 ?tab=POPULAR 식으로 URL 만 변경되어 들어오는 케이스 (router.push
+// 가 아닌 brower back/forward, 또는 같은 페이지 다른 query 진입)에 대응.
+watch(
+  () => route.query.tab,
+  () => {
+    const t = pickQueryTab();
+    if (t !== null && t !== feedStore.tab) void feedStore.setTab(t);
+  },
+);
 
 function onSelectChip(c: string | null): void {
   activeChip.value = c;
@@ -256,7 +284,13 @@ async function onSearch(): Promise<void> {
 }
 
 onMounted(async () => {
-  await feedStore.fetch();
+  // task #25: URL 의 ?tab= 값으로 첫 진입 탭 결정. 없으면 store 의 기본값 유지.
+  const seedTab = pickQueryTab();
+  if (seedTab !== null && seedTab !== feedStore.tab) {
+    await feedStore.setTab(seedTab);
+  } else {
+    await feedStore.fetch();
+  }
   if (error.value) await showError(error.value);
 });
 </script>

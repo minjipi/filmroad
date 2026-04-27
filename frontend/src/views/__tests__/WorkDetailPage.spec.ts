@@ -201,4 +201,16 @@ describe('WorkDetailPage.vue', () => {
     expect(wrapper.find('.spots').exists()).toBe(true);
     expect(wrapper.find('[data-testid="spots-map"]').exists()).toBe(false);
   });
+
+  // task #25: 페이지 언마운트 시 store reset — 다른 workId 진입 시 이전
+  // work / spots / progress 가 잠시 잔류하지 않게.
+  it('unmount → workStore.reset() called (task #25 stale-data guard)', async () => {
+    const { wrapper } = mountWorkDetail();
+    await flushPromises();
+    const store = useWorkDetailStore();
+    const resetSpy = vi.spyOn(store, 'reset');
+
+    wrapper.unmount();
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+  });
 });

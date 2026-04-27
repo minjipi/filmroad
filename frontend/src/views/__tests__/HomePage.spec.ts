@@ -13,8 +13,10 @@ const { pushSpy, backSpy } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
 }));
+// task #25: useRoute also needed (HomePage syncs scope/workId to query).
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: pushSpy, back: backSpy }),
+  useRouter: () => ({ push: pushSpy, back: backSpy, replace: vi.fn().mockResolvedValue(undefined) }),
+  useRoute: () => ({ path: '/home', query: {} }),
 }));
 
 const { toastCreateSpy } = vi.hoisted(() => ({

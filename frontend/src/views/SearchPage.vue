@@ -130,7 +130,7 @@ import {
   locationOutline,
   searchOutline,
 } from 'ionicons/icons';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   useSearchStore,
@@ -141,6 +141,7 @@ import {
 type TabKey = 'ALL' | 'WORKS' | 'PLACES';
 
 const router = useRouter();
+const route = useRoute();
 const searchStore = useSearchStore();
 const { works, places, loading, error } = storeToRefs(searchStore);
 
@@ -198,7 +199,24 @@ async function onOpenPlace(p: SearchPlaceResult): Promise<void> {
   await router.push(`/place/${p.id}`);
 }
 
+// task #25: 라우트 query 의 `q` 가 페이지의 단일 진입점. 첫 mount 시
+// `route.query.q` 를 rawQuery 로 시드 → rawQuery watch 가 자동 fetch.
+// 같은 페이지에서 URL 만 바뀌는 케이스(예: 외부 링크로 ?q=A → ?q=B)도
+// query watch 로 감지해 rawQuery 동기 → 같은 watch 가 fetch.
+function applyRouteQuery(): void {
+  const raw = route.query.q;
+  const q = typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : '';
+  if (rawQuery.value !== q) rawQuery.value = q;
+}
+
+watch(
+  () => route.query.q,
+  () => applyRouteQuery(),
+);
+
 onMounted(() => {
+  // 첫 진입 시 URL 의 q 시드.
+  applyRouteQuery();
   // Autofocus the search input so the keyboard pops up on mobile.
   void inputEl.value?.focus();
 });

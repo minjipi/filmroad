@@ -781,3 +781,130 @@
 - (M) `frontend/src/views/UserProfilePage.vue` (aria-label 영문 → 한국어 + 주석)
 - (M) `frontend/src/views/__tests__/UserProfilePage.spec.ts` (aria-label 단언 신규 1 케이스)
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #25 — stale data 패턴 일괄 수정 (SearchPage/MapPage High + 5개 Med)
+
+## 1. SearchPage — `route.query.q` watch 추가
+- 첫 mount 시 `route.query.q` → `rawQuery.value` 시드 (기존 watch 가 자동으로 search fetch).
+- query 변경 watch — 같은 페이지에서 URL 만 바뀌는 케이스(외부 링크 ?q=A → ?q=B) 대응.
+- `applyRouteQuery()` helper 로 시드 / watch 둘 다 호출.
+- `import { useRoute, useRouter }` — 기존 useRouter 만 import 됐던 걸 보강.
+
+## 2. MapPage — query 파라미터 watch 추가
+- 신규 `applyQueryEntry()` async 함수 — `selectedId` / `lat` / `lng` 변경 시 store 갱신 (setCenter / setZoom / selectMarker).
+- `watch(() => [route.query.selectedId, route.query.lat, route.query.lng, route.query.collectionId], ...)` — 같은 instance 가 마운트된 채 URL 만 바뀌는 케이스(예: ShotDetail #A → #B sub 클릭) 대응.
+- `JSON.stringify` 비교로 reference-only 변경 trigger 방지.
+- onMounted 의 first-entry 로직 (country-view / hasBeenViewed 분기) 은 보존.
+
+## 3. GalleryPage — `onUnmounted` reset
+- `useGalleryStore.reset()` action 신규 추가 (placeHeader / photos / total / sort / viewMode / page / size / loading / error 모두 초기화).
+- `onUnmounted(() => galleryStore.reset())` 와이어업 — 다른 placeId 갤러리 진입 시 이전 사진/헤더 잠시 잔류 방지.
+
+## 4. WorkDetailPage — `onUnmounted` reset
+- `useWorkDetailStore.reset()` action 신규 추가 (work / progress / spots / activeChip / loading / error).
+- `onUnmounted(() => workStore.reset())` — 다른 workId 진입 시 이전 work / spots / progress 잠시 잔류 방지.
+
+## 5. FeedPage — 탭 상태 라우트 query 동기화
+- `onSelectTab(t)` 에서 store 갱신 후 `router.replace({ path, query: { ...query, tab: t } })`.
+- 신규 `pickQueryTab()` helper — 유효한 FeedTab string 만 인정 (잘못된 query 무시).
+- `onMounted` 에서 `pickQueryTab()` 으로 시드 — 새로고침/공유 URL 복원.
+- query 변경 watch — 외부 navigation / browser back/forward 도 반영.
+
+## 6. HomePage — scope/selectedWorkId 라우트 query 동기화 (FeedPage 패턴)
+- `onSelectScope(s)` / `onSelectWork(id)` 에서 `syncQueryFromState()` 호출 — URL 갱신.
+- 신규 helpers: `pickQueryScope()`, `pickQueryWorkId()`, `syncQueryFromState()`.
+- `onMounted` 시드 (명시적 query 값만 override — 빈 query 가 store 시드를 덮지 않도록).
+- query 변경 watch — `JSON.stringify` 비교로 무한 루프 방지.
+
+## 7. FollowListPage — `props.initialTab` watch
+- 같은 컴포넌트 instance 가 재사용되면서 prop 만 바뀌는 케이스(예: `/user/1/followers` → `/user/1/following`) 대응.
+- `watch(() => props.initialTab, (next) => { if (next !== activeTab.value) activeTab.value = next; })` — 기존 activeTab watch 가 ensureLoaded 를 트리거하므로 fetch 도 자동 따라감.
+
+## 단위 테스트 (신규 5 케이스)
+- **FeedPage**: `tab click → router.replace with ?tab=<key> query synced`.
+- **GalleryPage**: `unmount → galleryStore.reset() called`.
+- **WorkDetailPage**: `unmount → workStore.reset() called`.
+- **HomePage**: 기존 시드 보존 케이스 (work tab + POPULAR_WORKS) 가 query-empty 와도 충돌 없이 동작 — 회귀 가드.
+- **MapPage**: 기존 task #23 back-button 케이스 + (query watch 의 reactive 검증은 unit-level 의 mock infra 한계로 dev 서버 수동 검증으로 대체).
+- 그 외 기존 specs (FeedPage, HomePage, SearchPage 등) 의 vue-router mock 에 `useRoute` 추가 — 새로운 route 의존성 보강.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **557 tests** 통과 (이전 546 + 신규 5 + 기존 강화 6).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 2313ms.
+  - 핵심 task #25 URL 모두 200:
+    - `GET /search?q=A` → 200
+    - `GET /map?selectedId=10` → 200
+    - `GET /feed?tab=POPULAR` → 200
+    - `GET /home?scope=POPULAR_WORKS` → 200
+
+## 변경 파일
+- (M) `frontend/src/views/SearchPage.vue`
+- (M) `frontend/src/views/MapPage.vue`
+- (M) `frontend/src/views/GalleryPage.vue`
+- (M) `frontend/src/views/WorkDetailPage.vue`
+- (M) `frontend/src/views/FeedPage.vue`
+- (M) `frontend/src/views/HomePage.vue`
+- (M) `frontend/src/views/FollowListPage.vue`
+- (M) `frontend/src/stores/gallery.ts` (reset action)
+- (M) `frontend/src/stores/workDetail.ts` (reset action)
+- (M) `frontend/src/views/__tests__/FeedPage.spec.ts`
+- (M) `frontend/src/views/__tests__/HomePage.spec.ts`
+- (M) `frontend/src/views/__tests__/SearchPage.spec.ts`
+- (M) `frontend/src/views/__tests__/GalleryPage.spec.ts`
+- (M) `frontend/src/views/__tests__/WorkDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/MapPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #26 — ShotDetailPage 카드별 more 버튼 추가 + sticky 헤더 more 제거
+
+## 변경
+### 1. sticky 헤더 (`.sd-top`) 의 more 버튼 제거
+- `<div class="right">` 영역 + 그 안의 `<button aria-label="more">` 통째로 삭제.
+- 헤더는 back 버튼 1개만 남는 minimal 형태. 카드별 `.card-more` 와 진입점 중복 회피.
+
+### 2. 각 카드의 `.lbl-chip.r` ("내 인증샷") → `.card-more` 버튼으로 교체
+- 적용 위치 3곳:
+  1. primary 단일 이미지 `<section class="compare">`
+  2. primary 멀티 이미지 carousel 첫 슬라이드 `<div class="compare">`
+  3. 추가 카드 (`appendedShots`) 의 `<section class="compare">`
+- 마크업: `<button class="card-more" aria-label="더보기" @click="onCardMore"><ion-icon ellipsisHorizontal /></button>`.
+- testid: primary 두 곳에 `data-testid="sd-card-more"` (테스트 셀렉터). 추가 카드는 외곽 `[data-testid="sd-feed-card"]` 로 스코프 좁혀 querySelector 로 접근 — primary 와 충돌 회피.
+- aria-label 한국어 (`더보기`) — task #23/#24 의 한국어 라벨 컨벤션 일관.
+
+### 3. 핸들러
+- `onMore()` → `onCardMore()` 이름 변경. stub `showInfo('더보기 메뉴는 곧 공개됩니다')`. 추후 카드별 컨텍스트(내 카드 = 삭제/수정 / 남 카드 = 신고/숨기기) 가 필요해지면 인자 추가.
+
+### 4. CSS
+- 제거: `.lbl-chip.r` 룰 (block + mode-bound display:none), `.sd-top .right` 룰.
+- 신규 `.card-more`: 32×32 원형, 검정 반투명 + backdrop-blur, top:12px / right:14px (compare-toggle 과 같은 visual 무게의 ic-btn 톤).
+- `.lbl-chip.l` (드라마 원본) 의 `display: none` mode-bind 는 그대로 유지.
+- `checkmark` 아이콘 import 정리 (lbl-chip.r 의 "내 인증샷" 텍스트 prefix 에서만 쓰였음).
+
+## 단위 테스트 (신규 3 케이스)
+- `sticky header has no more button (task #26)` — `.sd-top` 안에 `aria-label="back"` 만 1개, `aria-label="more"` 부재.
+- `primary card renders .card-more button at top-right with Korean aria-label (task #26)` — `section.compare` 안의 `[data-testid="sd-card-more"]` 존재 + `aria-label="더보기"`. 기존 `.lbl-chip.r` 부재.
+- `appended feed cards each render their own .card-more button (task #26)` — store 에 FeedPost 1개 push 후 카드 안의 `.card-more` 존재 + 한국어 aria-label.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **568 tests** 통과 (이전 557 + 신규 3 + 기타).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 2127ms.
+  - `GET /shot/15` → 200.
+  - `GET /src/views/ShotDetailPage.vue` → 163 900 bytes.
+  - 토큰 검증: `card-more` × 4 (3 buttons + class), `onCardMore` × 5 (handler + click bindings + setup), `sd-card-more` × 2 (primary 두 곳), `lbl-chip\.r` × 0 (모두 제거 확인).
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue` (마크업 3곳 + 헤더 + 핸들러 이름 + CSS + import)
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (신규 3 케이스)
+- (M) `_workspace/03_frontend_implementation.md`

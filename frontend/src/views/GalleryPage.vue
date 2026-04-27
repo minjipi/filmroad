@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -247,6 +247,9 @@ async function load(): Promise<void> {
 }
 
 onMounted(load);
+// task #25: stale-data 가드 — 페이지 떠날 때 store 비우기. 다른 placeId
+// 의 갤러리로 진입 시 이전 사진/헤더가 잠시 잔류하는 flicker 차단.
+onUnmounted(() => galleryStore.reset());
 watch(placeIdNum, (next, prev) => {
   if (next !== prev) void load();
 });
