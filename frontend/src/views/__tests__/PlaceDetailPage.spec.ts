@@ -30,6 +30,7 @@ import {
 } from '@/stores/placeDetail';
 import { useSavedStore } from '@/stores/saved';
 import type { PlaceKakaoInfoResponse } from '@/stores/kakaoInfo';
+import type { TourNearbyRestaurant } from '@/stores/tourNearby';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: PlaceDetailResponse = {
@@ -83,6 +84,9 @@ function mountPlaceDetailPage(
   overrides: {
     coverImageUrls?: string[];
     kakaoInfo?: PlaceKakaoInfoResponse | null;
+    // task #29: 한국관광공사 nearby 시드. 배열을 주면 tourNearby store 가
+    // placeId 키로 prefill — 컴포넌트가 fetch 호출해도 cache hit 으로 즉시 return.
+    tourNearby?: TourNearbyRestaurant[] | null;
   } = {},
 ) {
   // kakaoInfo override 가 들어오면 placeId 키로 prefill — store 의 fetch 가
@@ -90,6 +94,13 @@ function mountPlaceDetailPage(
   const kakaoInfoState = overrides.kakaoInfo
     ? { infoByPlace: { [fixture.place.id]: overrides.kakaoInfo } }
     : { infoByPlace: {} };
+
+  // task #29: tourNearby store 시드. undefined 면 빈 cache, 명시 배열/null
+  // 이면 placeId 키로 prefill.
+  const tourNearbyState =
+    overrides.tourNearby !== undefined
+      ? { itemsByPlace: { [fixture.place.id]: overrides.tourNearby } }
+      : { itemsByPlace: {} };
 
   const { wrapper } = mountWithStubs(PlaceDetailPage, {
     props: { id: fixture.place.id },
@@ -120,6 +131,7 @@ function mountPlaceDetailPage(
         visitedIds: [],
       },
       kakaoInfo: kakaoInfoState,
+      tourNearby: tourNearbyState,
     },
     stubs: {
       'ion-router-outlet': true,
@@ -692,52 +704,72 @@ describe('PlaceDetailPage.vue', () => {
     expect(kakaoCta).toBeDefined();
   });
 
-  it('hides .k-nearby header when nearby is empty and renders one card per nearby item otherwise', async () => {
+  // task #29: 카카오 nearby → 한국관광공사 TourAPI nearby 로 데이터 출처 교체.
+  // store 분리, 마크업/필드 매핑 갱신, 빈 응답이면 섹션 미렌더는 그대로.
+  it('hides .k-nearby section when tour-nearby is empty and renders one card per item otherwise (task #29)', async () => {
     const empty = mountPlaceDetailPage({
-      kakaoInfo: makeKakaoInfo({ nearby: [] }),
+      kakaoInfo: makeKakaoInfo(),
+      tourNearby: [],
     });
     await flushPromises();
-    expect(empty.wrapper.find('[data-testid="pd-kakao-section"] .k-nearby').exists()).toBe(
-      false,
-    );
+    // 카카오 섹션 자체는 떠 있지만 그 안의 .k-nearby 는 빈 응답이라 미렌더.
+    expect(empty.wrapper.find('[data-testid="pd-kakao-section"]').exists()).toBe(true);
+    expect(empty.wrapper.find('[data-testid="pd-nearby"]').exists()).toBe(false);
     empty.wrapper.unmount();
 
     const withNearby = mountPlaceDetailPage({
-      kakaoInfo: makeKakaoInfo({
-        nearby: [
-          {
-            name: '주문진 활어회센터',
-            categoryGroupCode: 'FD6',
-            categoryName: '음식점 > 한식 > 해물,생선',
-            distanceMeters: 240,
-            kakaoPlaceUrl: 'https://place.map.kakao.com/aaa',
-            lat: 37.89,
-            lng: 128.83,
-            phone: null,
-          },
-          {
-            name: '영진해변 카페',
-            categoryGroupCode: 'CE7',
-            categoryName: '카페',
-            distanceMeters: 80,
-            kakaoPlaceUrl: 'https://place.map.kakao.com/bbb',
-            lat: 37.892,
-            lng: 128.834,
-            phone: null,
-          },
-        ],
-      }),
+      kakaoInfo: makeKakaoInfo(),
+      tourNearby: [
+        {
+          contentId: 'tour-001',
+          title: '주문진 활어회센터',
+          addr1: '강원 강릉시 주문진읍 해안로',
+          imageUrl: 'https://tour-img/001.jpg',
+          latitude: 37.89,
+          longitude: 128.83,
+          distanceM: 240,
+          categoryName: '한식',
+        },
+        {
+          contentId: 'tour-002',
+          title: '영진해변 카페',
+          addr1: null,
+          imageUrl: null, // 사진 미등록 → ic-icon fallback
+          latitude: 37.892,
+          longitude: 128.834,
+          distanceM: 80,
+          categoryName: '카페·디저트',
+        },
+      ],
     });
     await flushPromises();
-    const section = withNearby.wrapper.find('[data-testid="pd-kakao-section"]');
-    expect(section.find('.k-nearby').exists()).toBe(true);
-    const cards = section.findAll('.k-nearby-card');
+    const section = withNearby.wrapper.find('[data-testid="pd-nearby"]');
+    expect(section.exists()).toBe(true);
+    const cards = section.findAll('[data-testid="pd-nearby-card"]');
     expect(cards.length).toBe(2);
     expect(cards[0].find('.nm').text()).toBe('주문진 활어회센터');
-    // 첫 카드: 음식점 240m → 240/80=3분
+    // 240m → 240/80 = 3분, 카테고리 prefix.
+    expect(cards[0].find('.d').text()).toContain('한식');
     expect(cards[0].find('.d').text()).toContain('도보 3분');
-    // 두 번째 카드: 80m → 1분 (clamp 안 적용되는 경계)
+    // 80m → 1분 (clamp 경계).
     expect(cards[1].find('.d').text()).toContain('도보 1분');
+    // imageUrl 있는 첫 카드는 <img> 렌더, 없는 두 번째 카드는 fallback ion-icon.
+    expect(cards[0].find('.th img').exists()).toBe(true);
+    expect(cards[1].find('.th.th-icon').exists()).toBe(true);
+    // 외부 링크는 카카오맵 검색으로 fallback (한국관광공사 외부 링크 부재).
+    const href = cards[0].attributes('href') ?? '';
+    expect(href).toContain('https://map.kakao.com/?q=');
+    expect(href).toContain(encodeURIComponent('주문진 활어회센터'));
+  });
+
+  it('tour-nearby fetch failure (null cache) → section hidden, no console crash (task #29)', async () => {
+    // null = "이미 시도, 데이터 없음" — 빈 응답과 같이 섹션 미렌더.
+    const { wrapper } = mountPlaceDetailPage({
+      kakaoInfo: makeKakaoInfo(),
+      tourNearby: null,
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="pd-nearby"]').exists()).toBe(false);
   });
 
   it('clicking the address copy button writes roadAddress to the clipboard', async () => {

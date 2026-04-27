@@ -30,7 +30,20 @@ const props = defineProps<{
   selectedId: number | null;
   visitedIds: number[];
   routePath?: LatLng[];
+  /**
+   * task #27: Optional list of points the map should auto-fit to. When
+   * provided and non-empty, the map calls Kakao's `setBounds()` so all
+   * points are visible at once. Single point → setCenter + a moderate
+   * zoom (avoids the over-zoom-in glitch when bounds collapse to one
+   * coordinate). Empty/undefined → no fit; `center`/`zoom` props win.
+   */
+  fitTo?: LatLng[];
 }>();
+
+// task #27: 단일 마커일 때 setBounds 가 zoom level 1 까지 들어가버리는
+// over-zoom 사고 회피용 폴백 zoom (도시 단위 정도). 사용자 보기 자연스러운
+// 수준으로 조정.
+const SINGLE_MARKER_ZOOM = 5;
 
 const emit = defineEmits<{
   (e: 'markerClick', id: number): void;
@@ -234,9 +247,38 @@ async function init(): Promise<void> {
   });
   renderOverlays();
   renderRoute();
+  // task #27: 초기 fit 적용 — props.fitTo 가 채워진 채로 마운트되면 즉시 fit.
+  applyFit();
   // Prime the consumer with the initial bounds so it can kick off the first
   // viewport-scoped fetch without waiting for the user to pan.
   emitBounds();
+}
+
+// task #27: fitTo 의 좌표 범위에 맞춰 지도 viewport 조정. Kakao 의
+// `LatLngBounds` + `extend(LatLng)` + `map.setBounds(bounds)` 패턴.
+function applyFit(): void {
+  if (!kakao || !mapInstance) return;
+  const pts = props.fitTo ?? [];
+  if (pts.length === 0) return;
+  const k = kakao as unknown as {
+    maps: {
+      LatLng: new (lat: number, lng: number) => unknown;
+      LatLngBounds: new () => {
+        extend: (pos: unknown) => void;
+      };
+    };
+  };
+  if (pts.length === 1) {
+    // 단일 점 — setBounds 가 over-zoom 되는 케이스 회피.
+    const p = pts[0];
+    const pos = new k.maps.LatLng(p.lat, p.lng);
+    (mapInstance as unknown as { setCenter: (v: unknown) => void }).setCenter(pos);
+    (mapInstance as unknown as { setLevel: (v: number) => void }).setLevel(SINGLE_MARKER_ZOOM);
+    return;
+  }
+  const bounds = new k.maps.LatLngBounds();
+  for (const p of pts) bounds.extend(new k.maps.LatLng(p.lat, p.lng));
+  (mapInstance as unknown as { setBounds: (v: unknown) => void }).setBounds(bounds);
 }
 
 function renderRoute(): void {
@@ -266,6 +308,9 @@ function renderRoute(): void {
 watch(renderables, () => renderOverlays(), { deep: true });
 watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
 watch(() => props.routePath, () => renderRoute(), { deep: true });
+// task #27: fitTo 가 비동기로 바뀌는 경우(부모에서 markers fetch 후 채움) 도
+// 자동 fit. deep 으로 좌표 값까지 추적.
+watch(() => props.fitTo, () => applyFit(), { deep: true });
 watch(
   () => [props.center.lat, props.center.lng],
   () => {

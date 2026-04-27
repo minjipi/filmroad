@@ -86,6 +86,30 @@ function mountWorkDetail() {
   });
 }
 
+// task #27: KakaoMap stub — captures the `fit-to` prop so the test can
+// assert that the parent passed the expected list of points. The real
+// component talks to Kakao SDK which jsdom can't host; only the prop
+// flow matters for this regression.
+const KakaoMapStub = {
+  name: 'KakaoMap',
+  props: ['center', 'zoom', 'markers', 'selectedId', 'visitedIds', 'fitTo'],
+  emits: ['markerClick'],
+  template:
+    '<div class="kakao-map-stub" :data-fit-count="fitTo?.length ?? 0" :data-fit-json="JSON.stringify(fitTo ?? [])"></div>',
+};
+
+function mountWorkDetailWithCoords(spots: Array<typeof workDetailState.spots[number] & { latitude: number; longitude: number }>) {
+  const stateWithCoords = {
+    ...workDetailState,
+    spots: spots.map((s) => ({ ...s })),
+  };
+  return mountWithStubs(WorkDetailPage, {
+    props: { id: 1 },
+    initialState: { workDetail: stateWithCoords },
+    stubs: { KakaoMap: KakaoMapStub },
+  });
+}
+
 describe('WorkDetailPage.vue', () => {
   beforeEach(() => {
     pushSpy.mockClear();
@@ -200,6 +224,57 @@ describe('WorkDetailPage.vue', () => {
     await wrapper.find('[data-testid="spots-view-list"]').trigger('click');
     expect(wrapper.find('.spots').exists()).toBe(true);
     expect(wrapper.find('[data-testid="spots-map"]').exists()).toBe(false);
+  });
+
+  // task #27 — 지도 탭 진입 시 KakaoMap.fitTo 가 모든 성지 좌표를 포함해
+  // viewport 가 자동 조정되도록 함. unit-level 에선 prop 전달 회귀 보장.
+  it('지도 탭 → KakaoMap 의 fit-to prop 이 모든 성지 lat/lng 로 채워짐 (task #27)', async () => {
+    const spotsWithCoords = [
+      { ...workDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
+      { ...workDetailState.spots[1], latitude: 37.5658, longitude: 126.9751 },
+    ];
+    const { wrapper } = mountWorkDetailWithCoords(spotsWithCoords);
+    await flushPromises();
+
+    // 진입 직후엔 list 모드 — 지도 stub 없음.
+    expect(wrapper.find('.kakao-map-stub').exists()).toBe(false);
+
+    // 지도 탭 클릭.
+    await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
+    await flushPromises();
+
+    const stub = wrapper.find('.kakao-map-stub');
+    expect(stub.exists()).toBe(true);
+    expect(stub.attributes('data-fit-count')).toBe('2');
+    const fit = JSON.parse(stub.attributes('data-fit-json') ?? '[]');
+    expect(fit).toEqual([
+      { lat: 37.8928, lng: 128.8347 },
+      { lat: 37.5658, lng: 126.9751 },
+    ]);
+  });
+
+  it('단일 성지일 때도 fit-to 전달 — KakaoMap 이 single-marker zoom 로 처리 (task #27)', async () => {
+    const spotsWithCoords = [
+      { ...workDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
+    ];
+    const { wrapper } = mountWorkDetailWithCoords(spotsWithCoords);
+    await flushPromises();
+    await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
+    await flushPromises();
+
+    const stub = wrapper.find('.kakao-map-stub');
+    expect(stub.attributes('data-fit-count')).toBe('1');
+  });
+
+  it('좌표 없는 성지만 있으면 KakaoMap 자체가 미렌더 — 빈 안내 노출 (task #27)', async () => {
+    // 좌표 없는 fixture (기본 workDetailState) — mapMarkers.length === 0.
+    const { wrapper } = mountWorkDetail();
+    await flushPromises();
+    await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.kakao-map-stub').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="spots-map"] .empty-note').exists()).toBe(true);
   });
 
   // task #25: 페이지 언마운트 시 store reset — 다른 workId 진입 시 이전

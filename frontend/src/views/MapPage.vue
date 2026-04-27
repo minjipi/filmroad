@@ -295,25 +295,26 @@
               </a>
             </div>
 
-            <div v-if="kakaoInfo.nearby.length > 0" class="k-nearby">
-              <h4>주변 맛집 · 카페</h4>
+            <!-- task #29: 카카오 nearby → 한국관광공사 TourAPI 기반.
+                 PlaceDetailPage 와 동일 store / 카드 마크업 / 빈응답 hide. -->
+            <div v-if="tourNearbyItems.length > 0" class="k-nearby" data-testid="map-nearby">
+              <h4>주변 맛집</h4>
               <div class="k-nearby-row no-scrollbar">
                 <a
-                  v-for="(n, i) in kakaoInfo.nearby"
-                  :key="i"
-                  :href="n.kakaoPlaceUrl"
+                  v-for="n in tourNearbyItems"
+                  :key="n.contentId"
+                  :href="tourNearbyHref(n)"
                   target="_blank"
                   rel="noopener"
                   class="k-nearby-card"
+                  data-testid="map-nearby-card"
                 >
-                  <div class="th th-icon">
-                    <ion-icon
-                      :icon="n.categoryGroupCode === 'CE7' ? cafeOutline : restaurantOutline"
-                      class="ic-22"
-                    />
+                  <div class="th" :class="{ 'th-icon': !n.imageUrl }">
+                    <img v-if="n.imageUrl" :src="n.imageUrl" :alt="n.title" />
+                    <ion-icon v-else :icon="restaurantOutline" class="ic-22" />
                   </div>
-                  <div class="nm">{{ n.name }}</div>
-                  <div class="d">{{ formatNearby(n) }}</div>
+                  <div class="nm">{{ n.title }}</div>
+                  <div class="d">{{ formatTourNearby(n) }}</div>
                 </a>
               </div>
             </div>
@@ -359,7 +360,6 @@ import {
   remove,
   locate,
   openOutline,
-  cafeOutline,
   restaurantOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
@@ -375,8 +375,9 @@ import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import {
   useKakaoInfoStore,
-  type KakaoNearbyDto,
 } from '@/stores/kakaoInfo';
+// task #29: 카카오 nearby → 한국관광공사 TourAPI 기반 신규 store.
+import { useTourNearbyStore, type TourNearbyRestaurant } from '@/stores/tourNearby';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import MapFilterSheet from '@/components/map/MapFilterSheet.vue';
@@ -404,6 +405,7 @@ const activeSheetFilterCount = computed(() => mapStore.activeSheetFilterCount);
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
+const tourNearbyStore = useTourNearbyStore();
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 // 현재 선택된 marker(=place) 의 카카오 정보. selected 가 바뀌면 watch 가
@@ -412,6 +414,13 @@ const isSaved = (id: number): boolean => savedStore.isSaved(id);
 const kakaoInfo = computed(() => {
   const id = selected.value?.id;
   return id == null ? null : kakaoInfoStore.infoFor(id);
+});
+
+// task #29: 한국관광공사 nearby — 선택 marker 의 placeId 가 있을 때만.
+const tourNearbyItems = computed<TourNearbyRestaurant[]>(() => {
+  const id = selected.value?.id;
+  if (id == null) return [];
+  return tourNearbyStore.itemsFor(id);
 });
 
 const syncLabel = computed(() => {
@@ -424,18 +433,22 @@ const syncLabel = computed(() => {
   return `${rel} 동기화`;
 });
 
-// 카카오 카테고리는 "한식 > 해물,생선" 식으로 깊이 표기 — 카드에서는 첫 토큰만
-// 짧게 노출해서 정보 밀도를 낮춘다. 빈 문자열이면 "주변" 으로 폴백.
-function shortCategoryLabel(categoryName: string): string {
-  const head = categoryName.split('>')[0]?.trim();
-  return head && head.length > 0 ? head : '주변';
+// task #29: 한국관광공사 TourAPI 기반 카드 라벨 — 카테고리 + 도보 분.
+// PlaceDetailPage 와 동일 helper (DRY 위해 별도 utils 분리는 양쪽 1회씩만
+// 쓰여 over-engineering — 인라인 유지).
+function formatTourNearby(n: TourNearbyRestaurant): string {
+  const cat = n.categoryName?.trim() || null;
+  if (typeof n.distanceM === 'number') {
+    const minutes = Math.max(1, Math.round(n.distanceM / 80));
+    return cat ? `${cat} · 도보 ${minutes}분` : `도보 ${minutes}분`;
+  }
+  return cat ?? '주변 맛집';
 }
 
-// 도보 환산은 80m/min 기준 (네이버지도/카카오맵 표기와 동일). 0 분이 떨어지는
-// 매우 가까운 케이스는 "0 분" 이 어색하니 1 분으로 round-up.
-function formatNearby(n: KakaoNearbyDto): string {
-  const minutes = Math.max(1, Math.round(n.distanceMeters / 80));
-  return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
+function tourNearbyHref(n: TourNearbyRestaurant): string {
+  const q = n.title.trim();
+  if (!q) return 'javascript:void(0)';
+  return `https://map.kakao.com/?q=${encodeURIComponent(q)}`;
 }
 
 // Draggable sheet — the composable owns the live drag height + pointer
@@ -737,6 +750,8 @@ watch(selected, (next, prev) => {
       mapStore.setSheetMode('peek');
     }
     void kakaoInfoStore.fetch(next.id);
+    // task #29: 한국관광공사 nearby 도 같이 로드 — 보조 정보 병렬 fetch.
+    void tourNearbyStore.fetch(next.id);
   }
 });
 
