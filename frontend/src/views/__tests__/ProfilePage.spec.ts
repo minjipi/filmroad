@@ -125,7 +125,7 @@ function mountProfile(
       regionLabel: string;
       workId: number;
       workTitle: string;
-      visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+      visibility: 'PUBLIC' | 'PRIVATE';
       createdAt: string;
     }>;
     myPhotosLoaded?: boolean;

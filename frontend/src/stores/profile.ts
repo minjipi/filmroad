@@ -36,7 +36,7 @@ export interface ProfileResponse {
   miniMapPins: MiniMapPin[];
 }
 
-export type PhotoVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+export type PhotoVisibility = 'PUBLIC' | 'PRIVATE';
 
 // One row in the profile photos grid. Matches the backend
 // `GET /api/users/me/photos` response (task #35).

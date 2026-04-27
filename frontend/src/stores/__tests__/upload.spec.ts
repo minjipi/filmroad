@@ -59,7 +59,7 @@ describe('upload store', () => {
 
     store.addPhoto(JPEG_DATA_URL);
     store.setCaption('hello');
-    store.setVisibility('FOLLOWERS');
+    store.setVisibility('PRIVATE');
     store.toggleStampbook();
     store.error = 'oops';
 
@@ -136,7 +136,7 @@ describe('upload store', () => {
     store.beginCapture(target);
     store.addPhoto(JPEG_DATA_URL);
     store.setCaption('hello');
-    store.setVisibility('FOLLOWERS');
+    store.setVisibility('PRIVATE');
     store.setTags(['도깨비', '강릉']);
     store.addToStampbook = false;
 
@@ -171,7 +171,7 @@ describe('upload store', () => {
       placeId: 10,
       caption: 'hello',
       tags: '도깨비,강릉',
-      visibility: 'FOLLOWERS',
+      visibility: 'PRIVATE',
       addToStampbook: false,
     });
   });
