@@ -65,6 +65,14 @@ kakao:
     cache-ttl-hours: 24
     nearby-radius-meters: 500
 
+korea-tourism:
+  service-key: disabled-korea-tourism
+  api:
+    base-url: https://apis.data.go.kr
+    timeout-ms: 3000
+    num-of-rows: 10
+    radius-meters: 200000
+
 app:
   domain:
     server: "http://localhost:8080"

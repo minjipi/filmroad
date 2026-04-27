@@ -3,6 +3,7 @@ package com.filmroad.api.domain.place;
 import com.filmroad.api.common.model.BaseResponse;
 import com.filmroad.api.domain.like.LikeService;
 import com.filmroad.api.domain.like.dto.LikeToggleResponse;
+import com.filmroad.api.domain.place.dto.NearbyRestaurantsResponse;
 import com.filmroad.api.domain.place.dto.PlaceDetailResponse;
 import com.filmroad.api.domain.place.dto.PlaceKakaoInfoResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ public class PlaceController {
     private final PlaceDetailService placeDetailService;
     private final LikeService likeService;
     private final KakaoPlaceInfoService kakaoPlaceInfoService;
+    private final NearbyRestaurantService nearbyRestaurantService;
 
     @GetMapping("/{id}")
     public BaseResponse<PlaceDetailResponse> getPlaceDetail(
@@ -56,5 +58,21 @@ public class PlaceController {
     @GetMapping("/{id}/kakao-info")
     public BaseResponse<PlaceKakaoInfoResponse> getKakaoInfo(@PathVariable Long id) {
         return BaseResponse.success(kakaoPlaceInfoService.getOrFetch(id));
+    }
+
+    /**
+     * 한국관광공사 KorService2 `locationBasedList2` 프록시 — place 주변 음식점 리스트.
+     * 외부 API 키 미설정/장애 시에도 200 + 빈 리스트로 응답해 프론트가 섹션을 자연스럽게
+     * 처리할 수 있게 한다 (KakaoSection 과 동일한 정책).
+     */
+    @Operation(summary = "장소 주변 음식점 조회 (한국관광공사 API 프록시)",
+            description = "PlaceDetailPage 의 주변 맛집 섹션. 외부 API 미설정/장애 시 빈 리스트.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "정상 응답 (빈 리스트 가능)"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 placeId")
+    })
+    @GetMapping("/{id}/nearby-restaurants")
+    public BaseResponse<NearbyRestaurantsResponse> getNearbyRestaurants(@PathVariable Long id) {
+        return BaseResponse.success(nearbyRestaurantService.getNearbyRestaurants(id));
     }
 }
