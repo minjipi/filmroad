@@ -1,8 +1,6 @@
 package com.filmroad.api.domain.place.dto;
 
 import com.filmroad.api.domain.place.PhotoVisibility;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -30,16 +28,14 @@ public class PhotoUploadRequest {
 
     /**
      * 촬영 위도 — 디바이스 GPS / EXIF 에서 캡처한 값. 권한 거부 시 null 허용.
-     * 서비스 단에서 성지 GPS 와 비교해 gpsScore 를 산출.
+     * 범위([-90, 90]) 밖 값은 서비스 단에서 null 로 정규화 + gpsScore=0 으로 처리하여
+     * 업로드 자체는 통과 (정책 (b)). 따라서 여기서는 strict bean validation 을 걸지 않는다.
      */
-    @DecimalMin(value = "-90.0")
-    @DecimalMax(value = "90.0")
     private Double latitude;
 
     /**
      * 촬영 경도 — 디바이스 GPS / EXIF 에서 캡처한 값. 권한 거부 시 null 허용.
+     * 범위([-180, 180]) 밖 값은 서비스 단에서 null 로 정규화.
      */
-    @DecimalMin(value = "-180.0")
-    @DecimalMax(value = "180.0")
     private Double longitude;
 }
