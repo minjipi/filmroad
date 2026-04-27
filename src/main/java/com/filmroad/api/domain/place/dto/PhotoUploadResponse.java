@@ -26,6 +26,16 @@ public class PhotoUploadResponse {
     private List<String> tags;
     private PhotoVisibility visibility;
     private Date createdAt;
+    /** 종합 채점 점수 0~100 — similarity + gps 합산. 미채점이면 0. */
+    private int totalScore;
+    /** 가이드 사진 vs 업로드 사진 유사도 0~100. */
+    private int similarityScore;
+    /** 성지 GPS 와 촬영 GPS 근접도 0~100. */
+    private int gpsScore;
+    /** 촬영 위도 — 클라이언트에서 보낸 값을 그대로 echo. null 가능. */
+    private Double capturedLatitude;
+    /** 촬영 경도 — 클라이언트에서 보낸 값을 그대로 echo. null 가능. */
+    private Double capturedLongitude;
     private StampRewardDto stamp;
     private RewardDeltaDto reward;
     /**
@@ -45,6 +55,11 @@ public class PhotoUploadResponse {
                 .tags(parseTags(post.getTagsCsv()))
                 .visibility(post.getVisibility())
                 .createdAt(post.getCreatedAt())
+                .totalScore(post.getTotalScore())
+                .similarityScore(post.getSimilarityScore())
+                .gpsScore(post.getGpsScore())
+                .capturedLatitude(post.getCapturedLatitude())
+                .capturedLongitude(post.getCapturedLongitude())
                 .stamp(stamp)
                 .reward(reward)
                 .images(post.getImages().stream().map(PhotoImageSummary::from).toList())

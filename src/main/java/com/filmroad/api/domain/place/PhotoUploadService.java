@@ -124,6 +124,8 @@ public class PhotoUploadService {
                 .caption(req.getCaption())
                 .visibility(visibility)
                 .tagsCsv(tagsCsv)
+                .capturedLatitude(req.getLatitude())
+                .capturedLongitude(req.getLongitude())
                 .build();
 
         List<Path> pendingWrites = new ArrayList<>(files.size());
