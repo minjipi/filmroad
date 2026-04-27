@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -17,7 +18,10 @@ import {
 } from '@/stores/map';
 import { signInForTest } from './__helpers__/auth';
 
-const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
+const mockApi = api as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+};
 
 const fixture: MapResponse = {
   markers: [
@@ -56,6 +60,7 @@ const fixture: MapResponse = {
     likeCount: 3200,
     rating: 4.8,
     distanceKm: 0.1,
+    liked: false,
   },
 };
 
@@ -63,6 +68,7 @@ describe('map store', () => {
   beforeEach(() => {
     setActivePinia(createPinia()); signInForTest();
     mockApi.get.mockReset();
+    mockApi.post.mockReset();
   });
 
   it('fetchMap populates markers, selected and forwards center as lat/lng', async () => {
@@ -149,6 +155,7 @@ describe('map store', () => {
         likeCount: 4100,
         rating: 4.7,
         distanceKm: 180.4,
+        liked: false,
       },
     };
     mockApi.get.mockResolvedValueOnce({ data: afterSelect });
@@ -255,6 +262,7 @@ describe('map store', () => {
       likeCount: 0,
       rating: 4.2,
       distanceKm: null,
+      liked: false,
     });
 
     expect(store.selected?.id).toBe(42);
@@ -269,7 +277,7 @@ describe('map store', () => {
     store.markLastViewed({
       id: 1, name: 'x', regionLabel: '', latitude: 1, longitude: 2,
       workId: 0, workTitle: '', workEpisode: null, coverImageUrls: [],
-      photoCount: 0, likeCount: 0, rating: 0, distanceKm: null,
+      photoCount: 0, likeCount: 0, rating: 0, distanceKm: null, liked: false,
     });
     expect(store.hasBeenViewed).toBe(true);
 
@@ -325,6 +333,7 @@ describe('map store', () => {
       likeCount: 0,
       rating: 4.0,
       distanceKm: null,
+      liked: false,
     };
 
     const store = useMapStore();
@@ -478,5 +487,58 @@ describe('map store', () => {
     // marker 도 모두 통과해야 함.
     store.setSheetFilters({ regions: ['강원'] });
     expect(store.visibleMarkers.map((m) => m.id).sort()).toEqual([1, 2, 3]);
+  });
+
+  it('toggleLike flips selected.liked optimistically and adopts the server response', async () => {
+    // 각 toggleLike 테스트는 selected 를 mutate 하므로 공유 fixture 가 오염되지
+    // 않도록 selected 를 새로 클론해서 mock 에 넘긴다.
+    mockApi.get.mockResolvedValueOnce({ data: { ...fixture, selected: { ...fixture.selected! } } });
+    const store = useMapStore();
+    await store.fetchMap();
+    expect(store.selected?.liked).toBe(false);
+    expect(store.selected?.likeCount).toBe(3200);
+
+    let resolvePost!: (v: { data: { liked: boolean; likeCount: number } }) => void;
+    mockApi.post.mockImplementationOnce(
+      () => new Promise((r) => { resolvePost = r; }),
+    );
+    const inflight = store.toggleLike(10);
+
+    // optimistic flip — 응답 오기 전에 이미 liked=true, likeCount +1.
+    expect(store.selected?.liked).toBe(true);
+    expect(store.selected?.likeCount).toBe(3201);
+
+    resolvePost({ data: { liked: true, likeCount: 3210 } });
+    await inflight;
+    // 서버 진실로 덮어쓰기 — optimistic 으로 박은 +1 과 다를 수 있다.
+    expect(store.selected?.liked).toBe(true);
+    expect(store.selected?.likeCount).toBe(3210);
+    expect(mockApi.post.mock.calls[0][0]).toBe('/api/places/10/like');
+  });
+
+  it('toggleLike rolls back to previous state on API failure', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { ...fixture, selected: { ...fixture.selected! } } });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    mockApi.post.mockRejectedValueOnce(new Error('network down'));
+    await store.toggleLike(10);
+
+    // 롤백 — 원래의 liked=false, likeCount=3200 으로 복원되고 error 메시지 노출.
+    expect(store.selected?.liked).toBe(false);
+    expect(store.selected?.likeCount).toBe(3200);
+    expect(store.error).toBe('network down');
+  });
+
+  it('toggleLike for a different place than selected is a no-op', async () => {
+    // selected 만 단일 카드라 시트가 다른 placeId 로 액션을 보낼 일은 없지만,
+    // 안전망 — 호출자 실수로 잘못된 id 가 들어와도 selected 가 오염되지 않는다.
+    mockApi.get.mockResolvedValueOnce({ data: { ...fixture, selected: { ...fixture.selected! } } });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    await store.toggleLike(99);
+    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(store.selected?.liked).toBe(false);
   });
 });

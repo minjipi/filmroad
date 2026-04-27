@@ -842,6 +842,7 @@ async function load(id: number): Promise<void> {
       likeCount: p.likeCount,
       rating: p.rating,
       distanceKm: p.distanceKm,
+      liked: p.liked,
     });
   }
 }

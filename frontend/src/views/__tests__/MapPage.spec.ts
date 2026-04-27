@@ -72,6 +72,7 @@ const fixture: MapResponse = {
     likeCount: 3200,
     rating: 4.8,
     distanceKm: 0.1,
+    liked: false,
   },
 };
 
@@ -198,6 +199,45 @@ describe('MapPage.vue', () => {
     await flushPromises();
 
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.selected!.id}`);
+  });
+
+  it('인증샷 stat icon click pushes /gallery/:id', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const photoStat = wrapper.find('[data-testid="sheet-photo-stat"]');
+    expect(photoStat.exists()).toBe(true);
+    await photoStat.trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith(`/gallery/${fixture.selected!.id}`);
+  });
+
+  it('heart icon click dispatches mapStore.toggleLike', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+    const toggleSpy = vi.spyOn(store, 'toggleLike').mockResolvedValue(undefined);
+
+    const likeStat = wrapper.find('[data-testid="sheet-like-stat"]');
+    expect(likeStat.exists()).toBe(true);
+    await likeStat.trigger('click');
+    await flushPromises();
+    expect(toggleSpy).toHaveBeenCalledWith(fixture.selected!.id);
+  });
+
+  it('heart stat reflects liked state via .liked class (filled vs outline)', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+
+    // 시드는 liked=false — 따라서 .liked 클래스 없음.
+    let likeStat = wrapper.find('[data-testid="sheet-like-stat"]');
+    expect(likeStat.classes()).not.toContain('liked');
+
+    // 직접 store 의 selected.liked 를 뒤집어 시각 분기를 본다.
+    if (store.selected) store.selected.liked = true;
+    await flushPromises();
+    likeStat = wrapper.find('[data-testid="sheet-like-stat"]');
+    expect(likeStat.classes()).toContain('liked');
   });
 
   it('first entry (no selected, hasBeenViewed=false) forces KOREA_CENTER + COUNTRY_ZOOM before fetch', async () => {

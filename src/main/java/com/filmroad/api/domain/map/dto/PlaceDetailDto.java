@@ -23,8 +23,13 @@ public class PlaceDetailDto {
     private int likeCount;
     private double rating;
     private Double distanceKm;
+    /**
+     * 현재 viewer 가 이 place 를 좋아요 눌렀는지. 비로그인은 false.
+     * 지도 시트의 하트 아이콘이 채움/외곽 분기에 사용한다.
+     */
+    private boolean liked;
 
-    public static PlaceDetailDto of(Place place, Double distanceKm) {
+    public static PlaceDetailDto of(Place place, Double distanceKm, boolean liked) {
         return PlaceDetailDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -39,6 +44,7 @@ public class PlaceDetailDto {
                 .likeCount(place.getLikeCount())
                 .rating(place.getRating())
                 .distanceKm(distanceKm)
+                .liked(liked)
                 .build();
     }
 }
