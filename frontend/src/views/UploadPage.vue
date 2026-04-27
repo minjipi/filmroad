@@ -145,44 +145,81 @@
             <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
           </button>
 
-          <div class="field row-field">
-            <div class="ico"><ion-icon :icon="peopleOutline" class="ic-20" /></div>
-            <div class="grow">
-              <div class="k">함께 간 사람</div>
-              <div class="v">친구 태그하기</div>
-            </div>
-            <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
-          </div>
-
-          <div class="field row-field">
-            <div class="ico stampbook"><ion-icon :icon="ribbonOutline" class="ic-20" /></div>
-            <div class="grow">
-              <div class="k">스탬프북에 추가</div>
-              <div class="v">{{ addToStampbook ? '수집 대상' : '추가 안 함' }}</div>
-            </div>
-            <button
-              class="toggle"
-              :class="{ off: !addToStampbook }"
-              type="button"
-              aria-label="stampbook"
-              @click="onToggleStampbook"
+          <!--
+            "한 번 정하면 거의 안 바꾸는" 옵션(스탬프북 / 공개 범위)은 기본
+            접힘. caption → 작품 → 위치 가 1차 작성 흐름이고, 나머지는 의식적
+            으로 만질 때만 펼치게 한다 (Instagram 패턴 — TikTok 의 "더보기",
+            Threads 의 "..." 메뉴와 같은 부류). 토글은 배지 행이라 data row
+            들과는 다른 시각 무게로 노출.
+          -->
+          <button
+            type="button"
+            class="advanced-toggle"
+            data-testid="advanced-toggle"
+            :aria-expanded="advancedOpen"
+            @click="advancedOpen = !advancedOpen"
+          >
+            <span>고급 설정</span>
+            <ion-icon
+              :icon="advancedOpen ? chevronUp : chevronDown"
+              class="ic-18"
             />
-          </div>
+          </button>
 
-          <div class="field row-field">
-            <div class="ico visibility"><ion-icon :icon="globeOutline" class="ic-20" /></div>
-            <div class="grow">
-              <div class="k">공개 범위</div>
-              <div class="v">{{ visibilityLabel }}</div>
+          <template v-if="advancedOpen">
+            <div class="field row-field">
+              <div class="ico stampbook"><ion-icon :icon="ribbonOutline" class="ic-20" /></div>
+              <div class="grow">
+                <div class="k">스탬프북에 추가</div>
+                <div class="v">{{ addToStampbook ? '수집 대상' : '추가 안 함' }}</div>
+              </div>
+              <button
+                class="toggle"
+                :class="{ off: !addToStampbook }"
+                type="button"
+                aria-label="stampbook"
+                @click="onToggleStampbook"
+              />
             </div>
-            <button
-              class="toggle"
-              :class="{ off: visibility !== 'PUBLIC' }"
-              type="button"
-              aria-label="visibility"
-              @click="onToggleVisibility"
-            />
-          </div>
+
+            <!--
+              공개 범위는 두 개뿐(전체공개 / 비공개)이라 토글보다 양쪽 옵션이
+              항상 보이는 segmented control 이 명확. 트위터 audience 선택,
+              카카오톡 대화상대 공개범위 등 이 패턴을 따른다. role=radiogroup
+              으로 a11y 도 정렬.
+            -->
+            <div class="field row-field vis-field">
+              <div class="ico visibility"><ion-icon :icon="globeOutline" class="ic-20" /></div>
+              <div class="grow">
+                <div class="k">공개 범위</div>
+                <div
+                  class="vis-segmented"
+                  role="radiogroup"
+                  aria-label="공개 범위"
+                  data-testid="visibility-segmented"
+                >
+                  <button
+                    type="button"
+                    class="vis-seg"
+                    :class="{ on: visibility === 'PUBLIC' }"
+                    role="radio"
+                    :aria-checked="visibility === 'PUBLIC'"
+                    data-testid="visibility-public"
+                    @click="onSetVisibility('PUBLIC')"
+                  >전체 공개</button>
+                  <button
+                    type="button"
+                    class="vis-seg"
+                    :class="{ on: visibility === 'PRIVATE' }"
+                    role="radio"
+                    :aria-checked="visibility === 'PRIVATE'"
+                    data-testid="visibility-private"
+                    @click="onSetVisibility('PRIVATE')"
+                  >비공개</button>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -252,10 +289,11 @@ import {
   sparklesOutline,
   filmOutline,
   locationOutline,
-  peopleOutline,
   ribbonOutline,
   globeOutline,
   chevronForwardOutline,
+  chevronDown,
+  chevronUp,
   addOutline,
   closeOutline,
   searchOutline,
@@ -278,11 +316,11 @@ const online = useOnline();
 
 const fileInput = ref<HTMLInputElement | null>(null);
 
-const visibilityLabel = computed(() => {
-  if (visibility.value === 'PUBLIC') return '전체 공개';
-  if (visibility.value === 'FOLLOWERS') return '팔로워 공개';
-  return '나만 보기';
-});
+// 고급 설정(스탬프북 / 공개 범위)은 기본 접힘. 사용자가 매번 바꾸지 않는
+// 옵션이라 caption 작성 흐름을 끊지 않게 한다. 페이지 단위 단순 ref —
+// 업로드 후 새 글 작성 시에는 다시 접힘으로 복귀.
+const advancedOpen = ref(false);
+
 
 // "공유하기" needs both a place and at least one photo. The button text/state
 // reflects what's missing so the user isn't left guessing. Offline browsers
@@ -359,8 +397,9 @@ function onToggleStampbook(): void {
   uploadStore.toggleStampbook();
 }
 
-function onToggleVisibility(): void {
-  uploadStore.setVisibility(visibility.value === 'PUBLIC' ? 'FOLLOWERS' : 'PUBLIC');
+function onSetVisibility(v: 'PUBLIC' | 'PRIVATE'): void {
+  if (visibility.value === v) return;
+  uploadStore.setVisibility(v);
 }
 
 async function onFilePick(e: Event): Promise<void> {
@@ -659,6 +698,63 @@ ion-content.up-content {
 }
 .row-field .grow { flex: 1; }
 .row-field .chev { color: var(--fr-ink-4); margin-left: auto; }
+
+/* 공개 범위 segmented control — 두 옵션이 항상 보이게. row 에 들어가지만
+   세로 레이아웃(라벨 위 / 컨트롤 아래)으로 두 pill 이 각자 충분한 폭 확보.
+   on 상태는 brand primary, off 는 muted bg + ink-3. */
+.vis-field .grow { display: flex; flex-direction: column; gap: 6px; }
+.vis-segmented {
+  display: flex;
+  gap: 6px;
+  background: var(--fr-bg-muted);
+  border-radius: 10px;
+  padding: 3px;
+}
+.vis-seg {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--fr-ink-3);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.vis-seg.on {
+  background: #ffffff;
+  color: var(--fr-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* 고급 설정 토글 — data row 보다 가벼운 무게(아이콘 박스 없음, 패딩 작게)로
+   "이건 메타 정보가 아니라 컨트롤이다"는 신호. 평면 행 사이에 끼면 시각
+   리듬이 깨져서 좌측 인덴트 약간 + 작은 폰트로 분리. */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 6px;
+  margin-top: 2px;
+  background: transparent;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+.advanced-toggle:active { color: var(--fr-ink-2); }
+.advanced-toggle ion-icon { color: var(--fr-ink-4); }
 
 .tags {
   display: flex; gap: 6px;
