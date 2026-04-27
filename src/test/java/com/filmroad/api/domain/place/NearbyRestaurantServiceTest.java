@@ -139,11 +139,11 @@ class NearbyRestaurantServiceTest {
         assertThat(item.getContentId()).isEqualTo("C-1234");
         assertThat(item.getTitle()).isEqualTo("주문진해전어");
         assertThat(item.getAddr1()).isEqualTo("강원 강릉시 주문진읍 ...");
-        assertThat(item.getDistance()).isEqualTo(120);
+        assertThat(item.getDistanceM()).isEqualTo(120);
         assertThat(item.getTel()).isEqualTo("033-661-1234");
         assertThat(item.getImageUrl()).isEqualTo("https://image.example.com/abc.jpg");
-        // mapX → lng, mapY → lat 매핑 검증
-        assertThat(item.getLng()).isEqualTo(128.8350);
-        assertThat(item.getLat()).isEqualTo(37.8927);
+        // mapX → longitude, mapY → latitude 매핑 검증 (필드명 단위/의미 명시)
+        assertThat(item.getLongitude()).isEqualTo(128.8350);
+        assertThat(item.getLatitude()).isEqualTo(37.8927);
     }
 }

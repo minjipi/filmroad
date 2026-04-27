@@ -17,24 +17,24 @@ public class NearbyRestaurantItem {
     private String contentId;
     private String title;
     private String addr1;
-    /** 거리 (m). 외부 API 의 dist 필드. null 가능. */
-    private Integer distance;
+    /** 거리 (m). 외부 API 의 dist 필드. null 가능. 필드명에 단위(M) 명시. */
+    private Integer distanceM;
     private String tel;
     /** 대표 이미지 URL — 외부 firstimage. 비어있는 경우 null. */
     private String imageUrl;
-    private Double lat;
-    private Double lng;
+    private Double latitude;
+    private Double longitude;
 
     public static NearbyRestaurantItem from(KoreaTourismItem raw) {
         return NearbyRestaurantItem.builder()
                 .contentId(raw.contentId())
                 .title(raw.title())
                 .addr1(raw.addr1())
-                .distance(raw.distance())
+                .distanceM(raw.distance())
                 .tel(raw.tel())
                 .imageUrl(raw.imageUrl())
-                .lat(raw.mapY())
-                .lng(raw.mapX())
+                .latitude(raw.mapY())
+                .longitude(raw.mapX())
                 .build();
     }
 }
