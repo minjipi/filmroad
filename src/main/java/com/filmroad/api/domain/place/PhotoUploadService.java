@@ -75,6 +75,15 @@ public class PhotoUploadService {
     private static final int POINTS_PER_LEVEL = 100;
     private static final int MAX_LEVEL = 10;
 
+    /**
+     * 인증샷 보상(스탬프 / 포인트 / 뱃지) 발급 기준 — `gpsScore` 가 이 값 이상이어야.
+     * ShotScoringService 의 score curve 기준 50 = 약 200m (50~80m 까진 80점,
+     * 200m 까지는 50~80, 200m 이상은 50 미만으로 떨어짐). 즉 "성지에서 약
+     * 200m 이내" 가 보상의 컷오프. 다른 사진을 업로드하면 distance 가 멀어
+     * gpsScore 가 0 또는 낮은 값이 돼 보상이 부여되지 않는다.
+     */
+    static final int GPS_VERIFY_THRESHOLD = 50;
+
     private final PlacePhotoRepository placePhotoRepository;
     private final PlaceRepository placeRepository;
     private final UserRepository userRepository;
@@ -167,27 +176,55 @@ public class PhotoUploadService {
 
         PlacePhoto savedPost = placePhotoRepository.save(post);
 
-        // Stamp / reward 는 batch 당 1회.
-        if (!stampRepository.existsByUserIdAndPlaceId(userId, place.getId())) {
-            stampRepository.save(Stamp.builder()
-                    .user(user)
-                    .place(place)
-                    .photo(savedPost)
-                    .build());
-        }
+        // 인증 통과 여부 — gpsScore 가 임계 이상이어야 stamp / 포인트 / 뱃지가 부여된다.
+        // 미통과 시 사진 / 점수 자체는 정상 저장 → 사용자는 "이 사진은 점수가 낮네" 라고
+        // 인지하지만, 부정 업로드(다른 장소 사진) 로 보상을 챙기지는 못함. 정책 (b) 와 호환.
+        boolean gpsVerified = post.getGpsScore() >= GPS_VERIFY_THRESHOLD;
 
-        int newStreakDays = Math.max(1, user.getStreakDays() + 1);
-        int newPoints = user.getPoints() + POINTS_PER_UPLOAD;
-        int newLevel = Math.min(MAX_LEVEL, newPoints / POINTS_PER_LEVEL + 1);
-        user.applyUploadReward(POINTS_PER_UPLOAD, newStreakDays, newLevel);
-        userRepository.save(user);
-
-        long stampCount = stampRepository.countByUserId(userId);
-        long workStampCount = stampRepository.countByUserIdAndWorkId(userId, place.getWork().getId());
         long workTotalCount = placeRepository.countByWorkId(place.getWork().getId());
-        int workPercent = workTotalCount == 0 ? 0 : (int) Math.round(100.0 * workStampCount / workTotalCount);
+        StampRewardDto stampReward = null;
+        RewardDeltaDto rewardDelta = null;
 
-        List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, workStampCount, workTotalCount);
+        if (gpsVerified) {
+            // Stamp / reward 는 batch 당 1회.
+            if (!stampRepository.existsByUserIdAndPlaceId(userId, place.getId())) {
+                stampRepository.save(Stamp.builder()
+                        .user(user)
+                        .place(place)
+                        .photo(savedPost)
+                        .build());
+            }
+
+            int newStreakDays = Math.max(1, user.getStreakDays() + 1);
+            int newPoints = user.getPoints() + POINTS_PER_UPLOAD;
+            int newLevel = Math.min(MAX_LEVEL, newPoints / POINTS_PER_LEVEL + 1);
+            user.applyUploadReward(POINTS_PER_UPLOAD, newStreakDays, newLevel);
+            userRepository.save(user);
+
+            long stampCount = stampRepository.countByUserId(userId);
+            long workStampCount = stampRepository.countByUserIdAndWorkId(userId, place.getWork().getId());
+            int workPercent = workTotalCount == 0 ? 0 : (int) Math.round(100.0 * workStampCount / workTotalCount);
+
+            List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, workStampCount, workTotalCount);
+
+            stampReward = StampRewardDto.builder()
+                    .placeName(place.getName())
+                    .workId(place.getWork().getId())
+                    .workTitle(place.getWork().getTitle())
+                    .collectedCount(workStampCount)
+                    .totalCount(workTotalCount)
+                    .percent(workPercent)
+                    .build();
+
+            rewardDelta = RewardDeltaDto.builder()
+                    .pointsEarned(POINTS_PER_UPLOAD)
+                    .currentPoints(user.getPoints())
+                    .streakDays(user.getStreakDays())
+                    .level(user.getLevel())
+                    .levelName(UserMeDto.levelName(user.getLevel()))
+                    .newBadges(newBadges)
+                    .build();
+        }
 
         // 3) 파일 write — 실패 시 지금까지 쓴 파일 best-effort 정리 + UPLOAD_FAILED throw → 트랜잭션 롤백.
         List<Path> written = new ArrayList<>(pendingWrites.size());
@@ -203,24 +240,8 @@ public class PhotoUploadService {
             throw BaseException.of(BaseResponseStatus.UPLOAD_FAILED);
         }
 
-        StampRewardDto stampReward = StampRewardDto.builder()
-                .placeName(place.getName())
-                .workId(place.getWork().getId())
-                .workTitle(place.getWork().getTitle())
-                .collectedCount(workStampCount)
-                .totalCount(workTotalCount)
-                .percent(workPercent)
-                .build();
-
-        RewardDeltaDto rewardDelta = RewardDeltaDto.builder()
-                .pointsEarned(POINTS_PER_UPLOAD)
-                .currentPoints(user.getPoints())
-                .streakDays(user.getStreakDays())
-                .level(user.getLevel())
-                .levelName(UserMeDto.levelName(user.getLevel()))
-                .newBadges(newBadges)
-                .build();
-
+        // GPS 미통과 시 stampReward / rewardDelta 모두 null — 호출자가 그대로
+        // null 을 받아 "사진은 올라갔지만 인증 보상 없음" UI 분기를 탄다.
         return PhotoUploadResponse.of(savedPost, stampReward, rewardDelta);
     }
 

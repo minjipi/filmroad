@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import exifr from 'exifr';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
@@ -136,6 +137,48 @@ function extForMime(mime: string): string {
   return 'jpg';
 }
 
+/**
+ * 업로드 좌표 결정 — 백엔드 채점/뱃지 게이트의 입력값.
+ *
+ * 1. 첫 번째 사진의 EXIF GPS 가 있으면 그걸 사용 (사용자가 현장에서 찍고
+ *    집/이동 중에 업로드하는 흔한 케이스를 살림. 카메라 앱이 GPS 를 EXIF
+ *    에 박아둠).
+ * 2. EXIF 가 없거나 (0, 0) 같이 무효한 fix 면 디바이스 geolocation
+ *    fallback (인앱 카메라/스크린샷 등 EXIF 가 없는 케이스).
+ * 3. 둘 다 실패하면 null — 백엔드는 gpsScore=0 으로 처리, 보상 미지급.
+ *
+ * 모든 단계가 catch-all 로 감싸져 좌표를 못 얻어도 업로드 자체는 진행.
+ */
+async function resolveUploadGps(firstPhotoDataUrl: string | undefined): Promise<{
+  latitude: number | undefined;
+  longitude: number | undefined;
+}> {
+  if (firstPhotoDataUrl) {
+    try {
+      const blob = dataUrlToBlob(firstPhotoDataUrl);
+      // exifr 는 GPS 가 없으면 undefined 반환 (throw X).
+      const gps = await exifr.gps(blob);
+      const lat = gps?.latitude;
+      const lng = gps?.longitude;
+      // (0, 0) 은 카메라가 fix 못 잡았을 때 자주 박는 dummy. 안전하게 무시.
+      if (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0)) {
+        return { latitude: lat, longitude: lng };
+      }
+    } catch {
+      // EXIF 파싱 실패 → fallback 진행.
+    }
+  }
+  try {
+    const res = await requestLocation({ timeoutMs: 5000 });
+    if (res.ok) {
+      return { latitude: res.coords.lat, longitude: res.coords.lng };
+    }
+  } catch {
+    // jsdom 등 navigator.geolocation 부재 환경 안전.
+  }
+  return { latitude: undefined, longitude: undefined };
+}
+
 export const useUploadStore = defineStore('upload', {
   state: (): State => ({
     targetPlace: null,
@@ -258,20 +301,9 @@ export const useUploadStore = defineStore('upload', {
           const ext = extForMime(blob.type);
           form.append('files', blob, `capture-${i}.${ext}`);
         }
-        // Best-effort GPS capture (task #4). 5s timeout, silent fail —
-        // backend treats missing coords as 0 GPS score rather than blocking
-        // the upload. Permission denial / unavailable / timeout all just
-        // skip the lat/lng fields with a console warning.
-        const geo = await requestLocation({ timeoutMs: 5000 });
-        let latitude: number | undefined;
-        let longitude: number | undefined;
-        if (geo.ok) {
-          latitude = geo.coords.lat;
-          longitude = geo.coords.lng;
-        } else {
-          // eslint-disable-next-line no-console
-          console.warn(`[upload] geolocation skipped (${geo.reason}); proceeding without coords`);
-        }
+        // GPS 결정 — 첫 사진의 EXIF 우선, 없으면 디바이스 geolocation fallback.
+        // 둘 다 실패하면 좌표 없이 업로드 (백엔드 gpsScore=0 → 보상 미지급).
+        const { latitude, longitude } = await resolveUploadGps(this.photos[0]);
 
         const meta = {
           placeId: this.targetPlace.placeId,

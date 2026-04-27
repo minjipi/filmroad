@@ -11,6 +11,12 @@ vi.mock('@/composables/useGeolocation', () => ({
   requestLocation: vi.fn().mockResolvedValue({ ok: false, reason: 'unavailable' }),
 }));
 
+// EXIF parser — resolveUploadGps tries this first, falls back to requestLocation.
+// Default to "no GPS in EXIF" so the existing geolocation-based tests still
+// hit their requestLocation mock.
+const { exifGpsSpy } = vi.hoisted(() => ({ exifGpsSpy: vi.fn() }));
+vi.mock('exifr', () => ({ default: { gps: exifGpsSpy } }));
+
 import api from '@/services/api';
 import { requestLocation } from '@/composables/useGeolocation';
 
@@ -59,6 +65,9 @@ describe('upload store', () => {
     // unchanged (lat/lng absent when geolocation is unavailable).
     mockRequestLocation.mockReset();
     mockRequestLocation.mockResolvedValue({ ok: false, reason: 'unavailable' });
+    // Default: EXIF empty — older tests target the geolocation fallback path.
+    exifGpsSpy.mockReset();
+    exifGpsSpy.mockResolvedValue(undefined);
   });
 
   it('beginCapture sets targetPlace and reset wipes everything back', () => {
@@ -346,7 +355,11 @@ describe('upload store', () => {
 
     const submitP = store.submit();
     // Let submit() reach api.post() so the interceptor captures our callback.
-    await new Promise((r) => setTimeout(r, 0));
+    // EXIF parse + geolocation fallback adds multiple microtask hops before
+    // the post call, so flush a few ticks to be safe rather than racing.
+    for (let i = 0; i < 10 && !onProgress; i += 1) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
     expect(typeof onProgress).toBe('function');
 
     // Simulate two in-flight progress events — state should tick forward.
@@ -390,10 +403,11 @@ describe('upload store', () => {
     expect(metaJson.placeId).toBe(10);
   });
 
-  it('submit silently omits latitude/longitude when geolocation fails (silent fail, task #4)', async () => {
+  it('submit silently omits latitude/longitude when EXIF + geolocation both fail', async () => {
+    // EXIF 비어있고 디바이스 geolocation 도 거부 → 좌표 없이 업로드 진행.
+    // resolveUploadGps 는 catch-all 로 silent fail 하므로 console.warn 호출 없음.
     mockRequestLocation.mockResolvedValueOnce({ ok: false, reason: 'denied' });
     mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const store = useUploadStore();
     store.beginCapture(target);
@@ -417,9 +431,59 @@ describe('upload store', () => {
     // JSON.stringify drops undefined keys — lat/lng absent rather than null.
     expect('latitude' in metaJson).toBe(false);
     expect('longitude' in metaJson).toBe(false);
-    // We left a console.warn breadcrumb (per task #4 brief — silent UX, not silent debug).
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    warnSpy.mockRestore();
+  });
+
+  // jsdom Blob 은 .text() 가 없어 FileReader 로 우회. 다른 테스트들이 쓰는 패턴 그대로.
+  function readBlobAsText(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsText(blob);
+    });
+  }
+
+  it('submit prefers EXIF GPS over device geolocation when EXIF is present', async () => {
+    // 사용자가 현장에서 찍고 집에서 업로드하는 패턴 — 사진 EXIF 의 좌표가
+    // 인증 지점이고, 업로드 시점의 디바이스 위치(집)는 무관.
+    exifGpsSpy.mockResolvedValueOnce({ latitude: 37.8928, longitude: 128.8347 });
+    mockRequestLocation.mockResolvedValue({
+      // requestLocation 이 호출되더라도 EXIF 가 우선이라 무시되어야.
+      ok: true,
+      coords: { lat: 0, lng: 0 },
+    });
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+    await store.submit();
+
+    const [, form] = mockApi.post.mock.calls[0];
+    const meta = JSON.parse(await readBlobAsText((form as FormData).get('meta') as Blob));
+    expect(meta.latitude).toBe(37.8928);
+    expect(meta.longitude).toBe(128.8347);
+    expect(mockRequestLocation).not.toHaveBeenCalled();
+  });
+
+  it('submit treats EXIF (0, 0) as a dummy fix and falls back to device GPS', async () => {
+    // 카메라가 GPS lock 못 잡았을 때 (0, 0) 이 들어오는 흔한 케이스 — 무시.
+    exifGpsSpy.mockResolvedValueOnce({ latitude: 0, longitude: 0 });
+    mockRequestLocation.mockResolvedValueOnce({
+      ok: true,
+      coords: { lat: 37.5, lng: 127.0 },
+    });
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+    await store.submit();
+
+    const [, form] = mockApi.post.mock.calls[0];
+    const meta = JSON.parse(await readBlobAsText((form as FormData).get('meta') as Blob));
+    expect(meta.latitude).toBe(37.5);
+    expect(meta.longitude).toBe(127.0);
   });
 
   it('retry() is a named alias for submit() — re-uses current state and POSTs again', async () => {
