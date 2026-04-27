@@ -47,7 +47,11 @@
           </div>
         </nav>
 
-        <div class="home-segmented" data-testid="home-segmented">
+        <div
+          v-if="selectedWorkId === null"
+          class="home-segmented"
+          data-testid="home-segmented"
+        >
           <span
             :class="['seg', scope === 'NEAR' ? 'active' : '']"
             @click="onSelectScope('NEAR')"
@@ -64,9 +68,12 @@
         </div>
 
         <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_WORKS 가 아닌 scope 는
-             기존 place grid 그대로. -->
+             기존 place grid 그대로. 작품 탭(selectedWorkId !== null) 에서는
+             segmented 자체가 숨겨지지만, state.scope 는 사용자가 모두 탭에서
+             골라둔 값을 그대로 보존한다. 그래서 POPULAR_WORKS 상태로 작품 탭에
+             들어와도 works-grid 가 뜨지 않도록 명시적으로 가드. -->
         <div
-          v-if="scope === 'POPULAR_WORKS'"
+          v-if="scope === 'POPULAR_WORKS' && selectedWorkId === null"
           class="home-grid works-grid"
           data-testid="works-grid"
         >
@@ -95,8 +102,12 @@
         </div>
 
         <template v-else>
+          <!-- NEAR 배너 / nearby-empty 는 사용자가 모두 탭에서 NEAR 를 선택해
+               geo 가 실패/granted-empty 상태일 때 노출. 작품 탭에선 scope 가
+               state 상 NEAR 라도 서버에는 TRENDING 으로 보내고 segmented 도
+               숨기므로, 이 NEAR-전용 UI 자체도 모두 탭으로 한정한다. -->
           <div
-            v-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'denied'"
+            v-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'denied'"
             class="geo-banner"
             data-testid="geo-denied-banner"
           >
@@ -108,7 +119,7 @@
           </div>
 
           <div
-            v-else-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'unavailable'"
+            v-else-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'unavailable'"
             class="geo-banner"
             data-testid="geo-unavailable-banner"
           >
@@ -126,7 +137,7 @@
           </div>
 
           <div
-            v-else-if="scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'timeout'"
+            v-else-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'timeout'"
             class="geo-banner"
             data-testid="geo-timeout-banner"
           >
@@ -175,7 +186,7 @@
           </div>
 
           <div
-            v-if="scope === 'NEAR' && geo.status === 'granted' && places.length === 0"
+            v-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'granted' && places.length === 0"
             class="nearby-empty"
             data-testid="nearby-empty"
           >

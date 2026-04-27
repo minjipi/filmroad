@@ -214,6 +214,40 @@ describe('home store', () => {
     expect(opts?.params).toMatchObject({ scope: 'TRENDING' });
   });
 
+  it('setWork(id) on POPULAR_WORKS state still sends scope=TRENDING (segmented is 모두-only)', async () => {
+    mockApi.get.mockResolvedValue({ data: fixture });
+    const store = useHomeStore();
+    // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태.
+    await store.setScope('POPULAR_WORKS');
+    expect(store.scope).toBe('POPULAR_WORKS');
+
+    // 작품 탭 클릭 — 서버에는 TRENDING 으로 호출되고, state.scope 는 보존.
+    mockApi.get.mockClear();
+    await store.setWork(1);
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ workId: 1, scope: 'TRENDING' });
+    expect(store.scope).toBe('POPULAR_WORKS');
+  });
+
+  it('setWork(null) returning to 모두 with preserved POPULAR_WORKS scope refetches with that scope', async () => {
+    mockApi.get.mockResolvedValue({ data: fixture });
+    const store = useHomeStore();
+    await store.setScope('POPULAR_WORKS'); // POPULAR_WORKS 는 view-only 라 fetch X
+    await store.setWork(1);                // 작품 탭 진입 — TRENDING 호출
+    mockApi.get.mockClear();
+
+    // 모두 복귀 — selectedWorkId 가 null 로 가니 보존된 POPULAR_WORKS 가 다시 effective.
+    // setWork 가 무조건 fetchHome 을 부르고, 작품 ID 가 빠진 상태에서 state.scope=POPULAR_WORKS
+    // 가 그대로 params 에 실려야 한다.
+    await store.setWork(null);
+    expect(store.scope).toBe('POPULAR_WORKS');
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    const [, opts] = mockApi.get.mock.calls[0];
+    expect(opts?.params).toMatchObject({ scope: 'POPULAR_WORKS' });
+    expect(opts?.params).not.toHaveProperty('workId');
+  });
+
   it('toggleLike(placeId) posts to /api/places/:id/like and updates liked/likeCount from response', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
 
