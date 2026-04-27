@@ -56,7 +56,6 @@ const fixture: ShotDetail = {
     id: 10,
     name: '주문진 영진해변 방파제',
     regionLabel: '강원 강릉시 주문진읍',
-    address: '강원 강릉시 주문진읍 교항리 산51-2',
     latitude: 37.89,
     longitude: 128.83,
   },
@@ -297,14 +296,15 @@ describe('ShotDetailPage.vue', () => {
     expect(pickerSpy).toHaveBeenCalledWith(10);
   });
 
-  it('loc-card click pushes /place/:id for the shot\'s place', async () => {
+  // task #13: loc-card 와 scene-card 두 섹션이 사용자 결정으로 제거됨.
+  // 장소 진입 / 원본 장면 재생 버튼 둘 다 더 이상 페이지에 존재하지 않음 —
+  // 회귀 단언 자체가 의미를 잃어 spec 에서 제거. 향후 진입점이 다시
+  // 생기면 그 시점에 새 spec 으로 커버.
+  it('task #13: loc-card and scene-card sections are no longer rendered', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
-    pushSpy.mockClear();
-
-    await wrapper.find('.loc-card').trigger('click');
-    await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith('/place/10');
+    expect(wrapper.find('.loc-card').exists()).toBe(false);
+    expect(wrapper.find('.scene-card').exists()).toBe(false);
   });
 
   it('clicking the sticky comment trigger opens the CommentSheet for this shot', async () => {
@@ -368,6 +368,345 @@ describe('ShotDetailPage.vue', () => {
 
     expect(wrapper.find('section.compare').exists()).toBe(true);
     expect(wrapper.find('[data-testid="sd-compare-toggle"]').exists()).toBe(false);
+  });
+
+  // task #15 — infinite scroll wiring. The page mounts an IntersectionObserver
+  // on a sentinel below the comment input; firing intersection triggers
+  // shotStore.loadNext() and the response posts render as feed cards.
+  it('IntersectionObserver intersection on sentinel calls loadNext + renders feed cards (task #15)', async () => {
+    let observerCallback: IntersectionObserverCallback | null = null;
+    const observeSpy = vi.fn();
+    const disconnectSpy = vi.fn();
+    const ObserverMock = vi
+      .fn()
+      .mockImplementation((cb: IntersectionObserverCallback) => {
+        observerCallback = cb;
+        return {
+          observe: observeSpy,
+          unobserve: vi.fn(),
+          disconnect: disconnectSpy,
+          takeRecords: vi.fn().mockReturnValue([]),
+          root: null,
+          rootMargin: '',
+          thresholds: [],
+        };
+      });
+    const originalObserver = (window as unknown as { IntersectionObserver?: typeof IntersectionObserver })
+      .IntersectionObserver;
+    (window as unknown as { IntersectionObserver: unknown }).IntersectionObserver = ObserverMock;
+
+    try {
+      const { wrapper } = mountPage();
+      await flushPromises();
+
+      // Observer was constructed against the sentinel.
+      expect(ObserverMock).toHaveBeenCalled();
+      expect(observeSpy).toHaveBeenCalled();
+
+      // Stub the feed endpoint with one post so loadNext renders a card.
+      const feedPost = {
+        id: 76,
+        imageUrl: 'https://cdn/p/76.jpg',
+        caption: '다음 인증샷',
+        createdAt: '2026-04-19T10:00:00Z',
+        sceneCompare: true,
+        dramaSceneImageUrl: 'https://cdn/scene/76.jpg',
+        author: {
+          userId: 2,
+          handle: 'trip_hj',
+          nickname: 'trip_hj',
+          avatarUrl: null,
+          verified: false,
+          following: false,
+        },
+        place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+        work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+        likeCount: 100,
+        commentCount: 12,
+        liked: false,
+        saved: false,
+        visitedAt: null,
+      };
+      mockApi.get.mockResolvedValueOnce({
+        data: { posts: [feedPost], hasMore: true, nextCursor: '75' },
+      });
+
+      // Fire intersection.
+      expect(observerCallback).toBeTruthy();
+      observerCallback!(
+        [
+          { isIntersecting: true, target: document.createElement('div') } as unknown as IntersectionObserverEntry,
+        ],
+        {} as IntersectionObserver,
+      );
+      await flushPromises();
+
+      // /api/feed was called with the seed cursor (the primary shot id).
+      const feedCall = mockApi.get.mock.calls.find((c) => String(c[0]) === '/api/feed');
+      expect(feedCall).toBeTruthy();
+
+      // Feed card rendered with the post's caption + handle.
+      const cards = wrapper.findAll('[data-testid="sd-feed-card"]');
+      expect(cards.length).toBe(1);
+      expect(cards[0].text()).toContain('다음 인증샷');
+      expect(cards[0].text()).toContain('trip_hj');
+    } finally {
+      if (originalObserver) {
+        (window as unknown as { IntersectionObserver: unknown }).IntersectionObserver = originalObserver;
+      } else {
+        delete (window as unknown as { IntersectionObserver?: unknown }).IntersectionObserver;
+      }
+    }
+  });
+
+  // task #17 — appended cards use the same 5-section markup as the primary
+  // shot (.compare / .sd-user / .sd-stats / .sd-caption / .cmt-input-wrap).
+  // task #18 — buttons are now fully interactive (only 공유 stays disabled).
+  it('appended feed cards render the same 5-section structure as the primary shot (task #17/#18)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push({
+      id: 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: '안목해변에서',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: true,
+      dramaSceneImageUrl: 'https://cdn/scene/76.jpg',
+      author: {
+        userId: 2,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: true,
+        following: true,
+      },
+      place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+      likeCount: 100,
+      commentCount: 12,
+      liked: false,
+      saved: false,
+      visitedAt: null,
+    });
+    await flushPromises();
+
+    const cards = wrapper.findAll('[data-testid="sd-feed-card"]');
+    expect(cards.length).toBe(1);
+    const card = cards[0];
+
+    // 5 sections — same class names as primary so styles cascade through.
+    expect(card.find('section.compare').exists()).toBe(true);
+    expect(card.find('section.sd-user').exists()).toBe(true);
+    expect(card.find('section.sd-stats').exists()).toBe(true);
+    expect(card.find('section.sd-caption').exists()).toBe(true);
+    expect(card.find('button.cmt-input-wrap').exists()).toBe(true);
+
+    // compare-hero — two imgs (drama + shot) + scene-meta with work info.
+    const compareImgs = card.findAll('section.compare img');
+    expect(compareImgs.length).toBe(2);
+    expect(compareImgs[0].attributes('src')).toBe('https://cdn/scene/76.jpg');
+    expect(compareImgs[1].attributes('src')).toBe('https://cdn/p/76.jpg');
+    expect(card.find('section.compare .scene-meta').text()).toContain('도깨비');
+    expect(card.find('section.compare .scene-meta').text()).toContain('2회');
+
+    // sd-user — nickname + place + verified, all interactive (task #18).
+    expect(card.find('.sd-user .nm').text()).toContain('trip_hj');
+    expect(card.find('.sd-user .verified').exists()).toBe(true);
+    expect(card.find('.sd-user .sub').text()).toContain('강릉 안목해변');
+    expect((card.find('.sd-user .nm').element as HTMLButtonElement).disabled).toBe(false);
+    expect((card.find('.sd-user .follow').element as HTMLButtonElement).disabled).toBe(false);
+
+    // sd-stats — 4 buttons. 좋아요/댓글/저장 interactive (task #18), 공유 disabled.
+    const statBtns = card.findAll('.sd-stat-btn');
+    expect(statBtns.length).toBe(4);
+    expect((statBtns[0].element as HTMLButtonElement).disabled).toBe(false); // 좋아요
+    expect((statBtns[1].element as HTMLButtonElement).disabled).toBe(false); // 댓글
+    expect((statBtns[2].element as HTMLButtonElement).disabled).toBe(false); // 저장
+    expect((statBtns[3].element as HTMLButtonElement).disabled).toBe(true); // 공유 (no real endpoint)
+
+    // sd-caption — caption text only (FeedPost has no tags).
+    expect(card.find('.sd-caption .body').text()).toContain('안목해변에서');
+    expect(card.findAll('.sd-caption .tag').length).toBe(0);
+
+    // cmt-input-wrap — interactive (task #18).
+    expect((card.find('button.cmt-input-wrap').element as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // task #18 — appended-card interaction wiring.
+  function seedAppended(extra: Partial<{
+    id: number;
+    likeCount: number;
+    liked: boolean;
+    saved: boolean;
+    following: boolean;
+    userId: number;
+    placeId: number;
+  }> = {}) {
+    return {
+      id: extra.id ?? 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: '안목해변에서',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: true,
+      dramaSceneImageUrl: 'https://cdn/scene/76.jpg',
+      author: {
+        userId: extra.userId ?? 2,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: false,
+        following: extra.following ?? false,
+      },
+      place: { id: extra.placeId ?? 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+      likeCount: extra.likeCount ?? 100,
+      commentCount: 12,
+      liked: extra.liked ?? false,
+      saved: extra.saved ?? false,
+      visitedAt: null,
+    };
+  }
+
+  it('appended card 좋아요 click → POST /api/photos/:id/like + optimistic flip (task #18)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ id: 76, likeCount: 100, liked: false }));
+    await flushPromises();
+
+    mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 101 } });
+
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    const likeBtn = card.findAll('.sd-stat-btn')[0];
+    await likeBtn.trigger('click');
+    await flushPromises();
+
+    const calls = mockApi.post.mock.calls;
+    const likeCall = calls.find((c) => String(c[0]) === '/api/photos/76/like');
+    expect(likeCall).toBeTruthy();
+    expect(store.appendedShots[0].liked).toBe(true);
+    expect(store.appendedShots[0].likeCount).toBe(101);
+  });
+
+  it('appended card 저장 click for an unsaved place → opens collection picker (task #18)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ placeId: 22 }));
+    await flushPromises();
+
+    const ui = useUiStore();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
+
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    const saveBtn = card.findAll('.sd-stat-btn')[2];
+    await saveBtn.trigger('click');
+    await flushPromises();
+
+    expect(pickerSpy).toHaveBeenCalledWith(22);
+  });
+
+  it('appended card 팔로우 click → POST /api/users/:userId/follow + optimistic flip (task #18)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ userId: 9, following: false }));
+    await flushPromises();
+
+    mockApi.post.mockResolvedValueOnce({
+      data: { following: true, followersCount: 1, followingCount: 1 },
+    });
+
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    await card.find('.sd-user .follow').trigger('click');
+    await flushPromises();
+
+    const calls = mockApi.post.mock.calls;
+    const followCall = calls.find((c) => String(c[0]) === '/api/users/9/follow');
+    expect(followCall).toBeTruthy();
+    expect(store.appendedShots[0].author.following).toBe(true);
+  });
+
+  it('appended card cmt-input-wrap click → opens CommentSheet for that post id (task #18)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ id: 76 }));
+    await flushPromises();
+
+    // 초기엔 시트 닫힘.
+    let stub = wrapper.find('.comment-sheet-stub');
+    expect(stub.attributes('data-open')).toBe('false');
+
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    await card.find('button.cmt-input-wrap').trigger('click');
+    await flushPromises();
+
+    stub = wrapper.find('.comment-sheet-stub');
+    expect(stub.attributes('data-open')).toBe('true');
+    // primary shot id (77) 가 아닌 appended post id (76) 로 시트 열림.
+    expect(stub.attributes('data-photo-id')).toBe('76');
+  });
+
+  it('appended card 닉네임 click → router.push /user/:userId (task #18)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ userId: 9 }));
+    await flushPromises();
+
+    pushSpy.mockClear();
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    await card.find('.sd-user .nm').trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith('/user/9');
+  });
+
+  it('end-of-feed status renders after loadNext returns hasMore=false + posts already loaded (task #15)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    // Manually drive the store into "end-reached after loading 1 post" state.
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push({
+      id: 76,
+      imageUrl: 'https://cdn/p/76.jpg',
+      caption: 'last',
+      createdAt: '2026-04-19T10:00:00Z',
+      sceneCompare: false,
+      dramaSceneImageUrl: null,
+      author: {
+        userId: 2,
+        handle: 'trip_hj',
+        nickname: 'trip_hj',
+        avatarUrl: null,
+        verified: false,
+        following: false,
+      },
+      place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
+      work: { id: 1, title: '도깨비', workEpisode: null, sceneTimestamp: null },
+      likeCount: 0,
+      commentCount: 0,
+      liked: false,
+      saved: false,
+      visitedAt: null,
+    });
+    store.nextEndReached = true;
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="sd-infinite-end"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="sd-infinite-end"]').text()).toContain('마지막');
   });
 
   it('back button calls router.back()', async () => {

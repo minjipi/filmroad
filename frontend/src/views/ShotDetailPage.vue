@@ -1,37 +1,43 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="sd-content">
-      <header class="sd-top">
-        <button type="button" class="ic-btn" aria-label="back" @click="onBack">
-          <ion-icon :icon="chevronBack" class="ic-22" />
-        </button>
-        <div class="right">
-          <!-- 공유 버튼은 sd-stats row 의 종이비행기 하나로 통일 — 헤더 + 액션 -->
-          <!-- row 양쪽에 두 개 있던 게 중복이라 헤더쪽을 제거. -->
-          <button type="button" class="ic-btn" aria-label="more" @click="onMore">
-            <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
+      <!-- task #16: .sd-top is now inside the scroll container so its
+           `position: sticky` actually sticks. The wrapper is always rendered
+           (loading/error/loaded) so the back/more buttons work even when the
+           fetch fails. The `data-testid="sd-loaded"` slot moved one level
+           inward to a dedicated wrapper that's still gated on `shot`. -->
+      <div class="sd-scroll no-scrollbar">
+        <header class="sd-top">
+          <button type="button" class="ic-btn" aria-label="back" @click="onBack">
+            <ion-icon :icon="chevronBack" class="ic-22" />
           </button>
+          <div class="right">
+            <!-- 공유 버튼은 sd-stats row 의 종이비행기 하나로 통일 — 헤더 + 액션 -->
+            <!-- row 양쪽에 두 개 있던 게 중복이라 헤더쪽을 제거. -->
+            <button type="button" class="ic-btn" aria-label="more" @click="onMore">
+              <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
+            </button>
+          </div>
+        </header>
+
+        <!-- Loading placeholder — shown while the first /api/photos/:id fetch
+             is in flight. Error placeholder handles 404/network failure. -->
+        <div
+          v-if="loading && !shot"
+          class="sd-placeholder"
+          data-testid="sd-loading"
+        >
+          불러오는 중…
         </div>
-      </header>
+        <div
+          v-else-if="!shot && error"
+          class="sd-placeholder error"
+          data-testid="sd-error"
+        >
+          {{ error }}
+        </div>
 
-      <!-- Loading placeholder — shown while the first /api/photos/:id fetch
-           is in flight. Error placeholder handles 404/network failure. -->
-      <div
-        v-if="loading && !shot"
-        class="sd-placeholder"
-        data-testid="sd-loading"
-      >
-        불러오는 중…
-      </div>
-      <div
-        v-else-if="!shot && error"
-        class="sd-placeholder error"
-        data-testid="sd-error"
-      >
-        {{ error }}
-      </div>
-
-      <div v-else-if="shot" class="sd-scroll no-scrollbar" data-testid="sd-loaded">
+        <div v-else-if="shot" class="sd-loaded" data-testid="sd-loaded">
         <!-- Multi-image post (task #44): horizontal carousel of all photos
              in the upload group. Scene-compare overlay lives only on the
              first slide; follow-up photos render as plain images. -->
@@ -297,54 +303,192 @@
           </span>
         </button>
 
-        <section class="loc-card" @click="onOpenPlace">
-          <div class="loc-map-thumb" />
-          <div class="meta">
-            <div class="pl">{{ shot.place.name }}</div>
-            <div class="ad">{{ shot.place.address ?? shot.place.regionLabel }}</div>
-          </div>
-          <button type="button" class="go" aria-label="open-place">
-            <ion-icon :icon="arrowForward" class="ic-20" />
-          </button>
-        </section>
+        <!-- task #13: loc-card / scene-card 두 섹션은 사용자 결정으로 제거.
+             장소 진입은 헤더의 sd-user 닉네임 / 추후 별도 진입점에서, 원본 장면
+             재생도 별도 기능으로 분리될 예정. compare 영역의 토글로 가이드
+             이미지를 즉석 확인할 수 있어 페이지 하단의 추가 카드는 잉여. -->
 
+        <!-- task #17: 무한 스크롤 피드 — 추가 카드는 primary shot 과 동일한
+             5-section 구조 (compare → sd-user → sd-stats → sd-caption →
+             cmt-input). primary 와 같은 CSS 클래스를 그대로 사용해 시각 일관.
+             데이터는 FeedPost (필드 이름이 ShotDetail 과 살짝 다르므로 카드별
+             바인딩 조정). 좋아요/저장/팔로우/댓글 버튼은 read-only 표시
+             (disabled) — primary 만 인터랙티브 (task #17 재량 결정).
+             내부 testid 는 primary 와 충돌하지 않도록 외곽 sd-feed-card 만
+             부여, 셀렉터 스코프는 querySelectorAll 또는 카드별 .find 로. -->
         <section
-          v-if="shot.sceneImageUrl"
-          class="scene-card"
-          @click="onOpenScene"
+          v-if="appendedShots.length > 0"
+          class="sd-feed"
+          data-testid="sd-feed"
         >
-          <div class="head">
-            <span class="drama-ic">
-              <ion-icon :icon="filmOutline" class="ic-18" />
-            </span>
-            <div class="title-block">
-              <div class="t">원본 장면 보기</div>
-              <div class="s">
-                {{ shot.work.title }}
-                <template v-if="shot.work.episode"> {{ shot.work.episode }}</template>
-                <template v-if="shot.work.sceneTimestamp"> · {{ shot.work.sceneTimestamp }}</template>
-                <template v-if="shot.work.network"> · {{ shot.work.network }}</template>
+          <article
+            v-for="s in appendedShots"
+            :key="s.id"
+            class="sd-feed-card"
+            data-testid="sd-feed-card"
+          >
+            <!-- 1. compare hero (single-image only — feed posts 는 multi-image carousel 없음) -->
+            <section class="compare" :data-mode="feedCardMode(s.id)">
+              <img
+                v-if="s.dramaSceneImageUrl"
+                :src="s.dramaSceneImageUrl"
+                class="compare-img is-guide"
+                alt="드라마 원본 장면"
+              />
+              <img
+                :src="s.imageUrl"
+                class="compare-img is-shot"
+                :alt="s.place.name"
+              />
+              <span v-if="s.dramaSceneImageUrl" class="lbl-chip l">드라마 원본</span>
+              <span class="lbl-chip r">
+                <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
+              </span>
+              <div class="scene-meta">
+                <ion-icon :icon="filmOutline" class="ic-16" />{{ s.work.title }}
+                <template v-if="s.work.workEpisode"> · {{ s.work.workEpisode }}</template>
+                <template v-if="s.work.sceneTimestamp">
+                  <span class="sep" />
+                  <ion-icon :icon="timeOutline" class="ic-16" />{{ s.work.sceneTimestamp }}
+                </template>
               </div>
-            </div>
-            <ion-icon :icon="chevronForwardOutline" class="ic-18 chev" />
-          </div>
-          <div class="body play">
-            <img :src="shot.sceneImageUrl" :alt="shot.work.title" />
-            <button type="button" class="play-btn" aria-label="play">
-              <ion-icon :icon="play" class="ic-20" />
+              <button
+                v-if="s.dramaSceneImageUrl"
+                type="button"
+                class="compare-toggle"
+                :aria-pressed="feedCardMode(s.id) === 'guide'"
+                @click="onToggleFeedCard(s.id)"
+              >
+                <ion-icon :icon="eyeOutline" class="ic-16" />
+                <span class="compare-toggle-lbl">{{ feedCardMode(s.id) === 'guide' ? '원본으로' : '가이드 보기' }}</span>
+              </button>
+            </section>
+
+            <!-- 2. sd-user (task #18: 닉네임 클릭 → 프로필 / 팔로우 토글) -->
+            <section class="sd-user">
+              <div class="avatar">
+                <img
+                  v-if="s.author.avatarUrl"
+                  :src="s.author.avatarUrl"
+                  :alt="s.author.nickname"
+                />
+              </div>
+              <div class="meta">
+                <button
+                  type="button"
+                  class="nm"
+                  @click="onOpenAppendedAuthor(s)"
+                >
+                  {{ s.author.nickname }}
+                  <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="verified" />
+                </button>
+                <div class="sub">
+                  <ion-icon :icon="locationOutline" class="ic-16" />
+                  {{ s.place.name }} · {{ formatVisitDate(s.createdAt) }}
+                </div>
+              </div>
+              <button
+                type="button"
+                :class="['follow', s.author.following ? 'on' : '']"
+                @click="onToggleAppendedFollow(s)"
+              >
+                {{ s.author.following ? '팔로잉' : '팔로우' }}
+              </button>
+            </section>
+
+            <!-- 3. sd-stats (task #18: 좋아요/댓글/저장 인터랙티브) -->
+            <section class="sd-stats">
+              <button
+                type="button"
+                :class="['sd-stat-btn', s.liked ? 'liked' : '']"
+                @click="onToggleAppendedLike(s)"
+              >
+                <span class="stat-inner">
+                  <ion-icon :icon="s.liked ? heart : heartOutline" class="ic-22" />
+                  <span class="n">{{ formatCount(s.likeCount) }}</span>
+                  <span class="l">좋아요</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="sd-stat-btn"
+                @click="onOpenAppendedComments(s)"
+              >
+                <span class="stat-inner">
+                  <ion-icon :icon="chatbubbleOutline" class="ic-22" />
+                  <span class="n">{{ formatCount(s.commentCount) }}</span>
+                  <span class="l">댓글</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                :class="['sd-stat-btn', feedCardSaved(s) ? 'saved' : '']"
+                @click="onToggleAppendedSave(s)"
+              >
+                <span class="stat-inner">
+                  <ion-icon :icon="feedCardSaved(s) ? bookmark : bookmarkOutline" class="ic-22" />
+                  <span class="l">저장</span>
+                </span>
+              </button>
+              <button type="button" class="sd-stat-btn" disabled>
+                <span class="stat-inner">
+                  <ion-icon :icon="paperPlaneOutline" class="ic-22" />
+                  <span class="l">공유</span>
+                </span>
+              </button>
+            </section>
+
+            <!-- 4. sd-caption (FeedPost 는 tags 미포함 — caption + date 만) -->
+            <section class="sd-caption">
+              <p v-if="s.caption" class="body">{{ s.caption }}</p>
+              <div class="date">{{ formatRelativeTime(s.createdAt) }}</div>
+            </section>
+
+            <!-- 5. cmt-input-wrap (task #18: 클릭 시 그 카드의 댓글 시트 열기) -->
+            <button
+              type="button"
+              class="cmt-input-wrap"
+              aria-label="댓글 작성"
+              @click="onOpenAppendedComments(s)"
+            >
+              <span class="me-av">
+                <img v-if="meAvatarUrl" :src="meAvatarUrl" alt="me" />
+              </span>
+              <span class="box">댓글을 남겨보세요…</span>
+              <span class="send" aria-hidden="true">
+                <ion-icon :icon="paperPlaneOutline" class="ic-18" />
+              </span>
             </button>
-            <span v-if="shot.work.sceneTimestamp" class="play-time">
-              {{ shot.work.sceneTimestamp }}
-            </span>
-          </div>
+          </article>
         </section>
 
-        <!-- 페이지 하단의 풀 댓글 섹션은 위로 inline preview 로 이동 (caption
-             직후). 본격적인 리스트는 CommentSheet 모달이 담당. -->
-      </div>
+        <!-- IntersectionObserver sentinel + 상태 안내. nextEndReached 가 true 면
+             observer 가 disconnect 되어 더 이상 fetch 가 일어나지 않음. -->
+        <div
+          ref="sentinelEl"
+          class="sd-infinite-sentinel"
+          data-testid="sd-infinite-sentinel"
+          aria-hidden="true"
+        />
+        <div
+          v-if="nextLoading"
+          class="sd-infinite-status"
+          data-testid="sd-infinite-loading"
+        >
+          더 불러오는 중…
+        </div>
+        <div
+          v-else-if="nextEndReached && appendedShots.length > 0"
+          class="sd-infinite-status muted"
+          data-testid="sd-infinite-end"
+        >
+          마지막 인증샷이에요
+        </div>
+        </div><!-- /.sd-loaded -->
+      </div><!-- /.sd-scroll (task #16) -->
     </ion-content>
     <CommentSheet
-      :photo-id="commentSheetOpen ? shot?.id ?? null : null"
+      :photo-id="commentSheetOpen ? commentSheetPhotoId : null"
       :open="commentSheetOpen"
       @close="commentSheetOpen = false"
       @created="onCommentCreated"
@@ -353,11 +497,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
-  chevronForwardOutline,
   ellipsisHorizontal,
   checkmark,
   checkmarkCircle,
@@ -370,8 +513,6 @@ import {
   bookmark,
   bookmarkOutline,
   paperPlaneOutline,
-  arrowForward,
-  play,
   eyeOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
@@ -395,12 +536,15 @@ const shotStore = useShotDetailStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const authStore = useAuthStore();
-const { shot, loading, error } = storeToRefs(shotStore);
+const { shot, loading, error, appendedShots, nextLoading, nextEndReached } = storeToRefs(shotStore);
 
 const commentsRef = ref<HTMLElement | null>(null);
 const carouselEl = ref<HTMLElement | null>(null);
 const currentSlide = ref(0);
 const commentSheetOpen = ref(false);
+// task #18: 댓글 시트가 어떤 post 의 댓글을 보여주는지 트래킹. primary 의
+// shot.id 또는 appendedShots 의 한 항목 id. null = 미오픈 / 미선택.
+const commentSheetPhotoId = ref<number | null>(null);
 
 // task #11/#12: compare hero swapped from a clip-path split view to a toggle.
 // Default = "shot" (user's photo). Tapping the floating "가이드 보기" button
@@ -410,6 +554,78 @@ const compareMode = ref<CompareMode>('shot');
 function onToggleCompare(): void {
   compareMode.value = compareMode.value === 'guide' ? 'shot' : 'guide';
 }
+
+// task #15: per-card compare mode for the infinite-scroll feed below the
+// primary shot. Keyed by shot id. Default 'shot' (user's photo). Reactive
+// via a Map exposed through a getter/setter so template lookups don't
+// trigger reactivity issues on the Map itself.
+const feedCardModes = ref<Record<number, CompareMode>>({});
+function feedCardMode(id: number): CompareMode {
+  return feedCardModes.value[id] ?? 'shot';
+}
+function onToggleFeedCard(id: number): void {
+  feedCardModes.value = {
+    ...feedCardModes.value,
+    [id]: feedCardMode(id) === 'guide' ? 'shot' : 'guide',
+  };
+}
+
+// IntersectionObserver-driven infinite scroll. The sentinel sits below
+// the comment input; when it scrolls into view, ask the store for the
+// next page. Observer is set up after the primary shot lands and
+// disconnected on unmount / on `nextEndReached`.
+const sentinelEl = ref<HTMLElement | null>(null);
+let infiniteObserver: IntersectionObserver | null = null;
+
+function teardownInfiniteObserver(): void {
+  if (infiniteObserver) {
+    infiniteObserver.disconnect();
+    infiniteObserver = null;
+  }
+}
+
+function setupInfiniteObserver(): void {
+  teardownInfiniteObserver();
+  if (typeof window === 'undefined' || typeof window.IntersectionObserver === 'undefined') {
+    // jsdom 환경 또는 매우 오래된 브라우저 — observer 없이 조용히 스킵.
+    return;
+  }
+  if (!sentinelEl.value) return;
+  infiniteObserver = new window.IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        if (shotStore.nextEndReached || shotStore.nextLoading) continue;
+        void shotStore.loadNext();
+      }
+    },
+    { rootMargin: '300px 0px' },
+  );
+  infiniteObserver.observe(sentinelEl.value);
+}
+
+// 첫 shot 이 도착한 다음 sentinel DOM 이 마운트되므로, shot 변화에 맞춰
+// observer 재설정. shot.id 가 바뀌면 (예: route 파라미터 변경) 새 시드로
+// 다시 시작. immediate=true 로 두어, store 가 prepopulated (테스트 / 캐시
+// 시드) 상태로 마운트되는 케이스에서도 첫 렌더 직후 observer 가 설치되게.
+watch(
+  () => shot.value?.id,
+  async (id) => {
+    if (id == null) return;
+    // DOM mount 까지 한 tick 기다림 — sentinel ref 가 아직 null 일 수 있음.
+    await nextTick();
+    setupInfiniteObserver();
+  },
+  { immediate: true },
+);
+
+// 끝 도달 시 observer 더 이상 필요 없음 — 즉시 disconnect.
+watch(
+  () => shotStore.nextEndReached,
+  (done) => {
+    if (done) teardownInfiniteObserver();
+  },
+);
 
 // Always fall back to the lead frame as a length-1 list so the template can
 // treat `images` as non-empty regardless of how old the backend response is.
@@ -521,20 +737,55 @@ async function onToggleBookmark(): Promise<void> {
 
 function onOpenComments(): void {
   if (!shot.value) return;
+  commentSheetPhotoId.value = shot.value.id;
   commentSheetOpen.value = true;
 }
 
 function onCommentCreated(): void {
-  if (shot.value) shot.value.commentCount += 1;
+  // task #18: 시트가 어떤 post 의 것인지에 따라 그 항목의 commentCount 만 +1.
+  const id = commentSheetPhotoId.value;
+  if (id == null) return;
+  if (shot.value && shot.value.id === id) {
+    shot.value.commentCount += 1;
+    return;
+  }
+  const found = shotStore.appendedShots.find((p) => p.id === id);
+  if (found) found.commentCount += 1;
 }
 
-async function onOpenPlace(): Promise<void> {
-  if (!shot.value) return;
-  await router.push(`/place/${shot.value.place.id}`);
+// ---------- task #18: appended-card interaction handlers ----------
+async function onToggleAppendedLike(post: { id: number }): Promise<void> {
+  await shotStore.toggleAppendedLike(post.id);
 }
 
-async function onOpenScene(): Promise<void> {
-  await showInfo('원본 장면 재생은 곧 공개됩니다');
+async function onToggleAppendedSave(post: { place: { id: number } }): Promise<void> {
+  // primary 와 동일 정책 — saved → toggleSave (즉시 unsave), unsaved →
+  // collection picker 시트 열기. Place id 기반.
+  const placeId = post.place.id;
+  if (savedStore.isSaved(placeId)) {
+    await savedStore.toggleSave(placeId);
+    return;
+  }
+  uiStore.openCollectionPicker(placeId);
+}
+
+async function onToggleAppendedFollow(post: { author: { userId: number } }): Promise<void> {
+  await shotStore.toggleAppendedFollow(post.author.userId);
+}
+
+function onOpenAppendedComments(post: { id: number }): void {
+  commentSheetPhotoId.value = post.id;
+  commentSheetOpen.value = true;
+}
+
+async function onOpenAppendedAuthor(post: { author: { userId: number } }): Promise<void> {
+  await router.push(`/user/${post.author.userId}`);
+}
+
+// 카드별 saved 상태는 savedStore 가 single source — server snapshot(`s.saved`)
+// 보다 client store 가 더 신뢰할 수 있음 (방금 저장/해제한 결과 반영).
+function feedCardSaved(post: { place: { id: number } }): boolean {
+  return savedStore.isSaved(post.place.id);
 }
 
 async function loadDetail(): Promise<void> {
@@ -544,7 +795,10 @@ async function loadDetail(): Promise<void> {
 }
 
 onMounted(loadDetail);
-onUnmounted(() => shotStore.reset());
+onUnmounted(() => {
+  teardownInfiniteObserver();
+  shotStore.reset();
+});
 
 // Re-fetch on route-level param change — ion-router may reuse the same
 // component instance when navigating between /shot/:id URLs.
@@ -557,12 +811,14 @@ watch(
 
 // Reset the carousel to the first slide whenever a new shot lands, so
 // navigating between posts doesn't keep the old index. Also reset the
-// compare toggle to "shot" so each new post starts on the user's photo.
+// compare toggle to "shot" + clear any feed-card toggle states so each
+// fresh primary post starts clean.
 watch(
   () => shot.value?.id,
   () => {
     currentSlide.value = 0;
     compareMode.value = 'shot';
+    feedCardModes.value = {};
     if (carouselEl.value) carouselEl.value.scrollLeft = 0;
   },
 );
@@ -573,34 +829,48 @@ ion-content.sd-content {
   --background: #ffffff;
 }
 
+/* task #16: .sd-scroll is the always-rendered scroll container. Bottom
+   padding gives breathing room past the last appended shot / sentinel. */
 .sd-scroll {
   overflow-y: auto;
   padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  height: 100%;
+}
+.sd-loaded {
+  /* No own padding/scroll — it's just a state wrapper inside .sd-scroll. */
 }
 
+/* Sticky top header — stays pinned while the user scrolls through the
+   primary post + appended feed. Sits above all in-page content (z-index 30)
+   but BELOW Ionic modals like CommentSheet (which Ionic places at 1000+). */
 .sd-top {
-  position: absolute;
-  top: calc(8px + env(safe-area-inset-top));
+  position: sticky;
+  top: 0;
   left: 0;
   right: 0;
   z-index: 30;
-  padding: 8px 16px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  pointer-events: none;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
+/* Feed-detail tone (rounded square neutral chip) instead of the previous
+   floating-on-photo dark circle — sticky header reads against any content
+   underneath without needing the dark contrast. */
 .sd-top .ic-btn {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(10px);
-  color: #ffffff;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-2);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
   cursor: pointer;
 }
 .sd-top .right { display: flex; gap: 8px; }
@@ -700,14 +970,16 @@ ion-content.sd-content {
   backdrop-filter: blur(8px);
   letter-spacing: -0.01em;
 }
+/* task #16: sticky header now takes layout space, so labels no longer
+   need the safe-area + 60px offset — sit at the natural photo-top edge. */
 .lbl-chip.l {
-  top: calc(60px + env(safe-area-inset-top));
+  top: 12px;
   left: 14px;
   background: rgba(0, 0, 0, 0.7);
   color: #ffffff;
 }
 .lbl-chip.r {
-  top: calc(60px + env(safe-area-inset-top));
+  top: 12px;
   right: 14px;
   background: rgba(20, 188, 237, 0.95);
   color: #ffffff;
@@ -917,146 +1189,6 @@ ion-content.sd-content {
   letter-spacing: 0.04em;
 }
 
-/* Location card */
-.loc-card {
-  margin: 6px 20px 16px;
-  background: var(--fr-bg-muted);
-  border-radius: 16px;
-  padding: 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-}
-.loc-map-thumb {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background:
-    radial-gradient(circle at 30% 30%, #d9e7f2, transparent 60%),
-    linear-gradient(180deg, #eef3f8, #dbe7f0);
-  position: relative;
-}
-.loc-map-thumb::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--fr-coral);
-  border: 2px solid #ffffff;
-  transform: translate(-50%, -100%);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-}
-.loc-card .meta { flex: 1; min-width: 0; }
-.loc-card .pl {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--fr-ink);
-}
-.loc-card .ad {
-  font-size: 11.5px;
-  color: var(--fr-ink-3);
-  margin-top: 2px;
-}
-.loc-card .go {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: #ffffff;
-  color: var(--fr-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-/* Scene card */
-.scene-card {
-  margin: 0 20px 16px;
-  border-radius: 16px;
-  border: 1px solid var(--fr-line);
-  overflow: hidden;
-  cursor: pointer;
-}
-.scene-card .head {
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--fr-line-soft);
-}
-.scene-card .head .drama-ic {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--fr-primary-soft);
-  color: var(--fr-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.scene-card .head .title-block { flex: 1; min-width: 0; }
-.scene-card .head .t {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--fr-ink);
-}
-.scene-card .head .s {
-  font-size: 11px;
-  color: var(--fr-ink-3);
-  margin-top: 1px;
-}
-.scene-card .head .chev { color: var(--fr-ink-4); }
-.scene-card .body { display: flex; }
-.scene-card .body img { width: 100%; display: block; }
-.scene-card .play { position: relative; }
-.scene-card .play::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle, rgba(0, 0, 0, 0.4) 0%, transparent 60%),
-    linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 40%);
-}
-.scene-card .play-btn {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--fr-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-}
-.scene-card .play-time {
-  position: absolute;
-  bottom: 10px;
-  left: 12px;
-  z-index: 2;
-  font-size: 11px;
-  font-weight: 700;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.65);
-  padding: 3px 8px;
-  border-radius: 6px;
-}
-
 /* Comments */
 .comments { padding: 0 20px 24px; }
 .comments h4 {
@@ -1188,6 +1320,47 @@ ion-content.sd-content {
   justify-content: center;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+/* ====================================================================
+   Infinite-scroll feed (task #15/#17) — appended shot cards below the
+   primary post. task #17: cards now reuse primary's 5-section markup
+   (.compare / .sd-user / .sd-stats / .sd-caption / .cmt-input-wrap),
+   so the inner styles inherit from primary's rules. This block only
+   adds the outer separator + the read-only disabled-state look.
+   ==================================================================== */
+.sd-feed {
+  border-top: 8px solid var(--fr-line-soft);
+}
+.sd-feed-card {
+  border-bottom: 8px solid var(--fr-line-soft);
+}
+.sd-feed-card:last-child { border-bottom: none; }
+
+/* task #18 — appended card buttons are now interactive. Only 공유 stays
+   disabled (matches primary which has no real share endpoint either). The
+   disabled-state look stays identical to enabled (opacity:1) so the layout
+   doesn't shift between cards. */
+.sd-feed-card .sd-stat-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.sd-infinite-sentinel {
+  width: 100%;
+  height: 1px;
+}
+.sd-infinite-status {
+  padding: 18px 20px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+}
+.sd-infinite-status.muted {
+  color: var(--fr-ink-4);
+  font-weight: 600;
 }
 
 /* Loading / error placeholders (task #39). Kept minimal — the design
