@@ -23,8 +23,19 @@
           <ion-icon :icon="searchOutline" class="ic-18 search-ic" />
           <span class="search-placeholder">강릉 · 도깨비 촬영지</span>
         </button>
-        <button class="icon-btn" type="button" aria-label="filters">
+        <button
+          class="icon-btn"
+          type="button"
+          aria-label="필터"
+          data-testid="filters-btn"
+          @click="filterSheetOpen = true"
+        >
           <ion-icon :icon="optionsOutline" class="ic-20" />
+          <span
+            v-if="activeSheetFilterCount > 0"
+            class="filter-badge"
+            data-testid="filter-badge"
+          >{{ activeSheetFilterCount }}</span>
         </button>
       </div>
 
@@ -289,6 +300,11 @@
       </section>
     </ion-content>
     <FrTabBar :model-value="'map'" />
+    <!--
+      필터 시트 — top-bar 의 필터 버튼이 트리거. ion-modal 자체를 page-level
+      에 두어 ion-content 의 scroll / safe-area 와 안 부딪히게.
+    -->
+    <MapFilterSheet :open="filterSheetOpen" @close="filterSheetOpen = false" />
   </ion-page>
 </template>
 
@@ -307,7 +323,6 @@ import {
   star,
   arrowForward,
   locationOutline,
-  filmOutline,
   close,
   callOutline,
   globeOutline,
@@ -338,6 +353,7 @@ import {
 } from '@/stores/kakaoInfo';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
+import MapFilterSheet from '@/components/map/MapFilterSheet.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import { useToast } from '@/composables/useToast';
 import { useDraggableSheet } from '@/composables/useDraggableSheet';
@@ -354,6 +370,10 @@ const route = useRoute();
 const router = useRouter();
 const visibleMarkers = computed<MapMarker[]>(() => mapStore.visibleMarkers);
 const visitedIds = computed<number[]>(() => mapStore.visitedIds);
+// 필터 시트 — top-bar 옆 필터 버튼이 토글. 활성 그룹 수가 1+ 면 버튼에
+// 작은 카운트 뱃지 표시.
+const filterSheetOpen = ref(false);
+const activeSheetFilterCount = computed(() => mapStore.activeSheetFilterCount);
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
@@ -423,6 +443,10 @@ interface ChipSpec {
 
 const filterChips = computed<ChipSpec[]>(() => {
   const f = filter.value;
+  // chip-row 는 "내 진행상황 / 즐겨찾는 모드" 성격의 1차 단축 필터로 통일.
+  // 작품 단축은 새 필터 시트의 작품 그룹(multi-select)이 더 잘 다루므로
+  // 하드코딩된 단일 작품(도깨비) chip 은 제거. 방문완료는 발견-지향 chip
+  // (성지/저장)과 시각적으로 분리되도록 끝에 위치.
   return [
     {
       key: 'SPOTS',
@@ -435,13 +459,6 @@ const filterChips = computed<ChipSpec[]>(() => {
       },
     },
     {
-      key: 'VISITED',
-      label: '방문완료',
-      icon: checkmark,
-      active: f === 'VISITED',
-      onClick: () => mapStore.setFilter('VISITED' as MapFilter),
-    },
-    {
       key: 'SAVED',
       label: '저장한 곳',
       icon: bookmarkOutline,
@@ -449,14 +466,11 @@ const filterChips = computed<ChipSpec[]>(() => {
       onClick: () => mapStore.setFilter('SAVED' as MapFilter),
     },
     {
-      key: 'WORK_1',
-      label: '도깨비',
-      icon: filmOutline,
-      active: workId.value === 1,
-      onClick: async () => {
-        mapStore.setFilter('SPOTS');
-        await mapStore.setWork(workId.value === 1 ? null : 1);
-      },
+      key: 'VISITED',
+      label: '방문완료',
+      icon: checkmark,
+      active: f === 'VISITED',
+      onClick: () => mapStore.setFilter('VISITED' as MapFilter),
     },
   ];
 });
@@ -759,6 +773,26 @@ ion-content.map-content {
   color: var(--fr-ink);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04);
   cursor: pointer;
+  position: relative;
+}
+/* 활성 시트 필터 그룹 수 뱃지 — 인스타 "필터 N개" 패턴. 0 이면 노출 안 함. */
+.filter-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--fr-coral);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.02em;
+  border: 1.5px solid #ffffff;
 }
 
 .chip-row {
