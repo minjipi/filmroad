@@ -54,6 +54,7 @@ public class SecurityConfig {
                                 "/api/map/places",
                                 "/api/places/*",
                                 "/api/places/*/kakao-info",
+                                "/api/places/*/nearby-restaurants",
                                 "/api/places/*/photos",
                                 "/api/photos/*",
                                 "/api/photos/*/comments",

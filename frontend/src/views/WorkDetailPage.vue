@@ -79,6 +79,9 @@
             class="spots-map"
             data-testid="spots-map"
           >
+            <!-- task #27: fit-to 로 모든 성지 마커가 한 viewport 에 보이게.
+                 center/zoom 은 마운트 직후 KakaoMap 이 fitTo 로 재조정하므로
+                 single-source 가 아니라 fallback 역할 (지도 마운트 직후 한 frame). -->
             <KakaoMap
               v-if="mapMarkers.length > 0"
               :center="mapCenter"
@@ -86,6 +89,7 @@
               :markers="mapMarkers"
               :selected-id="null"
               :visited-ids="visitedPlaceIds"
+              :fit-to="mapFitPoints"
               @marker-click="onOpenSpot"
             />
             <p v-else class="empty-note">좌표 정보가 없어 지도를 표시할 수 없어요</p>
@@ -207,6 +211,13 @@ const mapCenter = computed<{ lat: number; lng: number }>(() => {
   const lng = pts.reduce((a, p) => a + p.longitude, 0) / pts.length;
   return { lat, lng };
 });
+
+// task #27: KakaoMap.fitTo 로 넘길 점 좌표 — markers 와 1:1. 비어있으면 fit
+// 동작 안 하고 KakaoMap 이 기본 center/zoom 사용. 이 페이지의 KakaoMap 은
+// `v-if="mapMarkers.length > 0"` 가드로 0 케이스에서 마운트 자체 안 됨.
+const mapFitPoints = computed<{ lat: number; lng: number }[]>(() =>
+  mapMarkers.value.map((m) => ({ lat: m.latitude, lng: m.longitude })),
+);
 
 const visitedPlaceIds = computed<number[]>(() =>
   spots.value.filter((s) => s.visited).map((s) => s.placeId),

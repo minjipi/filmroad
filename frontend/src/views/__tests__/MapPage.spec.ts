@@ -93,10 +93,17 @@ interface KakaoSeed {
   infoByPlace?: Record<number, unknown>;
 }
 
+// task #29: tour-nearby store 시드. 키 = placeId, 값 = TourNearbyRestaurant[]
+// 또는 null (이미 시도, 데이터 없음).
+interface TourNearbySeed {
+  itemsByPlace?: Record<number, unknown>;
+}
+
 function mountMapPage(opts: {
   firstEntry?: boolean;
   sheetMode?: SheetMode;
   kakao?: KakaoSeed;
+  tourNearby?: TourNearbySeed;
 } = {}) {
   const firstEntry = opts.firstEntry ?? false;
   const sheetMode: SheetMode = opts.sheetMode ?? 'peek';
@@ -133,6 +140,9 @@ function mountMapPage(opts: {
   };
   if (opts.kakao) {
     initialState.kakaoInfo = { infoByPlace: opts.kakao.infoByPlace ?? {} };
+  }
+  if (opts.tourNearby) {
+    initialState.tourNearby = { itemsByPlace: opts.tourNearby.itemsByPlace ?? {} };
   }
   const { wrapper } = mountWithStubs(MapPage, {
     initialState,
@@ -301,7 +311,7 @@ describe('MapPage.vue', () => {
     expect(wrapper.find('[data-testid="map-kakao-section"]').exists()).toBe(false);
   });
 
-  it('kakao section renders the selected place\'s real Kakao Local data when fetched', async () => {
+  it('kakao section renders selected place data + task #29 tour-nearby cards from seed', async () => {
     const { wrapper } = mountMapPage({
       kakao: {
         infoByPlace: {
@@ -312,30 +322,36 @@ describe('MapPage.vue', () => {
             category: '여행 > 관광지',
             kakaoPlaceUrl: 'https://place.map.kakao.com/12345',
             lastSyncedAt: '2026-04-26T00:00:00Z',
-            nearby: [
-              {
-                name: '영진회집',
-                categoryGroupCode: 'FD6',
-                categoryName: '한식 > 해물,생선',
-                distanceMeters: 240,
-                kakaoPlaceUrl: 'https://place.map.kakao.com/1',
-                lat: 37.89,
-                lng: 128.83,
-                phone: null,
-              },
-              {
-                name: '테라로사 커피',
-                categoryGroupCode: 'CE7',
-                categoryName: '카페 > 커피전문점',
-                distanceMeters: 640,
-                kakaoPlaceUrl: 'https://place.map.kakao.com/2',
-                lat: 37.89,
-                lng: 128.83,
-                phone: null,
-              },
-            ],
+            // task #29: kakao nearby 는 더이상 안 씀 — 빈 배열로 시드.
+            nearby: [],
             available: true,
           },
+        },
+      },
+      tourNearby: {
+        itemsByPlace: {
+          10: [
+            {
+              contentId: 'tour-1',
+              title: '영진회집',
+              addr1: '강원 강릉시 주문진읍 해안로',
+              imageUrl: null,
+              latitude: 37.89,
+              longitude: 128.83,
+              distanceM: 240,
+              categoryName: '한식',
+            },
+            {
+              contentId: 'tour-2',
+              title: '테라로사 커피',
+              addr1: '강원 강릉시 주문진읍 해안로',
+              imageUrl: 'https://tour-img/2.jpg',
+              latitude: 37.89,
+              longitude: 128.83,
+              distanceM: 640,
+              categoryName: '카페·디저트',
+            },
+          ],
         },
       },
     });
@@ -347,10 +363,34 @@ describe('MapPage.vue', () => {
     expect(section.text()).toContain('지번 · 교항리 산51-2');
     expect(section.text()).toContain('033-662-3639');
     expect(section.text()).toContain('카카오맵에서 보기');
-    // nearby 카드는 시드 2건 → 두 개만 그려진다 (예전엔 mock 으로 항상 3개였음).
-    expect(wrapper.findAll('.k-nearby-card').length).toBe(2);
+    // task #29: tour-nearby 카드는 시드 2건 → 두 개.
+    const nearbyCards = wrapper.findAll('[data-testid="map-nearby-card"]');
+    expect(nearbyCards.length).toBe(2);
     expect(section.text()).toContain('영진회집');
     expect(section.text()).toContain('테라로사 커피');
+  });
+
+  it('task #29: tour-nearby 빈 응답이면 .k-nearby 미렌더 (kakao 본문은 정상)', async () => {
+    const { wrapper } = mountMapPage({
+      kakao: {
+        infoByPlace: {
+          10: {
+            roadAddress: '강원 강릉시 주문진읍 교항리 산51-2',
+            jibunAddress: '교항리 산51-2',
+            phone: '033-662-3639',
+            category: '여행',
+            kakaoPlaceUrl: 'https://place.map.kakao.com/12345',
+            lastSyncedAt: '2026-04-26T00:00:00Z',
+            nearby: [],
+            available: true,
+          },
+        },
+      },
+      tourNearby: { itemsByPlace: { 10: [] } },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="map-kakao-section"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="map-nearby"]').exists()).toBe(false);
   });
 
   it('kakao section stays hidden when the response shape says available=false (e.g. unmapped place)', async () => {

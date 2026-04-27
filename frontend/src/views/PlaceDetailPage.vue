@@ -321,25 +321,29 @@
               </a>
             </div>
 
-            <div v-if="kakaoInfo.nearby.length > 0" class="k-nearby">
-              <h4>주변 맛집 · 카페</h4>
+            <!-- task #29: 카카오 nearby → 한국관광공사 TourAPI 기반.
+                 빈 응답이면 섹션 자체 미렌더 (별도 안내 텍스트 없음 — 보조
+                 정보라 페이지 전체 흐름을 차지하지 않게). -->
+            <div v-if="tourNearbyItems.length > 0" class="k-nearby" data-testid="pd-nearby">
+              <h4>주변 맛집</h4>
               <div class="k-nearby-row no-scrollbar">
                 <a
-                  v-for="(n, i) in kakaoInfo.nearby"
-                  :key="i"
-                  :href="n.kakaoPlaceUrl"
+                  v-for="n in tourNearbyItems"
+                  :key="n.contentId"
+                  :href="tourNearbyHref(n)"
                   target="_blank"
                   rel="noopener"
                   class="k-nearby-card"
+                  data-testid="pd-nearby-card"
                 >
-                  <div class="th">
-                    <ion-icon
-                      :icon="n.categoryGroupCode === 'CE7' ? cafeOutline : restaurantOutline"
-                      class="ic-22"
-                    />
+                  <div class="th" :class="{ 'th-icon': !n.imageUrl }">
+                    <!-- imageUrl 가 빈 문자열인 케이스도 fallback (백엔드는 null 을
+                         빈 문자열로 평탄화할 수 있음). -->
+                    <img v-if="n.imageUrl" :src="n.imageUrl" :alt="n.title" />
+                    <ion-icon v-else :icon="restaurantOutline" class="ic-22" />
                   </div>
-                  <div class="nm">{{ n.name }}</div>
-                  <div class="d">{{ formatNearby(n) }}</div>
+                  <div class="nm">{{ n.title }}</div>
+                  <div class="d">{{ formatTourNearby(n) }}</div>
                 </a>
               </div>
             </div>
@@ -377,7 +381,6 @@ import {
   callOutline,
   globeOutline,
   openOutline,
-  cafeOutline,
   restaurantOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
@@ -390,8 +393,9 @@ import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import {
   useKakaoInfoStore,
-  type KakaoNearbyDto,
 } from '@/stores/kakaoInfo';
+// task #29: 카카오 nearby → 한국관광공사 TourAPI 기반 신규 store 로 교체.
+import { useTourNearbyStore, type TourNearbyRestaurant } from '@/stores/tourNearby';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
@@ -404,6 +408,7 @@ const mapStore = useMapStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
+const tourNearbyStore = useTourNearbyStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError, showInfo } = useToast();
 
@@ -418,6 +423,11 @@ const placeId = computed(() => Number(props.id));
 // 카카오맵 정보 — placeId 별로 캐싱된 응답을 그대로 노출. available=false 또는
 // 아직 fetch 전이면 null. 컴포넌트는 v-if="kakaoInfo?.available" 로 섹션 자체를 숨긴다.
 const kakaoInfo = computed(() => kakaoInfoStore.infoFor(placeId.value));
+// task #29: 한국관광공사 nearby — kakaoInfo 와 별도 채널. items.length === 0
+// 이면 섹션 자동 hide.
+const tourNearbyItems = computed<TourNearbyRestaurant[]>(() =>
+  tourNearbyStore.itemsFor(placeId.value),
+);
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
   if (!at) return '';
@@ -430,18 +440,25 @@ const syncLabel = computed(() => {
   return `${rel} 동기화`;
 });
 
-// 카카오 카테고리는 "한식 > 해물,생선" 같이 ">" 로 깊이가 들어와서, 카드 안에서는
-// 첫 토큰만 보여 정보 밀도를 낮춘다. 빈 문자열이면 "주변" 으로 fallback.
-function shortCategoryLabel(categoryName: string): string {
-  const head = categoryName.split('>')[0]?.trim();
-  return head && head.length > 0 ? head : '주변';
+// task #29: 한국관광공사 TourAPI 기반 카드 라벨 — 카테고리(있으면) + 도보
+// 분(distanceM 기준, 80m/min). 도보 0분은 "1분" 으로 round-up. distanceM 이
+// null 이면 카테고리만, 카테고리도 null 이면 "주변 맛집".
+function formatTourNearby(n: TourNearbyRestaurant): string {
+  const cat = n.categoryName?.trim() || null;
+  if (typeof n.distanceM === 'number') {
+    const minutes = Math.max(1, Math.round(n.distanceM / 80));
+    return cat ? `${cat} · 도보 ${minutes}분` : `도보 ${minutes}분`;
+  }
+  return cat ?? '주변 맛집';
 }
 
-// 도보 거리는 평균 보행 속도 80m/min 기준 (네이버지도/카카오맵 표기와 동일).
-// 0 분이 나오는 매우 가까운 경우는 1 분으로 round-up — UX 상 "0분" 은 어색.
-function formatNearby(n: KakaoNearbyDto): string {
-  const minutes = Math.max(1, Math.round(n.distanceMeters / 80));
-  return `${shortCategoryLabel(n.categoryName)} · 도보 ${minutes}분`;
+// 한국관광공사 데이터는 사용자-친화 외부 페이지가 따로 없어, 카드 클릭 시
+// 카카오맵 검색 결과 페이지로 fallback (기존 사용자 동선과 일관). 이름이
+// 비어있는 변종은 클릭 무시 — href="#" 로 두면 페이지 reload 사고.
+function tourNearbyHref(n: TourNearbyRestaurant): string {
+  const q = n.title.trim();
+  if (!q) return 'javascript:void(0)';
+  return `https://map.kakao.com/?q=${encodeURIComponent(q)}`;
 }
 
 // Hero carousel — transform 기반 무한 슬라이드.
@@ -816,9 +833,11 @@ async function onOpenRelated(id: number): Promise<void> {
 }
 
 async function load(id: number): Promise<void> {
-  // 카카오 정보는 메인 place fetch 와 병렬 실행 — 보조 정보라 실패/지연이
-  // place 본문 렌더를 막지 않게 한다. fetch 안에서 자체 try/catch 로 swallow.
+  // 카카오 정보 + task #29: 한국관광공사 nearby — 둘 다 메인 place fetch 와
+  // 병렬. 보조 정보라 실패/지연이 place 본문 렌더를 막지 않게 한다. 각
+  // fetch 안에서 자체 try/catch 로 swallow.
   void kakaoInfoStore.fetch(id);
+  void tourNearbyStore.fetch(id);
   await detailStore.fetch(id);
   if (error.value) {
     await showError(error.value);

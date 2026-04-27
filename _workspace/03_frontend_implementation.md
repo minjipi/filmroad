@@ -908,3 +908,118 @@
 - (M) `frontend/src/views/ShotDetailPage.vue` (마크업 3곳 + 헤더 + 핸들러 이름 + CSS + import)
 - (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (신규 3 케이스)
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #27 — WorkDetailPage 지도 탭 fitBounds 로 모든 성지 보이게
+
+## 구현 전략
+KakaoMap 에 신규 `fitTo: LatLng[]` 옵션 prop 추가. WorkDetailPage 가 마커 좌표 리스트를 그대로 넘기면 KakaoMap 이 마운트 직후 + fitTo 변경 시 Kakao 의 `LatLngBounds.extend()` + `map.setBounds()` 로 viewport 자동 조정. 1개 마커 케이스는 over-zoom 회피로 `setCenter + setLevel(5)` 폴백.
+
+## 변경
+
+### 1. `frontend/src/components/map/KakaoMap.vue`
+- 신규 optional prop `fitTo?: LatLng[]`.
+- 신규 `applyFit()` 함수 — pts 0개 noop, 1개는 setCenter + `SINGLE_MARKER_ZOOM = 5` (도시 단위 view), 2+ 개는 `new k.maps.LatLngBounds()` + `extend(LatLng)` 루프 + `mapInstance.setBounds(bounds)`.
+- `init()` 마지막에 `applyFit()` 호출 — 마운트 직후 즉시 fit.
+- 신규 `watch(() => props.fitTo, () => applyFit(), { deep: true })` — 부모에서 markers 가 비동기로 채워지는 경우도 catch-up.
+
+### 2. `frontend/src/views/WorkDetailPage.vue`
+- 신규 computed `mapFitPoints: { lat, lng }[]` — `mapMarkers` 와 1:1 매핑.
+- KakaoMap 마크업에 `:fit-to="mapFitPoints"` prop 전달. 기존 `:center` / `:zoom` 은 KakaoMap 이 fitTo 로 재조정 전 한 frame 의 fallback 역할.
+- KakaoMap 자체는 이미 `v-if="mapMarkers.length > 0"` 가드 — 좌표 0개 케이스에선 마운트 안 됨 (empty-note 노출).
+
+## 단위 테스트 (신규 3 케이스, 총 12)
+- 좌표 N개 → 지도 탭 클릭 시 KakaoMap stub 의 `data-fit-count` = N + `data-fit-json` 이 lat/lng 정확히 매칭.
+- 좌표 1개 → fit-count = 1 (KakaoMap 내부에서 over-zoom 회피 폴백 동작은 단위 테스트 외 영역; prop 전달만 검증).
+- 좌표 0개 → KakaoMap 미렌더 + `.empty-note` 노출.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **571 tests** 통과 (이전 568 + 신규 3).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행, Vite v5.4.21 ready in 2004ms):
+  - `GET /work/1` → 200.
+  - 토큰 검증:
+    - KakaoMap.vue: `LatLngBounds` × 1, `applyFit` × 4 (definition + init call + watch + setBounds usage), `fitTo` × 3, `setBounds` × 1.
+    - WorkDetailPage.vue: `fitTo` × 1 (template attr), `mapFitPoints` × 3 (computed + return + template binding).
+
+## 변경 파일
+- (M) `frontend/src/components/map/KakaoMap.vue` (신규 fitTo prop + applyFit + watch)
+- (M) `frontend/src/views/WorkDetailPage.vue` (mapFitPoints computed + KakaoMap fit-to prop)
+- (M) `frontend/src/views/__tests__/WorkDetailPage.spec.ts` (KakaoMapStub + 신규 3 케이스)
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #29 — KakaoSection 주변 맛집 UI 를 한국관광공사 API 로 교체
+
+## 변경
+
+### 1. 신규 store `frontend/src/stores/tourNearby.ts`
+- `TourNearbyRestaurant` 타입 정의: contentId / title / addr1 / imageUrl / latitude / longitude / distanceM / categoryName.
+- `useTourNearbyStore` Pinia store — `itemsByPlace: Record<number, TourNearbyRestaurant[] | null>` 캐시 + getter `itemsFor(placeId)`.
+- `fetch(placeId)` action:
+  - 이미 시도한 placeId 재호출 안 함 (kakaoInfo store 와 동일 패턴).
+  - `GET /api/places/{placeId}/nearby-restaurants` 호출. `{ items: [...] }` 응답 파싱.
+  - shape mismatch / 실패 시 null 캐시 + `console.warn` (보조 정보, 페이지 흐름 안 막음).
+
+### 2. PlaceDetailPage / MapPage 마크업 교체
+- 카카오 nearby (`kakaoInfo.nearby`) → tour-nearby (`tourNearbyItems`).
+- `.k-nearby` 카드 마크업:
+  - `.nm` ← `n.title` (기존 `n.name`)
+  - `.d` ← `formatTourNearby(n)` — 카테고리 + 도보 분 (80m/min, 0분 →1분 round-up). distanceM null 면 카테고리만, 카테고리도 null 면 "주변 맛집".
+  - `.th`: imageUrl 있으면 `<img>`, 없으면 `restaurantOutline` ic-icon fallback (`th-icon` modifier).
+- 카드 click target: 한국관광공사 외부 링크 부재 → `https://map.kakao.com/?q=<title>` fallback (사용자 동선 일관, 기존 패턴).
+- 헤더 텍스트: "주변 맛집 · 카페" → **"주변 맛집"** (TourAPI 가 음식점 카테고리만 노출하므로).
+- testid 부여: PlaceDetailPage `pd-nearby` / `pd-nearby-card`, MapPage `map-nearby` / `map-nearby-card`.
+- 빈 응답이면 `.k-nearby` 자체 미렌더 (별도 안내 텍스트 없음 — 보조 정보 정책 일관).
+
+### 3. fetch 트리거 추가
+- PlaceDetailPage: `load(id)` 안에서 `void tourNearbyStore.fetch(id)` — 메인 place fetch 와 병렬 (보조 정보 fail-soft).
+- MapPage: `watch(selected, ...)` 안에 `void tourNearbyStore.fetch(next.id)` 추가 — 카카오 fetch 와 병렬.
+
+### 4. 정리
+- `KakaoNearbyDto` import 제거 (PlaceDetailPage, MapPage 양쪽).
+- 기존 `formatNearby(n: KakaoNearbyDto)` / `shortCategoryLabel()` helper 삭제 — 이제 `formatTourNearby(n: TourNearbyRestaurant)` 가 담당.
+- `cafeOutline` 아이콘 import 제거 (FD6/CE7 분기가 사라져 미사용).
+- store `kakaoInfo` 의 `KakaoNearbyDto.name` 등 nearby 구조는 백엔드 응답에 있으면 그대로 두지만 UI 에서는 사용 안 함 — 추후 #34 같은 후속 task 로 backend 응답에서 nearby 필드 자체 제거 가능.
+
+## 단위 테스트
+### 신규 spec — `frontend/src/stores/__tests__/tourNearby.spec.ts` (5 케이스)
+- happy path → URL + cache.
+- 실패 → null cache + warn + no throw.
+- shape mismatch (items 가 array 아님) → null cache.
+- 동일 placeId 재호출 dedupe.
+- null cache (이전 실패) 도 "이미 시도" 로 인정 — 재호출 안 함.
+
+### 갱신 spec
+- **PlaceDetailPage.spec.ts** (2 케이스):
+  - 기존 카카오 nearby 케이스 → `tourNearby` 시드로 이전. 빈 응답 hide + N개 카드 + .nm/.d/.th 마크업 + map.kakao.com fallback href 검증.
+  - 신규: null cache (fetch 실패) → 섹션 hide.
+- **MapPage.spec.ts** (1 갱신 + 1 신규):
+  - 기존 "kakao section + nearby 카드" 케이스 → `tourNearby` 시드 사용으로 갱신. testid 변경 (`map-nearby-card`).
+  - 신규: tour-nearby 빈 응답 → `.k-nearby` 미렌더 (kakao 본문은 정상).
+- **mountWithStubs 헬퍼**: PlaceDetailPage / MapPage 양쪽에 `tourNearby` 시드 옵션 추가.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — **50 files / 578 tests** 통과 (이전 49 files / 571 → +1 file 신규 store spec, +5 store + 2 page-level 신규/갱신).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행, Vite v5.4.21 ready in 2104ms):
+  - `GET /place/10` → 200.
+  - 토큰 검증:
+    - PlaceDetailPage: `tourNearby` × 12, `formatTourNearby` × 3.
+    - MapPage: `tourNearby` × 12, `formatTourNearby` × 3.
+    - tourNearby store: `tourNearby` × 2, `nearby-restaurants` × 1 (URL 문자열).
+
+## 변경 파일 (8건)
+- (N) `frontend/src/stores/tourNearby.ts`
+- (N) `frontend/src/stores/__tests__/tourNearby.spec.ts`
+- (M) `frontend/src/views/PlaceDetailPage.vue`
+- (M) `frontend/src/views/MapPage.vue`
+- (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/MapPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`

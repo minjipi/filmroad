@@ -108,4 +108,25 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is(40050)));
     }
+
+    @Test
+    @DisplayName("GET /api/places/10/nearby-restaurants: 외부 API 키 비활성(test profile) → 200 + items=[] (섹션 빈 표시)")
+    void getNearbyRestaurants_disabledKey_returnsEmptyItems() throws Exception {
+        // application-test.yml 의 korea-tourism.service-key=disabled-korea-tourism 이라
+        // KoreaTourismClient 가 외부 호출 없이 빈 리스트 반환 → 응답은 200 + items=[].
+        mockMvc.perform(get("/api/places/10/nearby-restaurants"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.code", is(20000)))
+                .andExpect(jsonPath("$.results.items", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/places/99999/nearby-restaurants: 존재하지 않는 placeId → 404 PLACE_NOT_FOUND")
+    void getNearbyRestaurants_unknownId_returnsNotFound() throws Exception {
+        mockMvc.perform(get("/api/places/99999/nearby-restaurants"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is(40050)));
+    }
 }
