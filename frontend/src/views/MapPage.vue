@@ -362,6 +362,7 @@ import {
   type LocationFailReason,
 } from '@/composables/useGeolocation';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
+import { buildPlaceShareData } from '@/utils/share';
 
 const mapStore = useMapStore();
 const { selected, error, filter, center, zoom, workId, sheetMode } = storeToRefs(mapStore);
@@ -658,19 +659,10 @@ async function onRoute(): Promise<void> {
   window.open(url, '_blank', 'noopener');
 }
 
-async function onShare(): Promise<void> {
+function onShare(): void {
   const s = selected.value;
   if (!s) return;
-  const url = `${window.location.origin}/place/${s.id}`;
-  try {
-    if (navigator.share) await navigator.share({ title: s.name, url });
-    else {
-      await navigator.clipboard?.writeText(url);
-      await showInfo('링크를 복사했어요');
-    }
-  } catch {
-    /* user cancelled */
-  }
+  uiStore.openShareSheet(buildPlaceShareData(s));
 }
 
 

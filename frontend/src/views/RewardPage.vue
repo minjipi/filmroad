@@ -100,14 +100,15 @@ import {
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUploadStore } from '@/stores/upload';
-import { useToast } from '@/composables/useToast';
+import { useUiStore } from '@/stores/ui';
+import { buildBoastShareData } from '@/utils/share';
 
 defineProps<{ placeId: string | number }>();
 
 const router = useRouter();
 const uploadStore = useUploadStore();
+const uiStore = useUiStore();
 const { lastResult, targetPlace } = storeToRefs(uploadStore);
-const { showInfo } = useToast();
 
 const result = computed(() => lastResult.value);
 const stamp = computed(() => lastResult.value?.stamp ?? null);
@@ -149,8 +150,11 @@ const confettiDots = computed<Confetti[]>(() =>
   })),
 );
 
-async function onBoast(): Promise<void> {
-  await showInfo('공유는 곧 공개됩니다');
+function onBoast(): void {
+  if (!lastResult.value) return;
+  uiStore.openShareSheet(
+    buildBoastShareData(lastResult.value, targetPlace.value?.placeName),
+  );
 }
 
 async function onGoHome(): Promise<void> {

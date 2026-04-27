@@ -26,6 +26,7 @@ import {
   type CaptureTarget,
   type PhotoResponse,
 } from '@/stores/upload';
+import { useUiStore } from '@/stores/ui';
 import { mountWithStubs } from './__helpers__/mount';
 
 const target: CaptureTarget = {
@@ -759,17 +760,31 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
     }
   });
 
-  it('U10: 친구에게 자랑하기 CTA 클릭 → toast 호출 (현 단계 placeholder 동작)', async () => {
+  it('U10: 친구에게 자랑하기 CTA 클릭 → ShareSheet 가 인증 카드 데이터로 열린다', async () => {
     vi.useFakeTimers();
     try {
-      const wrapper = await reachAuthenticatedStage(baseResponse({}));
+      const wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 1,
+          totalCount: 8,
+          percent: 12,
+        },
+      }));
+      const uiStore = useUiStore();
       const boastBtn = wrapper.find('[data-testid="upload-boast"]');
       expect(boastBtn.exists()).toBe(true);
-      // fakeTimers 가 활성화 중이라 toastController.create 의 await 구간을 풀어준다
       await boastBtn.trigger('click');
-      await vi.advanceTimersByTimeAsync(0);
       await flushPromises();
-      expect(toastCreateSpy).toHaveBeenCalled();
+      expect(uiStore.shareSheetOpen).toBe(true);
+      expect(uiStore.shareData).toMatchObject({
+        title: '도깨비 · 주문진 영진해변 방파제 인증 완료!',
+        description: '필름로드에서 도깨비 성지를 다녀왔어요',
+        imageUrl: 'https://cdn/p/99.jpg',
+        url: expect.stringMatching(/\/shot\/99$/),
+      });
     } finally {
       vi.useRealTimers();
     }
