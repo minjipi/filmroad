@@ -65,6 +65,11 @@ export const useUserProfileStore = defineStore('userProfile', {
   }),
   actions: {
     async fetchUser(id: number): Promise<void> {
+      // task #22: clear stale user before fetch so navigating between
+      // /user/:id pages doesn't briefly flash the previous user's data
+      // (a sibling kind of flicker — page content swaps mid-render). The
+      // template's loading placeholder takes over until new data lands.
+      this.user = null;
       this.loading = true;
       this.error = null;
       try {

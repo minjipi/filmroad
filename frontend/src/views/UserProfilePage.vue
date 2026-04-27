@@ -3,10 +3,14 @@
     <ion-content :fullscreen="true" class="up-content">
       <!-- Floating top bar -->
       <header class="up-top">
+        <!-- task #24: 뒤로가기 버튼 — `/shot/:id` 의 avatar/nm 클릭으로 진입한
+             경우 사용자가 직전 shot 으로 자연스럽게 복귀할 수 있게. 다른 진입
+             경로(피드/검색/직접 URL)에서도 동일 패턴이 일반적이라 항상 노출.
+             aria-label 은 한국어로 통일 (task #23 MapPage 와 일관). -->
         <button
           type="button"
           class="ic-btn"
-          aria-label="back"
+          aria-label="뒤로 가기"
           data-testid="up-back"
           @click="onBack"
         >
@@ -25,7 +29,14 @@
         </div>
       </header>
 
-      <div v-if="loading && !user" class="up-placeholder" data-testid="up-loading">
+      <!--
+        task #22: flicker 제거 — 첫 sync 렌더 시점엔 onMounted 가 아직 안
+        돌아 `loading` 이 false. 기존 `v-if="loading && !user"` 는 그 첫 1
+        tick 동안 false 가 되어 페이지가 빈 상태(헤더만)로 깜빡임. 조건을
+        `!user && !error` 로 넓혀, 데이터/에러가 도착하기 전 모든 시점을
+        loading placeholder 가 흐름 끊김 없이 덮도록 수정.
+      -->
+      <div v-if="!user && !error" class="up-placeholder" data-testid="up-loading">
         불러오는 중…
       </div>
       <div v-else-if="!user && error" class="up-placeholder error" data-testid="up-error">
@@ -216,7 +227,10 @@ const props = defineProps<{ id: string | number }>();
 const router = useRouter();
 const userStore = useUserProfileStore();
 const authStore = useAuthStore();
-const { user, loading, error, followPending } = storeToRefs(userStore);
+// task #22: template no longer reads `loading` directly — `!user && !error`
+// is enough to drive the placeholder. Keeping `userStore.loading` access
+// inside refresh() (`if (userStore.loading) return`) since it's a guard.
+const { user, error, followPending } = storeToRefs(userStore);
 const { showInfo } = useToast();
 
 type UpTab = 'photos' | 'collections' | 'map';

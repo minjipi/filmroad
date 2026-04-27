@@ -617,3 +617,167 @@
 - (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (fixture address 라인 삭제)
 - (M) `frontend/src/stores/__tests__/shotDetail.spec.ts` (fixture address 라인 삭제)
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #21 — ShotDetailPage avatar / sub(place) 클릭 라우팅 추가
+
+## 구현
+### Primary shot
+- `<div class="avatar">` → `<button type="button" class="avatar" data-testid="sd-avatar" :disabled="shot.author.id == null" @click="onOpenAuthor">` — 기존 nm 핸들러 재사용. `.nm` 과 동일한 disabled 가드 (fallback 작성자 id null 시 비활성).
+- `<div class="sub">` → `<button type="button" class="sub" data-testid="sd-place-link" @click="onOpenPlaceMap">` — 신규 핸들러.
+- `aria-label` 부여 (`"<nickname> 프로필 보기"` / `"<placeName> 지도에서 보기"`) — 시각이 텍스트라 스크린 리더는 명시 컨텍스트 없으면 의미 파악 어려움.
+
+### Appended cards
+- 동일 패턴으로 변환. `onOpenAppendedAuthor(s)` / `onOpenAppendedPlaceMap(s)` 핸들러 wired.
+
+### 신규 핸들러 (`script setup`)
+- `onOpenPlaceMap()` → `router.push({ path: '/map', query: { selectedId: String(shot.value.place.id) } })`. shot id null guard.
+- `onOpenAppendedPlaceMap(post)` → 같은 패턴, post.place.id 인자.
+
+### CSS
+- `.avatar` 에 button reset (border/padding 제거, cursor:pointer, appearance:none) + `:disabled { cursor: default }`.
+- `.sd-user .sub` 에 button reset (border/padding/background 제거, font-family 상속, text-align:left, cursor:pointer) + hover 시 ink-2.
+- 기존 `.nm` 의 reset 패턴과 일관.
+
+## 검증 ⚠️ 부분 완료 (환경 블로커)
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run lint` ✓ 클린 (사전 3 error 그대로).
+- `npm run build` ❌ **인프라 이슈로 차단** — `Cannot find module @rollup/rollup-linux-x64-gnu`. WSL `/mnt/c/...` 에서 `mkdir` 가 ENOENT(File exists) 오락가락하는 phantom-directory 상태.
+- `npm run test:unit` ❌ 같은 이유로 차단.
+- 회복 시도: `npm install`, `npm install --include=optional --force`, `npm rebuild`, `npm cache clean --force`, `npm uninstall @rollup/...`, `mkdir`, `cp -r`, `rm -rf` 모두 동일 ENOENT. WSL 측 `wsl --shutdown` 또는 호스트 재시작 필요. 코드 측 문제 아님.
+- task #19 시점 (~30분 전) build/test 모두 동작했음 — task #21 시작 시점부터 phantom 생성. 추정: 직전 task #19 의 build 후 어딘가에서 npm cache 가 inconsistent 해진 듯.
+
+### 회복 후 자동 검증 가능 항목
+신규 4 spec 케이스가 ShotDetailPage.spec.ts 에 추가됨. 환경 회복 후 자동 통과 예상:
+- primary avatar click → push '/user/1' (fixture.author.id=1).
+- primary sub click → push `{ path: '/map', query: { selectedId: '10' } }` (fixture.place.id=10).
+- appended card avatar click → push '/user/9' (seed userId=9).
+- appended card sub click → push `{ path: '/map', query: { selectedId: '22' } }` (seed placeId=22).
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue` (마크업 + 핸들러 + CSS reset)
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (신규 4 케이스)
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #22 — UserProfilePage flicker 제거
+
+## 진단
+사용자가 `/user/:id` 진입 시 빈 페이지 → 실제 페이지 두 번 렌더되는 flicker 보고. 원인:
+
+- `UserProfilePage` 의 placeholder 분기가 `v-if="loading && !user"` 로 묶여 있었음.
+- Vue lifecycle: 컴포넌트 mount 는 sync, `onMounted` 의 `refresh()` → `userStore.fetchUser(id)` 는 mount AFTER 비동기 fire. 따라서 첫 sync 렌더 시점엔 `loading=false`, `user=null` — `loading && !user` 는 **false** 라 placeholder 가 노출되지 않음. 다음 tick 에 loading=true 가 되어야 placeholder 가 보임.
+- 결과: **사용자가 보는 순서 = 빈 헤더 + 빈 body → up-loading placeholder → up-loaded 실제 컨텐츠**. 첫 번째 빈 화면 한 frame 이 시각적 flicker.
+
+## 수정
+### 1. `frontend/src/views/UserProfilePage.vue`
+- placeholder 분기 조건 변경: `v-if="loading && !user"` → `v-if="!user && !error"`. 데이터/에러가 도착하기 전 모든 시점 (sync 첫 렌더 포함) 을 loading placeholder 가 흐름 끊김 없이 덮음.
+- `storeToRefs(userStore)` 에서 더 이상 사용 안 하는 `loading` 제거. 다른 곳의 `userStore.loading` 직접 접근(`refresh()` 의 in-flight guard) 은 유지.
+
+### 2. `frontend/src/stores/userProfile.ts`
+- `fetchUser()` 액션 시작에 `this.user = null` 추가 — sibling flicker (한 user 페이지에서 다른 user 페이지로 이동할 때 이전 user 데이터가 잠시 잔류) 방지. template 의 새 placeholder 조건과 함께 navigate-between-users 케이스도 깔끔하게 loading → loaded 전환.
+
+## 단위 테스트
+### 신규 2 케이스 (`UserProfilePage.spec.ts`, 총 16)
+- `initial mount renders the loading placeholder immediately (no blank-page flicker, task #22)` — api.get 를 hang 시킨 상태로 `user=null, loading=false, error=null` 시드. 첫 sync 렌더 직후 (flushPromises 전) `up-loading` 이 즉시 visible, `up-loaded`/`up-error` 미노출. flush 후에도 fetch 가 hang 중이라 그대로 loading.
+- `fetchUser clears stale user before loading new id (task #22 sibling-flicker guard)` — store 에 이전 user 가 있는 상태에서 fetchUser 시작 → 즉시 `user=null` 로 클리어 검증. 응답 도착 후 새 user 갱신 검증.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **542 tests** 통과 (이전 540 + 신규 2).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린 (기존 사용 안 하는 `loading` import 도 정리해 신규 위반 0건).
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 1994ms, 콘솔 클린.
+  - `GET /user/9` → 200 (SPA shell).
+  - `GET /src/views/UserProfilePage.vue` → 58 219 bytes.
+  - 토큰 검증: `up-loading` × 1, `up-loaded` × 1, `up-error` × 1 (placeholder 분기 모두 transform 정상).
+
+## 변경 파일
+- (M) `frontend/src/views/UserProfilePage.vue` (placeholder 조건 + storeToRefs 정리)
+- (M) `frontend/src/stores/userProfile.ts` (fetchUser 시작 시 user 클리어)
+- (M) `frontend/src/views/__tests__/UserProfilePage.spec.ts` (신규 2 케이스)
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #23 — MapPage top-bar 뒤로가기 버튼 추가 (shot 진입 시)
+
+## 구현
+### 표시 조건
+`route.query.selectedId` 가 있을 때만 — ShotDetail 의 sub(place) 클릭 등 컨텍스트 진입 (`/map?selectedId=<placeId>`) 시그널. 일반 `/map` 진입엔 미렌더 (홈 → 지도 탭 자연스러운 흐름 보존).
+
+### 마크업 (`frontend/src/views/MapPage.vue`)
+- `<div class="top-bar">` 안 search-box 좌측에 신규 button:
+  ```vue
+  <button v-if="showBackButton" class="back-btn" type="button"
+          aria-label="뒤로 가기" data-testid="map-back-btn" @click="onMapBack">
+    <ion-icon :icon="chevronBack" class="ic-22" />
+  </button>
+  ```
+- `chevronBack` 아이콘 import 추가.
+
+### 핸들러
+- `showBackButton: ComputedRef<boolean>` — `route.query.selectedId != null`.
+- `onMapBack()` — `window.history.length > 1` 이면 `router.back()` (자연스러운 ShotDetail 복귀), 아니면 `router.replace('/home')` fallback (직접 URL / 새 탭 엣지 케이스).
+
+### CSS
+- `.back-btn`: 48×48 정사각, `border-radius: 16px`, search-box 와 동일 그림자/배경/높이 — top-bar 내 시각 무게 일관. `:active { transform: translateY(1px) }` press 피드백.
+
+## 단위 테스트
+### 신규 3 케이스 (`MapPage.spec.ts`)
+- 일반 진입(`query: {}`) → 뒤로가기 미렌더.
+- 컨텍스트 진입(`query: { selectedId: '10' }`) → 뒤로가기 렌더 + `aria-label="뒤로 가기"`.
+- 클릭 → `router.back()` 호출 (history.pushState 로 history>1 보강).
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **545 tests** 통과 (이전 542 + 신규 3).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 1991ms, 콘솔 클린.
+  - `GET /map` → 200, `GET /map?selectedId=10` → 200 (둘 다 SPA shell).
+  - `GET /src/views/MapPage.vue` → 120 550 bytes.
+  - 토큰 검증: `back-btn` × 1, `map-back-btn` × 1, `onMapBack` × 3, `showBackButton` × 3 — 모두 정상 transform.
+
+## 변경 파일
+- (M) `frontend/src/views/MapPage.vue`
+- (M) `frontend/src/views/__tests__/MapPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #24 — UserProfilePage top-bar 뒤로가기 버튼
+
+## 진단
+- 뒤로가기 버튼은 **이미 존재** — task #22 시점부터 `.up-top` 헤더 좌측에 `<button class="ic-btn" aria-label="back" data-testid="up-back" @click="onBack">` 패턴으로 구현돼 있었음.
+- `onBack()` 핸들러도 이미 task #23 MapPage 와 동일한 history-length fallback 패턴 (`router.back()` ↔ `router.replace('/home')`).
+- team-lead 가이드의 testid 제안(`up-back-btn`) 은 기존 `up-back` 과 다르나, 기존 spec(`back button calls router.back when history exists` test) 이 이미 `up-back` 셀렉터에 의존하므로 호환성 위해 기존 testid 유지.
+
+## 변경
+### 1. `UserProfilePage.vue`
+- `aria-label="back"` (영문) → `aria-label="뒤로 가기"` (한국어). task #23 MapPage 의 `aria-label="뒤로 가기"` 와 톤 일치, 한국어 UI 컨벤션 유지.
+- 추적용 주석 추가 (task #24 컨텍스트 + "항상 노출" 결정 명시).
+
+### 2. 단위 테스트 (`UserProfilePage.spec.ts`)
+- 신규 1 케이스: `back button always renders with Korean aria-label "뒤로 가기" (task #24)`.
+- 기존 `back button calls router.back when history exists` 그대로 유지 — 클릭 → router.back 동작 회귀 가드.
+
+## 검증
+- `npx vue-tsc --noEmit` ✓ 그린.
+- `npm run test:unit` — 49 files / **546 tests** 통과 (이전 545 + 신규 1).
+- `npm run build` ✓ 그린.
+- `npm run lint` ✓ 클린.
+- **Dev 헬스체크** (`pkill -f vite` 선행):
+  - Vite v5.4.21 ready in 1930ms, 콘솔 클린.
+  - `GET /user/9` → 200.
+  - `GET /src/views/UserProfilePage.vue` → 59 437 bytes.
+  - 토큰 검증: `chevronBackOutline` × 3, `up-back` × 1, `aria-label="뒤로 가기"` (= "뒤로 가기") × 1 — 한국어 라벨 정상 transform.
+
+## 변경 파일
+- (M) `frontend/src/views/UserProfilePage.vue` (aria-label 영문 → 한국어 + 주석)
+- (M) `frontend/src/views/__tests__/UserProfilePage.spec.ts` (aria-label 단언 신규 1 케이스)
+- (M) `_workspace/03_frontend_implementation.md`

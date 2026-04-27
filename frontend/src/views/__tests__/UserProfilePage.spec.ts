@@ -233,6 +233,69 @@ describe('UserProfilePage.vue (task #42)', () => {
     window.history.back();
   });
 
+  // task #24 — 뒤로가기 버튼 셀렉터 + aria-label 회귀 가드. 버튼은 이미
+  // 존재했으나 aria-label 이 영문 "back" 이었던 것을 한국어로 통일 (task
+  // #23 MapPage 의 "뒤로 가기" 와 일치).
+  it('back button always renders with Korean aria-label "뒤로 가기" (task #24)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const btn = wrapper.find('[data-testid="up-back"]');
+    expect(btn.exists()).toBe(true);
+    expect(btn.attributes('aria-label')).toBe('뒤로 가기');
+  });
+
+  // task #22 — flicker 회귀 가드.
+  // 첫 sync 렌더 (onMounted 의 fetch 가 아직 안 돌아 loading 도 false 인 시점)에서
+  // 빈 페이지 대신 up-loading placeholder 가 즉시 노출되어야 한다. 기존 조건
+  // `loading && !user` 는 첫 tick 동안 false 라 이 단언이 fail 했었다.
+  it('initial mount renders the loading placeholder immediately (no blank-page flicker, task #22)', async () => {
+    // api.get 를 hang 시켜 fetch 가 끝나지 않도록 → 첫 렌더 + onMounted 직후 상태 고정.
+    mockApi.get.mockReset();
+    mockApi.get.mockImplementation(() => new Promise(() => undefined));
+    const { wrapper } = mountWithStubs(UserProfilePage, {
+      props: { id: '42' },
+      initialState: {
+        // user=null, loading=false, error=null — onMounted 가 fetch 를 트리거 하기
+        // 직전 / 첫 sync 렌더 시점의 상태.
+        userProfile: { user: null, loading: false, error: null, followPending: false },
+        auth: { user: { id: 999, nickname: 'me', handle: 'me', avatarUrl: null } },
+      },
+    });
+
+    // sync 렌더 직후 — flushPromises 호출 전 — 이미 up-loading 이 보여야 함.
+    expect(wrapper.find('[data-testid="up-loading"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="up-loaded"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="up-error"]').exists()).toBe(false);
+
+    // microtasks flush 후에도 fetch 가 hang 중이라 여전히 loading 표시.
+    await flushPromises();
+    expect(wrapper.find('[data-testid="up-loading"]').exists()).toBe(true);
+  });
+
+  it('fetchUser clears stale user before loading new id (task #22 sibling-flicker guard)', async () => {
+    const { useUserProfileStore } = await import('@/stores/userProfile');
+    const store = useUserProfileStore();
+    // 기존 user 가 store 에 있는 상태에서 fetch 시작 → 즉시 null 로 클리어.
+    store.user = structuredClone(fixture);
+    let resolveFetch: (v: { data: UserProfile }) => void = () => {};
+    mockApi.get.mockReset();
+    mockApi.get.mockImplementationOnce(
+      () => new Promise((r) => { resolveFetch = r; }),
+    );
+    const fetchP = store.fetchUser(99);
+
+    // fetch 가 시작되자마자 user 가 null 로 비워져야 — 이전 사용자 데이터가 새
+    // /user/:id 페이지에 깜빡 잔류하는 sibling flicker 방지.
+    expect(store.user).toBeNull();
+    expect(store.loading).toBe(true);
+
+    // 이후 응답 도착 → 새 user.
+    resolveFetch({ data: { ...structuredClone(fixture), id: 99 } });
+    await fetchP;
+    expect(store.user?.id).toBe(99);
+  });
+
   it('mounting on your own user id redirects to /profile instead of rendering (task #42)', async () => {
     mountWithStubs(UserProfilePage, {
       props: { id: '999' },

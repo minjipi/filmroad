@@ -14,6 +14,18 @@
       />
 
       <div class="top-bar">
+        <!-- task #23: ShotDetail 의 sub 클릭 등 컨텍스트 진입 시(query.selectedId
+             존재) 만 뒤로가기 버튼 노출. 일반 /map 진입은 미렌더. -->
+        <button
+          v-if="showBackButton"
+          class="back-btn"
+          type="button"
+          aria-label="뒤로 가기"
+          data-testid="map-back-btn"
+          @click="onMapBack"
+        >
+          <ion-icon :icon="chevronBack" class="ic-22" />
+        </button>
         <button
           class="search-box"
           type="button"
@@ -316,6 +328,7 @@ import {
   searchOutline,
   optionsOutline,
   checkmark,
+  chevronBack,
   cameraOutline,
   heartOutline,
   bookmark,
@@ -614,6 +627,22 @@ async function onSearch(): Promise<void> {
   await router.push('/search');
 }
 
+// task #23: ShotDetail 의 sub(place) 클릭으로 진입한 경우만 search-box 좌측에
+// 뒤로가기 버튼 노출. 일반 /map 진입(query 없이)은 미렌더 — 사용자 의도
+// 컨텍스트 와 일치. URL 의 selectedId 존재 여부가 가장 단순한 진입-경로 신호.
+const showBackButton = computed<boolean>(() => route.query.selectedId != null);
+
+function onMapBack(): void {
+  // history 가 있으면 router.back() — 직전의 ShotDetail 페이지로 자연스러운
+  // 복귀. 없으면 fallback 으로 /home (직접 URL / 새 탭 등 엣지). 실제로
+  // selectedId 가 query 에 있을 땐 거의 항상 history 가 존재하지만 안전망.
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back();
+  } else {
+    void router.replace('/home');
+  }
+}
+
 async function onToggleSave(): Promise<void> {
   if (!selected.value) return;
   const pid = selected.value.id;
@@ -735,6 +764,24 @@ ion-content.map-content {
   z-index: 20;
   display: flex; gap: 8px;
 }
+/* task #23: shot → map 진입 컨텍스트 전용 뒤로가기 버튼. search-box 와
+   동일한 그림자/높이로 시각 무게 일관, 정사각 형태로 search-box 옆에 부착. */
+.back-btn {
+  width: 48px;
+  height: 48px;
+  background: #ffffff;
+  border: none;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fr-ink);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.back-btn:active { transform: translateY(1px); }
+
 .search-box {
   flex: 1;
   height: 48px;

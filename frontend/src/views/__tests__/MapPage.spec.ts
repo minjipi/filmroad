@@ -505,4 +505,41 @@ describe('MapPage.vue', () => {
     expect(badge.exists()).toBe(true);
     expect(badge.text()).toBe('2');
   });
+
+  // task #23 — context-entry back button. Renders only when query.selectedId
+  // is present (e.g., user clicked sub(place) on /shot/:id and landed on
+  // /map?selectedId=<placeId>). Plain /map entry stays clean.
+  describe('top-bar back button (task #23)', () => {
+    it('일반 /map 진입 (query.selectedId 없음) → 뒤로가기 버튼 미렌더', async () => {
+      routeRef.current = { query: {} };
+      const { wrapper } = mountMapPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="map-back-btn"]').exists()).toBe(false);
+    });
+
+    it('컨텍스트 진입 (?selectedId=10) → 뒤로가기 버튼 렌더', async () => {
+      routeRef.current = { query: { selectedId: '10' } };
+      const { wrapper } = mountMapPage();
+      await flushPromises();
+
+      const btn = wrapper.find('[data-testid="map-back-btn"]');
+      expect(btn.exists()).toBe(true);
+      expect(btn.attributes('aria-label')).toBe('뒤로 가기');
+    });
+
+    it('뒤로가기 버튼 클릭 → router.back() (history 가 있을 때)', async () => {
+      routeRef.current = { query: { selectedId: '10' } };
+      const { wrapper } = mountMapPage();
+      await flushPromises();
+      backSpy.mockClear();
+
+      // jsdom 의 window.history.length 는 기본 1+. 여러 sub spec 이 동작하는
+      // 환경에서 1보다 크게 유지될 가능성 높음 — pushState 로 보강해 안전.
+      window.history.pushState({}, '', '/map?selectedId=10');
+      await wrapper.find('[data-testid="map-back-btn"]').trigger('click');
+
+      expect(backSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 });

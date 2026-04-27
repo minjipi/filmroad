@@ -656,6 +656,68 @@ describe('ShotDetailPage.vue', () => {
     expect(stub.attributes('data-photo-id')).toBe('76');
   });
 
+  // task #21 — avatar / sub(place) 클릭 라우팅. avatar 는 nm 와 동일 동작
+  // (작성자 프로필), sub 는 신규 동작 (/map?selectedId=<placeId>).
+  it('primary avatar click → router.push /user/:authorId (task #21)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="sd-avatar"]').trigger('click');
+    await flushPromises();
+    // fixture.author.id = 1
+    expect(pushSpy).toHaveBeenCalledWith('/user/1');
+  });
+
+  it('primary sub(place) click → router.push /map?selectedId=:placeId (task #21)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="sd-place-link"]').trigger('click');
+    await flushPromises();
+    // fixture.place.id = 10 → query.selectedId = "10"
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/map',
+      query: { selectedId: '10' },
+    });
+  });
+
+  it('appended card avatar click → router.push /user/:userId (task #21)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ userId: 9 }));
+    await flushPromises();
+
+    pushSpy.mockClear();
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    await card.find('.avatar').trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith('/user/9');
+  });
+
+  it('appended card sub(place) click → router.push /map?selectedId=:placeId (task #21)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const { useShotDetailStore } = await import('@/stores/shotDetail');
+    const store = useShotDetailStore();
+    store.appendedShots.push(seedAppended({ placeId: 22 }));
+    await flushPromises();
+
+    pushSpy.mockClear();
+    const card = wrapper.find('[data-testid="sd-feed-card"]');
+    await card.find('.sub').trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/map',
+      query: { selectedId: '22' },
+    });
+  });
+
   it('appended card 닉네임 click → router.push /user/:userId (task #18)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();

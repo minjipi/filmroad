@@ -152,13 +152,20 @@
         </section>
 
         <section class="sd-user">
-          <div class="avatar">
+          <button
+            type="button"
+            class="avatar"
+            data-testid="sd-avatar"
+            :disabled="shot.author.id == null"
+            :aria-label="`${shot.author.nickname} 프로필 보기`"
+            @click="onOpenAuthor"
+          >
             <img
               v-if="shot.author.avatarUrl"
               :src="shot.author.avatarUrl"
               :alt="shot.author.nickname"
             />
-          </div>
+          </button>
           <div class="meta">
             <button
               type="button"
@@ -170,10 +177,16 @@
               {{ shot.author.nickname }}
               <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="verified" />
             </button>
-            <div class="sub">
+            <button
+              type="button"
+              class="sub"
+              data-testid="sd-place-link"
+              :aria-label="`${shot.place.name} 지도에서 보기`"
+              @click="onOpenPlaceMap"
+            >
               <ion-icon :icon="locationOutline" class="ic-16" />
               {{ shot.place.name }} · {{ takenAtLabel }}
-            </div>
+            </button>
           </div>
           <button
             type="button"
@@ -364,15 +377,20 @@
               </button>
             </section>
 
-            <!-- 2. sd-user (task #18: 닉네임 클릭 → 프로필 / 팔로우 토글) -->
+            <!-- 2. sd-user (task #18: 닉네임/팔로우, #21: avatar/sub 클릭) -->
             <section class="sd-user">
-              <div class="avatar">
+              <button
+                type="button"
+                class="avatar"
+                :aria-label="`${s.author.nickname} 프로필 보기`"
+                @click="onOpenAppendedAuthor(s)"
+              >
                 <img
                   v-if="s.author.avatarUrl"
                   :src="s.author.avatarUrl"
                   :alt="s.author.nickname"
                 />
-              </div>
+              </button>
               <div class="meta">
                 <button
                   type="button"
@@ -382,10 +400,15 @@
                   {{ s.author.nickname }}
                   <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="verified" />
                 </button>
-                <div class="sub">
+                <button
+                  type="button"
+                  class="sub"
+                  :aria-label="`${s.place.name} 지도에서 보기`"
+                  @click="onOpenAppendedPlaceMap(s)"
+                >
                   <ion-icon :icon="locationOutline" class="ic-16" />
                   {{ s.place.name }} · {{ formatVisitDate(s.createdAt) }}
-                </div>
+                </button>
               </div>
               <button
                 type="button"
@@ -782,6 +805,19 @@ async function onOpenAppendedAuthor(post: { author: { userId: number } }): Promi
   await router.push(`/user/${post.author.userId}`);
 }
 
+// task #21: avatar / sub(place) 클릭 라우팅. avatar 는 기존 onOpenAuthor /
+// onOpenAppendedAuthor 와 동일 핸들러 재사용. sub 는 신규 — place-id 를
+// MapPage 의 selectedId query 로 보내 지도에서 해당 장소 자동 선택되도록.
+async function onOpenPlaceMap(): Promise<void> {
+  const placeId = shot.value?.place.id;
+  if (placeId == null) return;
+  await router.push({ path: '/map', query: { selectedId: String(placeId) } });
+}
+
+async function onOpenAppendedPlaceMap(post: { place: { id: number } }): Promise<void> {
+  await router.push({ path: '/map', query: { selectedId: String(post.place.id) } });
+}
+
 // 카드별 saved 상태는 savedStore 가 single source — server snapshot(`s.saved`)
 // 보다 client store 가 더 신뢰할 수 있음 (방금 저장/해제한 결과 반영).
 function feedCardSaved(post: { place: { id: number } }): boolean {
@@ -1048,13 +1084,22 @@ ion-content.sd-content {
   gap: 12px;
   border-bottom: 1px solid var(--fr-line-soft);
 }
+/* task #21: .avatar 는 이제 <button> — 클릭 시 작성자 프로필로 이동.
+   button native 스타일 (border/padding/background) 을 모두 reset 하고
+   기존 시각(원형 + 회색 placeholder) 유지. */
 .avatar {
   width: 44px; height: 44px;
   border-radius: 50%;
   overflow: hidden;
   background: #eeeeee;
   flex-shrink: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.avatar:disabled { cursor: default; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sd-user .meta { flex: 1; min-width: 0; }
 .sd-user .nm {
@@ -1081,6 +1126,8 @@ ion-content.sd-content {
   height: 14px;
   color: var(--fr-primary);
 }
+/* task #21: .sub 는 이제 <button> — 클릭 시 /map?selectedId 로 이동.
+   button native 스타일 reset 하고 기존 시각(작은 회색 텍스트 + location icon) 유지. */
 .sd-user .sub {
   font-size: 11.5px;
   color: var(--fr-ink-3);
@@ -1088,7 +1135,16 @@ ion-content.sd-content {
   display: flex;
   align-items: center;
   gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.sd-user .sub:hover { color: var(--fr-ink-2); }
 .sd-user .follow {
   height: 32px;
   padding: 0 14px;
