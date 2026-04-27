@@ -154,7 +154,24 @@
           class="saved-tab"
           data-testid="tab-saved"
         >
-          <div class="collection-row no-scrollbar">
+          <div
+            v-if="isSavedEmpty"
+            class="saved-empty"
+            data-testid="saved-empty"
+          >
+            <ion-icon :icon="bookmarkOutline" class="ic-22 saved-empty-ic" />
+            <p class="msg">아직 저장한 성지가 없어요</p>
+            <span class="hint">마음에 드는 성지를 북마크해보세요</span>
+            <button
+              type="button"
+              class="fr-btn primary"
+              data-testid="saved-empty-cta"
+              @click="onGoFindPlaces"
+            >
+              <ion-icon :icon="addOutline" class="ic-16" />추가하러 가기
+            </button>
+          </div>
+          <div v-else class="collection-row no-scrollbar">
             <div
               class="coll default"
               data-testid="coll-default"
@@ -221,6 +238,7 @@ import {
   bookmarkOutline,
   logOutOutline,
   trophyOutline,
+  addOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -331,6 +349,21 @@ watch(
     if (savedStore.error) await showError(savedStore.error);
   },
 );
+
+// 저장 탭이 완전히 비어 있을 때(컬렉션도 없고 미분류도 0개) "추가하러 가기" CTA 를
+// 노출. 컬렉션이 하나라도 있으면 그 카드들은 평소대로 보여 주는 게 자연스러우므로
+// totalCount===0 이 아닌 collections.length === 0 까지 함께 본다. fetch 가 아직
+// 안 끝났을 때 한 프레임 빈 상태가 깜빡이는 걸 막기 위해 savedFetched 가드 포함.
+const isSavedEmpty = computed(
+  () =>
+    savedFetched.value &&
+    defaultCount.value === 0 &&
+    savedCollections.value.length === 0,
+);
+
+async function onGoFindPlaces(): Promise<void> {
+  await router.push('/home');
+}
 
 async function onOpenDefaultCollection(): Promise<void> {
   // No /collection/default route — SavedPage doubles as the unclassified
@@ -811,6 +844,55 @@ ion-content.pf-content {
   text-align: center;
   color: var(--fr-ink-3);
   font-size: 13px;
+}
+
+/* 저장 탭이 완전히 비어있을 때 노출되는 empty state. collection-row 와 같은
+   가로 인셋(16px) 을 유지해 다른 탭의 콘텐츠 정렬과 일관되게 보이도록. */
+.saved-empty {
+  margin: 24px 16px 16px;
+  padding: 28px 20px;
+  border-radius: 18px;
+  background: var(--fr-bg-muted, #f5f7fa);
+  border: 1px solid var(--fr-line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.saved-empty-ic {
+  color: var(--fr-ink-3);
+  margin-bottom: 4px;
+}
+.saved-empty .msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fr-ink);
+}
+.saved-empty .hint {
+  font-size: 12px;
+  color: var(--fr-ink-3);
+  margin-bottom: 14px;
+}
+.saved-empty .fr-btn {
+  width: 100%;
+  max-width: 220px;
+  height: 44px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  cursor: pointer;
+}
+.saved-empty .fr-btn.primary {
+  background: var(--fr-primary);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(20, 188, 237, 0.3);
 }
 
 </style>

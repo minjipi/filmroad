@@ -281,6 +281,74 @@ describe('ProfilePage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/collection/1');
   });
 
+  it('saved tab with no collections AND no unfiled items renders the empty CTA', async () => {
+    const { wrapper } = mountProfile({
+      savedState: {
+        collections: [],
+        items: [],
+        savedPlaceIds: [],
+        totalCount: 0,
+        suggestion: null,
+        loading: false,
+        error: null,
+      },
+    });
+    await flushPromises();
+    await wrapper.findAll('.local-tabs .tab-i')[2].trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="saved-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="saved-empty-cta"]').exists()).toBe(true);
+    // collection-row 가 같이 보이면 "기본 0곳" 카드가 어색하게 떠 있게 됨 — 가려야 함.
+    expect(wrapper.find('.saved-tab .collection-row').exists()).toBe(false);
+  });
+
+  it('saved empty CTA click pushes /home', async () => {
+    const { wrapper } = mountProfile({
+      savedState: {
+        collections: [],
+        items: [],
+        savedPlaceIds: [],
+        totalCount: 0,
+        suggestion: null,
+        loading: false,
+        error: null,
+      },
+    });
+    await flushPromises();
+    await wrapper.findAll('.local-tabs .tab-i')[2].trigger('click');
+    await flushPromises();
+    pushSpy.mockClear();
+
+    await wrapper.find('[data-testid="saved-empty-cta"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/home');
+  });
+
+  it('saved tab with at least one user collection still renders collection-row, not empty CTA', async () => {
+    // 사용자가 컬렉션은 만들었지만 안에 아무것도 안 담은 상태 — 이때는 평소 화면을
+    // 유지하고 빈 CTA 는 띄우지 않는다 (요구사항 옵션 b).
+    const { wrapper } = mountProfile({
+      savedState: {
+        collections: [
+          { id: 5, name: '버킷리스트', coverImageUrls: null, count: 0, gradient: null },
+        ],
+        items: [],
+        savedPlaceIds: [],
+        totalCount: 0,
+        suggestion: null,
+        loading: false,
+        error: null,
+      },
+    });
+    await flushPromises();
+    await wrapper.findAll('.local-tabs .tab-i')[2].trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="saved-empty"]').exists()).toBe(false);
+    expect(wrapper.find('.saved-tab .collection-row').exists()).toBe(true);
+  });
+
   it('saved tab uses the 11-saved.html horizontal `.collection-row` (task #36)', async () => {
     const { wrapper } = mountProfile();
     await flushPromises();
