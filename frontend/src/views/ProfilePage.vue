@@ -4,9 +4,6 @@
       <header class="top-bar">
         <h1>{{ handleLabel }}</h1>
         <div class="r">
-          <button type="button" aria-label="share" @click="onShare">
-            <ion-icon :icon="shareSocialOutline" class="ic-20" />
-          </button>
           <button type="button" aria-label="menu" @click="onMenu">
             <ion-icon :icon="menuOutline" class="ic-20" />
           </button>
@@ -231,8 +228,10 @@ import { useProfileStore, type MiniMapPin } from '@/stores/profile';
 import { useStampbookStore } from '@/stores/stampbook';
 import { useSavedStore } from '@/stores/saved';
 import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import { useToast } from '@/composables/useToast';
+import { buildProfileShareData } from '@/utils/share';
 
 type LocalTab = 'photos' | 'stampbook' | 'saved';
 
@@ -241,6 +240,7 @@ const profileStore = useProfileStore();
 const stampbookStore = useStampbookStore();
 const savedStore = useSavedStore();
 const authStore = useAuthStore();
+const uiStore = useUiStore();
 const { user, stats, miniMapPins, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
 const { works: stampbookWorks } = storeToRefs(stampbookStore);
 const { collections: savedCollections, items: savedItems } = storeToRefs(savedStore);
@@ -368,8 +368,9 @@ function onOpenFollowing(): void {
   void router.push(`/user/${user.value.id}/following`);
 }
 
-async function onShare(): Promise<void> {
-  await showInfo('공유 기능은 곧 공개됩니다');
+function onShare(): void {
+  if (!user.value) return;
+  uiStore.openShareSheet(buildProfileShareData(user.value));
 }
 
 async function onMenu(): Promise<void> {

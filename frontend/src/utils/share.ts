@@ -43,3 +43,31 @@ export function buildPlaceShareData(place: PlaceShareInput): ShareData {
     url: `${shareOrigin()}/place/${place.id}`,
   };
 }
+
+/**
+ * 사용자 프로필 공유 카드. /profile (내 프로필) 과 /user/:id (남의 프로필) 가
+ * 같은 빌더를 쓴다. 공유 URL 은 항상 /user/:id — /profile 은 me 전용 라우트라
+ * 다른 사람이 클릭해도 의미가 없음. bio 가 비어 있으면 레벨 라벨로 폴백.
+ */
+export interface ProfileShareInput {
+  id: number;
+  nickname: string;
+  handle: string;
+  avatarUrl: string;
+  bio: string;
+  level: number;
+  levelName: string;
+}
+
+export function buildProfileShareData(user: ProfileShareInput): ShareData {
+  const trimmedBio = user.bio.trim();
+  const description = trimmedBio.length > 0
+    ? trimmedBio
+    : `LV.${user.level} · ${user.levelName}`;
+  return {
+    title: `${user.nickname} (@${user.handle})`,
+    description,
+    imageUrl: user.avatarUrl,
+    url: `${shareOrigin()}/user/${user.id}`,
+  };
+}
