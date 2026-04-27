@@ -89,7 +89,14 @@ export const useHomeStore = defineStore('home', {
       this.loading = true;
       this.error = null;
       try {
-        const params: Record<string, string | number> = { scope: this.scope };
+        // 작품 탭(selectedWorkId !== null) 에서는 segmented 가 UI 상 숨겨지고
+        // "그 작품의 trending places" 만 보여주는 단일 모드. state.scope 는
+        // 모두 탭으로 복귀했을 때 사용자의 직전 선택을 복원하기 위해 그대로
+        // 보존하되, 서버 호출에는 항상 TRENDING 을 보낸다 — POPULAR_WORKS 로
+        // 작품 탭 들어왔을 때 백엔드가 잘못된 scope 를 보고 엉뚱한 정렬을
+        // 반환하던 버그(작품 탭에서 모든 작품 카드가 보이던 케이스) 를 차단.
+        const effectiveScope = this.selectedWorkId !== null ? 'TRENDING' : this.scope;
+        const params: Record<string, string | number> = { scope: effectiveScope };
         if (this.selectedWorkId !== null) params.workId = this.selectedWorkId;
         if (typeof opts.lat === 'number') params.lat = opts.lat;
         if (typeof opts.lng === 'number') params.lng = opts.lng;
