@@ -32,15 +32,6 @@
           <div class="stat clickable" data-testid="profile-following-stat" @click="onOpenFollowing"><div class="n">{{ formatCount(stats.followingCount) }}</div><div class="l">팔로잉</div></div>
         </section>
 
-        <section class="cta">
-          <button class="btn primary" type="button" @click="onEdit">
-            <ion-icon :icon="createOutline" class="ic-16" />프로필 편집
-          </button>
-          <button class="btn" type="button" @click="onShare">
-            <ion-icon :icon="shareSocialOutline" class="ic-16" />공유
-          </button>
-        </section>
-
         <section class="mini-map">
           <div
             v-for="(p, i) in miniMapPins"
@@ -213,6 +204,79 @@
 
     </ion-content>
     <FrTabBar :model-value="'me'" />
+
+    <!-- 우상단 menu 아이콘으로 여는 액션 시트. Ionic actionSheetController 는
+         header 에 아이콘을 꽂을 슬롯이 없어 ShareSheet 와 같은 Teleport 기반
+         커스텀 시트로 대체. 취소 버튼은 별도 행 대신 헤더 우상단 X 아이콘으로
+         일원화. 백드롭 탭으로도 닫힘. -->
+    <Teleport to="body">
+      <Transition name="pf-backdrop-fade">
+        <div
+          v-if="menuOpen"
+          class="pf-backdrop"
+          data-testid="profile-menu-backdrop"
+          @click="closeMenu"
+        />
+      </Transition>
+      <Transition name="pf-sheet-slide">
+        <div
+          v-if="menuOpen"
+          class="pf-sheet"
+          role="dialog"
+          aria-label="프로필 메뉴"
+          data-testid="profile-menu-sheet"
+        >
+          <header class="pf-sheet-head">
+            <h2>프로필</h2>
+            <button
+              type="button"
+              class="pf-sheet-close"
+              aria-label="닫기"
+              data-testid="profile-menu-close"
+              @click="closeMenu"
+            >
+              <ion-icon :icon="closeOutline" class="ic-22" />
+            </button>
+          </header>
+
+          <div class="pf-sheet-body">
+            <button
+              type="button"
+              class="pf-sheet-row"
+              data-testid="profile-menu-edit"
+              @click="onEditAndClose"
+            >
+              <span class="pf-sheet-ico">
+                <ion-icon :icon="createOutline" class="ic-20" />
+              </span>
+              <span class="pf-sheet-label">프로필 편집</span>
+            </button>
+            <button
+              type="button"
+              class="pf-sheet-row"
+              data-testid="profile-menu-share"
+              @click="onShareAndClose"
+            >
+              <span class="pf-sheet-ico">
+                <ion-icon :icon="shareSocialOutline" class="ic-20" />
+              </span>
+              <span class="pf-sheet-label">공유</span>
+            </button>
+            <button
+              type="button"
+              class="pf-sheet-row danger"
+              data-testid="profile-menu-logout"
+              @click="onLogoutAndClose"
+            >
+              <span class="pf-sheet-ico">
+                <ion-icon :icon="logOutOutline" class="ic-20" />
+              </span>
+              <span class="pf-sheet-label">로그아웃</span>
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </ion-page>
 </template>
 
@@ -222,7 +286,6 @@ import {
   IonPage,
   IonContent,
   IonIcon,
-  actionSheetController,
   onIonViewWillEnter,
 } from '@ionic/vue';
 import {
@@ -239,6 +302,7 @@ import {
   logOutOutline,
   trophyOutline,
   addOutline,
+  closeOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -406,22 +470,33 @@ function onShare(): void {
   uiStore.openShareSheet(buildProfileShareData(user.value));
 }
 
-async function onMenu(): Promise<void> {
-  const sheet = await actionSheetController.create({
-    header: '계정',
-    buttons: [
-      {
-        text: '로그아웃',
-        role: 'destructive',
-        icon: logOutOutline,
-        handler: () => {
-          void handleLogout();
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
+// 우상단 menu 버튼이 토글하는 커스텀 시트의 open 상태. 취소 버튼은 별도
+// 행으로 두지 않고 헤더 우상단 X 아이콘 + 백드롭 탭으로 일원화.
+const menuOpen = ref(false);
+
+function onMenu(): void {
+  menuOpen.value = true;
+}
+
+function closeMenu(): void {
+  menuOpen.value = false;
+}
+
+// 각 액션은 시트를 먼저 닫고 → 동작 호출. 라우팅/공유 시트가 떠 있는 메뉴
+// 시트에 가려지지 않게 하기 위함.
+async function onEditAndClose(): Promise<void> {
+  closeMenu();
+  await onEdit();
+}
+
+function onShareAndClose(): void {
+  closeMenu();
+  onShare();
+}
+
+async function onLogoutAndClose(): Promise<void> {
+  closeMenu();
+  await handleLogout();
 }
 
 async function handleLogout(): Promise<void> {
@@ -553,25 +628,6 @@ ion-content.pf-content {
 .stat .n { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--fr-ink); }
 .stat .l { font-size: 11.5px; color: var(--fr-ink-3); margin-top: 2px; }
 .stat + .stat { border-left: 1px solid var(--fr-line); }
-
-.cta {
-  padding: 16px 20px 4px;
-  display: flex;
-  gap: 8px;
-}
-.cta .btn {
-  flex: 1;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--fr-bg-muted);
-  color: var(--fr-ink);
-  font-size: 13px; font-weight: 700;
-  border: none;
-  display: flex; align-items: center; justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.cta .btn.primary { background: var(--fr-primary); color: #ffffff; }
 
 .mini-map {
   margin: 18px 20px 0;
@@ -893,6 +949,130 @@ ion-content.pf-content {
   background: var(--fr-primary);
   color: #ffffff;
   box-shadow: 0 6px 16px rgba(20, 188, 237, 0.3);
+}
+
+/* ---------- 우상단 menu 시트 ----------
+   z-index 60/70 — 글로벌 ShareSheet (80/90) 보다 한 단 아래로 둬, 공유 행
+   탭 시 menu 가 leave 트랜지션 중이어도 위로 올라오는 ShareSheet 가 가려지지
+   않게 한다. App.vue 에 먼저 마운트된 ShareSheet 의 teleport 노드가 DOM 상
+   더 앞에 있어 동일 z-index 면 menu 가 위로 그려지던 버그가 있었음. */
+.pf-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 23, 42, 0.5);
+}
+.pf-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  background: #ffffff;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.18);
+}
+.pf-sheet-slide-enter-from,
+.pf-sheet-slide-leave-to {
+  transform: translateY(100%);
+}
+.pf-sheet-slide-enter-active,
+.pf-sheet-slide-leave-active {
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pf-backdrop-fade-enter-from,
+.pf-backdrop-fade-leave-to {
+  opacity: 0;
+}
+.pf-backdrop-fade-enter-active,
+.pf-backdrop-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.pf-sheet-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 12px;
+}
+.pf-sheet-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink-3);
+}
+.pf-sheet-close {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--fr-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.pf-sheet-close:hover,
+.pf-sheet-close:active {
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink);
+}
+
+.pf-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+.pf-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 56px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.pf-sheet-row:hover,
+.pf-sheet-row:active {
+  background: var(--fr-bg-muted);
+}
+.pf-sheet-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink);
+}
+.pf-sheet-label {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.pf-sheet-row.danger .pf-sheet-ico {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--fr-coral, #ef4444);
+}
+.pf-sheet-row.danger .pf-sheet-label {
+  color: var(--fr-coral, #ef4444);
 }
 
 </style>

@@ -6,7 +6,8 @@ export interface ProfileUser {
   nickname: string;
   handle: string;
   avatarUrl: string;
-  bio: string;
+  // bio 미설정 사용자는 서버가 null 을 내려보낸다. 사용처에서 `?? ''` 로 폴백.
+  bio: string | null;
   level: number;
   levelName: string;
   points: number;

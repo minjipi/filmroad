@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
 // Route the api mock by URL so the task-#41 refetch-on-entry flow
@@ -179,6 +179,14 @@ describe('ProfilePage.vue', () => {
     apiGetMock.mockReset();
   });
 
+  afterEach(() => {
+    // Teleport("body") 로 들어간 시트/백드롭은 wrapper 가 언마운트돼도 jsdom 에
+    // 그대로 남는다. 다음 테스트가 "닫혀 있음" 전제를 깔 수 있게 수동 청소.
+    document.body
+      .querySelectorAll('[data-testid="profile-menu-sheet"], [data-testid="profile-menu-backdrop"]')
+      .forEach((el) => el.remove());
+  });
+
   it('renders the profile card with nickname, handle and level pill', async () => {
     const { wrapper } = mountProfile();
     await flushPromises();
@@ -202,6 +210,83 @@ describe('ProfilePage.vue', () => {
     expect(numbers).toEqual(['42', '186', '1.2k', '234']);
     const labels = stats.map((s) => s.find('.l').text());
     expect(labels).toEqual(['방문 성지', '인증샷', '팔로워', '팔로잉']);
+  });
+
+  it('does not render the .cta section (편집/공유는 상단 메뉴 시트로 이전)', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    // 화면 중앙의 .cta 행이 사라졌는지 확인. 액션은 우상단 menu 아이콘 시트로 이전됐다.
+    expect(wrapper.find('.cta').exists()).toBe(false);
+    expect(wrapper.find('section.cta').exists()).toBe(false);
+  });
+
+  it('menu sheet is hidden by default; tapping menu button opens it with edit/share/logout rows', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    // 닫혀 있을 땐 sheet/backdrop 둘 다 DOM 에 없음 (Teleport + v-if).
+    expect(document.body.querySelector('[data-testid="profile-menu-sheet"]')).toBeNull();
+
+    await wrapper.find('button[aria-label="menu"]').trigger('click');
+    await flushPromises();
+
+    const sheet = document.body.querySelector('[data-testid="profile-menu-sheet"]');
+    expect(sheet).not.toBeNull();
+    // 4개 요소: 닫기 X + 편집 / 공유 / 로그아웃.
+    expect(sheet?.querySelector('[data-testid="profile-menu-close"]')).not.toBeNull();
+    expect(sheet?.querySelector('[data-testid="profile-menu-edit"]')).not.toBeNull();
+    expect(sheet?.querySelector('[data-testid="profile-menu-share"]')).not.toBeNull();
+    expect(sheet?.querySelector('[data-testid="profile-menu-logout"]')).not.toBeNull();
+  });
+
+  it('menu sheet X icon closes the sheet (취소가 아이콘으로 일원화됨)', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    await wrapper.find('button[aria-label="menu"]').trigger('click');
+    await flushPromises();
+
+    const closeBtn = document.body.querySelector<HTMLButtonElement>('[data-testid="profile-menu-close"]');
+    expect(closeBtn).not.toBeNull();
+    closeBtn!.click();
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="profile-menu-sheet"]')).toBeNull();
+  });
+
+  it('menu sheet edit row pushes /profile/edit and closes the sheet', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    await wrapper.find('button[aria-label="menu"]').trigger('click');
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const editBtn = document.body.querySelector<HTMLButtonElement>('[data-testid="profile-menu-edit"]');
+    editBtn!.click();
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith('/profile/edit');
+    expect(document.body.querySelector('[data-testid="profile-menu-sheet"]')).toBeNull();
+  });
+
+  it('menu sheet share row opens ShareSheet with profile data and closes the sheet', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    await wrapper.find('button[aria-label="menu"]').trigger('click');
+    await flushPromises();
+
+    const { useUiStore } = await import('@/stores/ui');
+    const ui = useUiStore();
+    const openSpy = vi.spyOn(ui, 'openShareSheet');
+
+    const shareBtn = document.body.querySelector<HTMLButtonElement>('[data-testid="profile-menu-share"]');
+    shareBtn!.click();
+    await flushPromises();
+
+    expect(openSpy).toHaveBeenCalled();
+    expect(openSpy.mock.calls[0][0]).toMatchObject({
+      title: expect.stringContaining('김미루'),
+      url: expect.stringMatching(/\/user\/\d+$/),
+    });
+    expect(document.body.querySelector('[data-testid="profile-menu-sheet"]')).toBeNull();
   });
 
   it('renders one .mini-pin per miniMapPins entry with its variant class', async () => {
