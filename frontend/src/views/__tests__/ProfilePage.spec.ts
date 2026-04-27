@@ -167,6 +167,18 @@ function mountProfile(
       },
       saved: overrides.savedState ?? { ...savedSeedState },
     },
+    // VisitMap 은 onMounted 에서 Kakao SDK 를 동적 로드하는데, jsdom 에서는
+    // 키 없음으로 reject 또는 onerror 흐름을 타게 된다. 프로필 페이지 단위
+    // 테스트는 VisitMap 의 wiring(pins prop / @open) 만 보면 충분하므로
+    // 가벼운 stub 으로 대체 — 실 동작은 별도 VisitMap.spec.ts 에서 검증.
+    stubs: {
+      VisitMap: {
+        props: ['pins'],
+        emits: ['open'],
+        template:
+          '<section data-testid="visit-map" :data-pin-count="pins.length"><button data-testid="visit-map-overlay" type="button" @click="$emit(\'open\')">overlay</button></section>',
+      },
+    },
   });
 }
 
@@ -289,15 +301,23 @@ describe('ProfilePage.vue', () => {
     expect(document.body.querySelector('[data-testid="profile-menu-sheet"]')).toBeNull();
   });
 
-  it('renders one .mini-pin per miniMapPins entry with its variant class', async () => {
+  it('mounts VisitMap with all visited pins (no client-side cap)', async () => {
     const { wrapper } = mountProfile();
     await flushPromises();
+    const visitMap = wrapper.find('[data-testid="visit-map"]');
+    expect(visitMap.exists()).toBe(true);
+    // miniMapPins 길이 (3) 가 그대로 prop 으로 흐르는지 확인 — 백엔드 cap 제거
+    // 후 실제 방문 곳 수와 정확히 일치해야 한다.
+    expect(visitMap.attributes('data-pin-count')).toBe('3');
+  });
 
-    const pins = wrapper.findAll('.mini-pin');
-    expect(pins.length).toBe(3);
-    expect(pins[0].classes()).toContain('PRIMARY');
-    expect(pins[1].classes()).toContain('VIOLET');
-    expect(pins[2].classes()).toContain('MINT');
+  it('VisitMap @open routes to /map (지도로 보기)', async () => {
+    const { wrapper } = mountProfile();
+    await flushPromises();
+    pushSpy.mockClear();
+    await wrapper.find('[data-testid="visit-map-overlay"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/map');
   });
 
   it('all three local tabs stay in-place — photos / stampbook / saved (task #36)', async () => {
@@ -595,12 +615,7 @@ describe('ProfilePage.vue', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('"지도로 보기" overlay link pushes /map', async () => {
-    const { wrapper } = mountProfile();
-    await flushPromises();
-
-    await wrapper.find('.map-overlay .r').trigger('click');
-    await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith('/map');
-  });
+  // "지도로 보기" 라우팅은 이제 VisitMap @open 으로 흐른다 — 해당 검증은
+  // "VisitMap @open routes to /map" 테스트에서 대체. 옛 .map-overlay 셀렉터는
+  // 컴포넌트 분리로 ProfilePage 트리에 더이상 존재하지 않음.
 });
