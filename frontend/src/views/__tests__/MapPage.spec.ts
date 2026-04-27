@@ -480,8 +480,29 @@ describe('MapPage.vue', () => {
     const { wrapper, store } = mountMapPage();
     await flushPromises();
     const chips = wrapper.findAll('.filter-chip');
-    // [성지, 방문완료, 저장한 곳, 도깨비]
-    await chips[1].trigger('click');
+    // [성지, 저장한 곳, 방문완료] — 작품 chip(도깨비)은 시트로 이전.
+    expect(chips.length).toBe(3);
+    await chips[2].trigger('click');
     expect(store.filter).toBe('VISITED');
+  });
+
+  it('필터 버튼: 활성 시트 필터가 없으면 뱃지가 안 보인다', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="filters-btn"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="filter-badge"]').exists()).toBe(false);
+  });
+
+  it('필터 버튼: 시트 필터 활성 그룹 수가 뱃지로 노출된다', async () => {
+    const { wrapper, store } = mountMapPage();
+    await flushPromises();
+
+    store.setSheetFilters({ workIds: [1], regions: ['강릉시'] });
+    await flushPromises();
+
+    const badge = wrapper.find('[data-testid="filter-badge"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toBe('2');
   });
 });
