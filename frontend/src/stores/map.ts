@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useSavedStore } from '@/stores/saved';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export interface MapMarker {
   id: number;
@@ -27,6 +29,8 @@ export interface PlaceDetail {
   likeCount: number;
   rating: number;
   distanceKm: number | null;
+  /** viewer 가 좋아요 눌렀는지. 비로그인은 false. 시트의 하트 아이콘 채움/외곽 분기. */
+  liked: boolean;
 }
 
 export interface MapResponse {
@@ -292,6 +296,7 @@ export const useMapStore = defineStore('map', {
           likeCount: prev?.likeCount ?? 0,
           rating: prev?.rating ?? 0,
           distanceKm: hit.distanceKm,
+          liked: prev?.liked ?? false,
         };
         // Zoom into the picked place and remember we've left the country view.
         this.center = { lat: hit.latitude, lng: hit.longitude };
@@ -383,10 +388,39 @@ export const useMapStore = defineStore('map', {
         likeCount: 0,
         rating: 0,
         distanceKm: next.distanceKm,
+        liked: false,
       };
     },
     markVisited(id: number): void {
       if (!this.visitedIds.includes(id)) this.visitedIds.push(id);
+    },
+    /**
+     * 시트 하트 아이콘 토글. HomeStore.toggleLike 와 동일 패턴 — optimistic 으로
+     * 먼저 뒤집고, 응답이 오면 서버 진실로 덮어쓰고, 실패 시 롤백. 비로그인은
+     * 로그인 프롬프트로 우회. 시트는 단일 place 만 보여주므로 selected 만 갱신.
+     */
+    async toggleLike(placeId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.');
+        return;
+      }
+      const target = this.selected;
+      if (!target || target.id !== placeId) return;
+      const prevLiked = target.liked;
+      const prevLikeCount = target.likeCount;
+      target.liked = !prevLiked;
+      target.likeCount = prevLikeCount + (target.liked ? 1 : -1);
+      try {
+        const { data } = await api.post<{ liked: boolean; likeCount: number }>(
+          `/api/places/${placeId}/like`,
+        );
+        target.liked = data.liked;
+        target.likeCount = data.likeCount;
+      } catch (e) {
+        target.liked = prevLiked;
+        target.likeCount = prevLikeCount;
+        this.error = e instanceof Error ? e.message : '좋아요를 저장하지 못했어요';
+      }
     },
   },
 });

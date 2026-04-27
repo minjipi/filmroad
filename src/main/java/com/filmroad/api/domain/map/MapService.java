@@ -1,8 +1,10 @@
 package com.filmroad.api.domain.map;
 
+import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.common.util.GeoUtils;
+import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.map.dto.MapMarkerDto;
 import com.filmroad.api.domain.map.dto.MapResponse;
 import com.filmroad.api.domain.map.dto.PlaceDetailDto;
@@ -33,6 +35,8 @@ public class MapService {
     private int nationwideMarkerLimit;
 
     private final PlaceRepository placeRepository;
+    private final PlaceLikeRepository placeLikeRepository;
+    private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
     public MapResponse getMap(Double lat, Double lng, Long workId, String q, Long selectedId,
@@ -84,7 +88,14 @@ public class MapService {
         if (chosen == null && !visiblePlaces.isEmpty()) {
             chosen = visiblePlaces.get(0);
         }
-        return chosen == null ? null : PlaceDetailDto.of(chosen, distanceKm(lat, lng, chosen));
+        if (chosen == null) {
+            return null;
+        }
+        // viewer 의 좋아요 여부 — 비로그인은 false. 단일 place 라 한 번의 exists 쿼리로 충분.
+        Long viewerId = currentUser.currentUserIdOrNull();
+        boolean liked = viewerId != null
+                && placeLikeRepository.existsByUserIdAndPlaceId(viewerId, chosen.getId());
+        return PlaceDetailDto.of(chosen, distanceKm(lat, lng, chosen), liked);
     }
 
     private static Double distanceKm(Double lat, Double lng, Place place) {

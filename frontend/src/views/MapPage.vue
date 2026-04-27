@@ -156,12 +156,24 @@
             </div>
             <div class="sheet-meta">
               <div class="stat-row">
-                <span class="s">
+                <button
+                  type="button"
+                  class="s"
+                  data-testid="sheet-photo-stat"
+                  aria-label="인증샷 갤러리 보기"
+                  @click="onOpenGallery"
+                >
                   <ion-icon :icon="cameraOutline" class="ic-16" />{{ formatCount(selected.photoCount) }}
-                </span>
-                <span class="s">
-                  <ion-icon :icon="heartOutline" class="ic-16" />{{ formatCount(selected.likeCount) }}
-                </span>
+                </button>
+                <button
+                  type="button"
+                  :class="['s', selected.liked ? 'liked' : '']"
+                  data-testid="sheet-like-stat"
+                  :aria-label="selected.liked ? '좋아요 취소' : '좋아요'"
+                  @click="onToggleLike"
+                >
+                  <ion-icon :icon="selected.liked ? heart : heartOutline" class="ic-16" />{{ formatCount(selected.likeCount) }}
+                </button>
                 <span class="s star">
                   <ion-icon :icon="star" class="ic-16" />{{ selected.rating.toFixed(1) }}
                 </span>
@@ -330,6 +342,7 @@ import {
   checkmark,
   chevronBack,
   cameraOutline,
+  heart,
   heartOutline,
   bookmark,
   bookmarkOutline,
@@ -657,6 +670,17 @@ async function onToggleSave(): Promise<void> {
 async function onOpenDetail(): Promise<void> {
   if (!selected.value) return;
   await router.push(`/place/${selected.value.id}`);
+}
+
+async function onOpenGallery(): Promise<void> {
+  if (!selected.value) return;
+  await router.push(`/gallery/${selected.value.id}`);
+}
+
+async function onToggleLike(): Promise<void> {
+  if (!selected.value) return;
+  await mapStore.toggleLike(selected.value.id);
+  if (mapStore.error) await showError(mapStore.error);
 }
 
 // roadAddress 우선, 없으면 jibun. clipboard 가 막힌 환경(HTTP 페이지 / 권한
@@ -1016,7 +1040,24 @@ ion-content.map-content {
   font-size: 11px;
   color: var(--fr-ink-3);
 }
-.stat-row .s { display: flex; align-items: center; gap: 3px; }
+/* photoCount / liked 셀은 button 으로 바뀌어 클릭 가능. 시각적으로는 기존
+   span 과 동일해야 해서 background/border 를 모두 0 으로 두고 span.s 와
+   같은 inline-flex 배치만 유지. */
+.stat-row .s {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.stat-row button.s:focus-visible { outline: 2px solid var(--fr-primary); outline-offset: 2px; border-radius: 4px; }
+.stat-row .s.liked { color: var(--fr-primary); }
+.stat-row .s.liked ion-icon { color: var(--fr-primary); }
+.stat-row .s.star { cursor: default; }
 .stat-row .s.star ion-icon { color: var(--fr-amber); }
 .preview-sub {
   font-size: 11.5px;
