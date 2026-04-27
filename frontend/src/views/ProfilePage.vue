@@ -32,20 +32,7 @@
           <div class="stat clickable" data-testid="profile-following-stat" @click="onOpenFollowing"><div class="n">{{ formatCount(stats.followingCount) }}</div><div class="l">팔로잉</div></div>
         </section>
 
-        <section class="mini-map">
-          <div
-            v-for="(p, i) in miniMapPins"
-            :key="i"
-            :class="['mini-pin', p.variant]"
-            :style="pinStyle(p)"
-          />
-          <div class="map-overlay">
-            <span class="l">
-              <ion-icon :icon="locationOutline" class="ic-16" />전국 {{ stats?.visitedCount ?? 0 }}곳 방문
-            </span>
-            <span class="r" @click="onOpenMap">지도로 보기<ion-icon :icon="chevronForwardOutline" class="ic-16" /></span>
-          </div>
-        </section>
+        <VisitMap :pins="miniMapPins" @open="onOpenMap" />
 
         <nav class="local-tabs">
           <div
@@ -295,7 +282,6 @@ import {
   star,
   createOutline,
   locationOutline,
-  chevronForwardOutline,
   gridOutline,
   ribbonOutline,
   bookmarkOutline,
@@ -306,7 +292,8 @@ import {
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useProfileStore, type MiniMapPin } from '@/stores/profile';
+import { useProfileStore } from '@/stores/profile';
+import VisitMap from '@/components/profile/VisitMap.vue';
 import { useStampbookStore } from '@/stores/stampbook';
 import { useSavedStore } from '@/stores/saved';
 import { useAuthStore } from '@/stores/auth';
@@ -346,32 +333,6 @@ const handleLabel = computed(() => {
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
-}
-
-const MAP_PAD_DEG = 0.5;
-const bounds = computed(() => {
-  const ms = miniMapPins.value;
-  if (ms.length === 0) {
-    return { minLat: 0, maxLat: 1, minLng: 0, maxLng: 1 };
-  }
-  const lats = ms.map((m) => m.latitude);
-  const lngs = ms.map((m) => m.longitude);
-  return {
-    minLat: Math.min(...lats) - MAP_PAD_DEG,
-    maxLat: Math.max(...lats) + MAP_PAD_DEG,
-    minLng: Math.min(...lngs) - MAP_PAD_DEG,
-    maxLng: Math.max(...lngs) + MAP_PAD_DEG,
-  };
-});
-
-function pinStyle(p: MiniMapPin): Record<string, string> {
-  const b = bounds.value;
-  const x = (p.longitude - b.minLng) / Math.max(b.maxLng - b.minLng, 0.0001);
-  const y = 1 - (p.latitude - b.minLat) / Math.max(b.maxLat - b.minLat, 0.0001);
-  return {
-    left: `${(x * 100).toFixed(2)}%`,
-    top: `${(y * 100).toFixed(2)}%`,
-  };
 }
 
 // task #35: PLACEHOLDER_IMAGES / gridCells were removed. Photos tab now
@@ -629,62 +590,9 @@ ion-content.pf-content {
 .stat .l { font-size: 11.5px; color: var(--fr-ink-3); margin-top: 2px; }
 .stat + .stat { border-left: 1px solid var(--fr-line); }
 
-.mini-map {
-  margin: 18px 20px 0;
-  height: 160px;
-  border-radius: 18px;
-  overflow: hidden;
-  position: relative;
-  background:
-    radial-gradient(circle at 20% 40%, #e6eef7 0%, transparent 50%),
-    radial-gradient(circle at 70% 60%, #dde9f2 0%, transparent 60%),
-    linear-gradient(180deg, #eef3f8, #e3ecf4);
-  border: 1px solid var(--fr-line);
-}
-.mini-map::before {
-  content: '';
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-  background-size: 30px 30px;
-}
-.mini-pin {
-  position: absolute;
-  width: 16px; height: 16px;
-  border-radius: 50% 50% 50% 0;
-  transform: translate(-50%, -100%) rotate(-45deg);
-}
-.mini-pin.PRIMARY { background: var(--fr-primary); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
-.mini-pin.VIOLET { background: var(--fr-violet); }
-.mini-pin.MINT { background: var(--fr-mint); }
-
-.map-overlay {
-  position: absolute;
-  left: 14px; right: 14px; bottom: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.map-overlay .l {
-  background: rgba(15, 23, 42, 0.85);
-  color: #ffffff;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 11px; font-weight: 700;
-  backdrop-filter: blur(6px);
-  display: flex; align-items: center; gap: 4px;
-}
-.map-overlay .r {
-  background: #ffffff;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 11px; font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  display: flex; align-items: center; gap: 4px;
-  cursor: pointer;
-  color: var(--fr-ink);
-}
+/* .cta (편집/공유) 는 PR #42 에서 우상단 menu 시트로 이전됐고, .mini-map /
+   .mini-pin / .map-overlay 의 가짜 지도 스타일은 VisitMap 컴포넌트로 이전돼
+   여기서는 모두 제거. */
 
 .local-tabs {
   padding: 20px 20px 12px;

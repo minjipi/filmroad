@@ -27,14 +27,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
-    private static final int MINI_MAP_PIN_LIMIT = 7;
-    private static final String[] PIN_VARIANTS = {"PRIMARY", "VIOLET", "MINT"};
+    // 프로필 mini-map 은 사용자가 방문한 모든 성지 좌표를 펼쳐 보여 준다 — 별도
+    // cap 없이 전체 stamp 를 뿌리고, 프론트에서 setBounds 로 핀이 모두 보이게 줌을
+    // 자동 맞춘다. 핀 색은 "방문" 단일 카테고리라 PRIMARY 한 색만 사용.
+    private static final String DEFAULT_PIN_VARIANT = "PRIMARY";
     // ProfilePage 인증샷 grid 기본값 / 상한. 60 까지로 제한해 infinite scroll 페이지당 부담을 제한.
     private static final int MY_PHOTOS_DEFAULT_LIMIT = 30;
     private static final int MY_PHOTOS_MAX_LIMIT = 60;
@@ -58,15 +59,12 @@ public class UserService {
         long visitedCount = stampRepository.countByUserId(userId);
 
         List<Stamp> recent = stampRepository.findByUserIdOrderByAcquiredAtDesc(userId);
-        List<MiniMapPinDto> pins = IntStream.range(0, Math.min(recent.size(), MINI_MAP_PIN_LIMIT))
-                .mapToObj(i -> {
-                    Stamp s = recent.get(i);
-                    return MiniMapPinDto.builder()
-                            .latitude(s.getPlace().getLatitude())
-                            .longitude(s.getPlace().getLongitude())
-                            .variant(PIN_VARIANTS[i % PIN_VARIANTS.length])
-                            .build();
-                })
+        List<MiniMapPinDto> pins = recent.stream()
+                .map(s -> MiniMapPinDto.builder()
+                        .latitude(s.getPlace().getLatitude())
+                        .longitude(s.getPlace().getLongitude())
+                        .variant(DEFAULT_PIN_VARIANT)
+                        .build())
                 .toList();
 
         ProfileStatsDto stats = ProfileStatsDto.builder()
