@@ -355,13 +355,12 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/photos returns stamp + reward deltas including pointsEarned=50")
+    @DisplayName("POST /api/photos — gpsScore 가 임계 이상이면 stamp + reward (pointsEarned=50) 발급")
     void upload_returnsStampAndReward() throws Exception {
-        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false, null, null);
-
+        // 시드 place 10 의 좌표(37.8928, 128.8347) 와 동일하게 보내 gpsScore=100 → 인증 통과.
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
-                        .file(buildMeta(req))
+                        .file(buildMetaWithCoords(10L, 37.8928, 128.8347))
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.stamp.workTitle", is("도깨비")))
@@ -454,18 +453,17 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/photos — 3장 업로드해도 points 는 한 batch 당 +50 한 번만")
+    @DisplayName("POST /api/photos — 3장 업로드해도 points 는 한 batch 당 +50 한 번만 (인증 통과 좌표)")
     void upload_grantsRewardOnlyOnceForBatch() throws Exception {
-        PhotoUploadRequest req = new PhotoUploadRequest(10L, null, null, PhotoVisibility.PUBLIC, false, null, null);
-
         com.filmroad.api.domain.user.User before = userRepository.findById(1L).orElseThrow();
         int pointsBefore = before.getPoints();
 
+        // place 10 좌표 → gpsScore=100 → 인증 통과. 멀티 업로드 보상 정책 검증의 의미가 살아남.
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage("a.jpg"))
                         .file(buildImage("b.jpg"))
                         .file(buildImage("c.jpg"))
-                        .file(buildMeta(req))
+                        .file(buildMetaWithCoords(10L, 37.8928, 128.8347))
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.reward.pointsEarned", is(50)));
@@ -537,8 +535,13 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("C2: 좌표 누락(null/null) → gpsScore=0, capturedLatitude null, 업로드/스탬프/리워드 정상")
-    void upload_withoutCoords_gpsZeroButUploadOk() throws Exception {
+    @DisplayName("C2: 좌표 누락(null/null) → 사진은 업로드되지만 gpsScore=0 → stamp/reward 미발급")
+    void upload_withoutCoords_gpsZeroAndNoReward() throws Exception {
+        // 좌표 없는 업로드는 gpsScore 0 → 인증 임계 미달 → 보상 통째로 스킵.
+        // 부정 사용자가 "GPS 안 보내고 보상은 챙긴다" 우회를 막는 핵심 가드.
+        com.filmroad.api.domain.user.User before = userRepository.findById(1L).orElseThrow();
+        int pointsBefore = before.getPoints();
+
         mockMvc.perform(multipart("/api/photos")
                         .file(buildImage())
                         .file(buildMetaWithCoords(10L, null, null))
@@ -547,8 +550,29 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.gpsScore", is(0)))
                 .andExpect(jsonPath("$.results.capturedLatitude").doesNotExist())
                 .andExpect(jsonPath("$.results.capturedLongitude").doesNotExist())
-                .andExpect(jsonPath("$.results.reward.pointsEarned", is(50)))
-                .andExpect(jsonPath("$.results.stamp.workTitle", is("도깨비")));
+                // stamp / reward 응답이 통째로 null — FE 가 "보상 없는 업로드" 분기 탐.
+                .andExpect(jsonPath("$.results.stamp").doesNotExist())
+                .andExpect(jsonPath("$.results.reward").doesNotExist());
+
+        // 사용자 points 도 그대로.
+        com.filmroad.api.domain.user.User after = userRepository.findById(1L).orElseThrow();
+        assertThat(after.getPoints())
+                .as("GPS 미통과 업로드는 points 누적도 안 됨")
+                .isEqualTo(pointsBefore);
+    }
+
+    @Test
+    @DisplayName("POST /api/photos — 임계 밖(다른 도시) 좌표면 stamp/reward 미발급")
+    void upload_farFromPlace_skipsStampAndReward() throws Exception {
+        // place 10 = (37.8928, 128.8347). 0.1° 차이는 약 11km — 1km cutoff 도 한참 밖이라 gpsScore=0.
+        mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage())
+                        .file(buildMetaWithCoords(10L, 37.9928, 128.8347))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.gpsScore", lessThan(50)))
+                .andExpect(jsonPath("$.results.stamp").doesNotExist())
+                .andExpect(jsonPath("$.results.reward").doesNotExist());
     }
 
     @Test
