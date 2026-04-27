@@ -224,20 +224,29 @@ public class PhotoUploadService {
         return PhotoUploadResponse.of(savedPost, stampReward, rewardDelta);
     }
 
+    // 지원 포맷 안내 — 토스트로 그대로 노출되어 사용자가 다음 행동(다른 파일
+    // 선택 / iPhone 카메라 호환 모드 전환) 을 결정할 수 있게 함. iPhone 사용자가
+    // 가장 자주 만나는 HEIC 케이스를 메시지에 명시.
+    private static final String UNSUPPORTED_FORMAT_MSG =
+            "JPG, PNG, WebP 만 업로드할 수 있어요. " +
+            "iPhone 사진(HEIC) 은 설정 → 카메라 → 포맷 → '높은 호환성' 으로 바꾼 뒤 다시 시도해 주세요.";
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
         }
         String extension = extractExtension(file.getOriginalFilename());
         if (!EXT_SAFE.matcher(extension).matches() || !ALLOWED_EXTENSIONS.contains(extension)) {
-            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
+            throw new BaseException(BaseResponseStatus.INVALID_FILE_TYPE, UNSUPPORTED_FORMAT_MSG);
         }
         String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
+            throw new BaseException(BaseResponseStatus.INVALID_FILE_TYPE, UNSUPPORTED_FORMAT_MSG);
         }
+        // 매직 바이트 단계에서 잡히는 케이스(.png 확장자로 위장한 HEIC 파일 등)는
+        // 사용자에게 가장 헷갈리는 형태라 같은 안내가 핵심.
         if (!isImageMagicByteValid(file)) {
-            throw BaseException.of(BaseResponseStatus.INVALID_FILE_TYPE);
+            throw new BaseException(BaseResponseStatus.INVALID_FILE_TYPE, UNSUPPORTED_FORMAT_MSG);
         }
     }
 
