@@ -241,6 +241,32 @@ describe('ShotDetailPage.vue', () => {
     expect(user.find('.verified').exists()).toBe(true);
   });
 
+  it('author-action button is hidden when shot.author.isMe (no self follow / placeholder)', async () => {
+    // 기본 fixture 의 isMe=true — 본인 사진 컨텍스트.
+    const { wrapper } = mountPage();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="sd-author-action"]').exists()).toBe(false);
+  });
+
+  it('author-action button is visible with 팔로우/팔로잉 label when shot.author is someone else', async () => {
+    // beforeEach 가 fixture (isMe=true) 를 mockResolvedValue 로 깔아두기 때문에
+    // onMounted 의 fetch 가 initialState 를 덮어쓴다. 다른 사람 시나리오로
+    // 가려면 mock 자체를 isMe=false 인 변형으로 한 번 갈아끼우면 충분.
+    const otherUserFixture: ShotDetail = {
+      ...fixture,
+      author: { ...fixture.author, isMe: false, following: false },
+    };
+    mockApi.get.mockReset();
+    mockApi.get.mockResolvedValue({ data: otherUserFixture });
+
+    const { wrapper } = mountPage();
+    await flushPromises();
+    const btn = wrapper.find('[data-testid="sd-author-action"]');
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toBe('팔로우');
+    expect(btn.classes()).not.toContain('on');
+  });
+
   it('caption + tags render verbatim (no v-html; tags prefixed with #)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();

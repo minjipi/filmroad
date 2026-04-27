@@ -188,9 +188,12 @@
               {{ shot.place.name }} · {{ takenAtLabel }}
             </button>
           </div>
+          <!-- 작성자가 본인이면 팔로우 버튼은 의미 없으므로 숨김. 별도 "내 기록"
+               CTA 도 두지 않음 — /profile 이 사실상 그 역할을 대체한다. -->
           <button
+            v-if="!shot.author.isMe"
             type="button"
-            :class="['follow', !shot.author.isMe && shot.author.following ? 'on' : '']"
+            :class="['follow', shot.author.following ? 'on' : '']"
             data-testid="sd-author-action"
             @click="onAuthorAction"
           >
@@ -678,10 +681,10 @@ const placeSaved = computed(() =>
 
 const meAvatarUrl = computed(() => authStore.user?.avatarUrl ?? null);
 
+// 본인 사진일 땐 버튼 자체가 v-if 로 숨겨지므로 isMe 분기를 두지 않는다.
 const authorActionLabel = computed(() => {
   const a = shot.value?.author;
   if (!a) return '';
-  if (a.isMe) return '내 기록';
   return a.following ? '팔로잉' : '팔로우';
 });
 
@@ -731,13 +734,9 @@ async function onOpenAuthor(): Promise<void> {
 }
 
 async function onAuthorAction(): Promise<void> {
-  const a = shot.value?.author;
-  if (!a) return;
-  if (a.isMe) {
-    // 본인 사진 — "내 기록" 페이지로의 라우팅 / placeholder. 실 페이지 들어오기 전엔 안내.
-    await showInfo('내 기록 화면은 곧 공개됩니다');
-    return;
-  }
+  // 본인 사진은 v-if 로 버튼 자체가 안 보여 호출되지 않는 경로지만, 안전망으로
+  // shot 미로드 가드만 두고 팔로우 토글로 직진.
+  if (!shot.value?.author) return;
   await shotStore.toggleAuthorFollow();
   if (error.value) await showError(error.value);
 }
