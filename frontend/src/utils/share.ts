@@ -54,13 +54,15 @@ export interface ProfileShareInput {
   nickname: string;
   handle: string;
   avatarUrl: string;
-  bio: string;
+  // bio 미설정 사용자는 백엔드가 null 을 내려보낸다. 타입 상으로는 string 이지만
+  // 런타임은 null/undefined 일 수 있어 nullable 로 수용.
+  bio: string | null | undefined;
   level: number;
   levelName: string;
 }
 
 export function buildProfileShareData(user: ProfileShareInput): ShareData {
-  const trimmedBio = user.bio.trim();
+  const trimmedBio = (user.bio ?? '').trim();
   const description = trimmedBio.length > 0
     ? trimmedBio
     : `LV.${user.level} · ${user.levelName}`;
