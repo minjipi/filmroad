@@ -367,4 +367,116 @@ describe('map store', () => {
     store.setFilter('SAVED');
     expect(store.selected?.id).toBe(13);
   });
+
+  it('sheetFilters defaults: ALL workIds/regions empty, no distance limit, ALL visit', () => {
+    const store = useMapStore();
+    expect(store.sheetFilters.workIds).toEqual([]);
+    expect(store.sheetFilters.regions).toEqual([]);
+    expect(store.sheetFilters.maxDistanceKm).toBeNull();
+    expect(store.sheetFilters.visitStatus).toBe('ALL');
+    expect(store.activeSheetFilterCount).toBe(0);
+  });
+
+  it('setSheetFilters narrows visibleMarkers by workIds (multi)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+    expect(store.visibleMarkers.length).toBe(2);
+
+    store.setSheetFilters({ workIds: [1] });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([10]);
+
+    store.setSheetFilters({ workIds: [2] });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([13]);
+
+    store.setSheetFilters({ workIds: [1, 2] });
+    expect(store.visibleMarkers.map((m) => m.id).sort()).toEqual([10, 13]);
+  });
+
+  it('setSheetFilters narrows visibleMarkers by region first-token', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    // 강릉시 주문진읍 → "강릉시"; 서울 용산구 이태원동 → "서울".
+    store.setSheetFilters({ regions: ['서울'] });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([13]);
+  });
+
+  it('setSheetFilters maxDistanceKm filters by marker.distanceKm (null distance kept)', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    // 10 → 0.1km, 13 → 180.4km. 5km 이하만 → 10 만 통과.
+    store.setSheetFilters({ maxDistanceKm: 5 });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([10]);
+  });
+
+  it('setSheetFilters visitStatus stacks ON TOP of chip filter', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    // visitedIds 기본값 [10]. 'UNVISITED' 시트 필터 → 13 만.
+    store.setSheetFilters({ visitStatus: 'UNVISITED' });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([13]);
+
+    store.setSheetFilters({ visitStatus: 'VISITED' });
+    expect(store.visibleMarkers.map((m) => m.id)).toEqual([10]);
+  });
+
+  it('activeSheetFilterCount counts only non-default groups', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+    expect(store.activeSheetFilterCount).toBe(0);
+
+    store.setSheetFilters({ workIds: [1] });
+    expect(store.activeSheetFilterCount).toBe(1);
+
+    store.setSheetFilters({ regions: ['서울'], maxDistanceKm: 30 });
+    expect(store.activeSheetFilterCount).toBe(3);
+
+    store.resetSheetFilters();
+    expect(store.activeSheetFilterCount).toBe(0);
+  });
+
+  it('availableWorks / availableRegions derive from current markers', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    expect(store.availableWorks).toEqual([
+      { id: 1, title: '도깨비' },
+      { id: 2, title: '이태원 클라쓰' },
+    ]);
+    // 강릉시 주문진읍 → "강릉시"; 서울 용산구 이태원동 → "서울".
+    expect(store.availableRegions).toEqual(['강릉시', '서울']);
+  });
+
+  it('availableRegions normalizes 광역시도 variants (강원/강원도/강원특별자치도 → 강원)', async () => {
+    // regionLabel 데이터가 정식명·줄임명·신설 자치도명이 섞여 들어와도
+    // 같은 광역으로 dedup 돼 한 줄로만 노출.
+    mockApi.get.mockResolvedValueOnce({
+      data: {
+        markers: [
+          { id: 1, name: 'A', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원 평창', distanceKm: null },
+          { id: 2, name: 'B', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원도 강릉', distanceKm: null },
+          { id: 3, name: 'C', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원특별자치도 속초', distanceKm: null },
+          { id: 4, name: 'D', latitude: 0, longitude: 0, workId: 2, workTitle: 'Y', regionLabel: '서울특별시 종로구', distanceKm: null },
+        ],
+        selected: null,
+      },
+    });
+    const store = useMapStore();
+    await store.fetchMap();
+
+    expect(store.availableRegions).toEqual(['강원', '서울']);
+
+    // 시트에서 정규화된 "강원" 을 선택하면 raw 라벨이 "강원도", "강원특별자치도" 인
+    // marker 도 모두 통과해야 함.
+    store.setSheetFilters({ regions: ['강원'] });
+    expect(store.visibleMarkers.map((m) => m.id).sort()).toEqual([1, 2, 3]);
+  });
 });

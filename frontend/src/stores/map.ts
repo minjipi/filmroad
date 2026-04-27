@@ -36,6 +36,26 @@ export interface MapResponse {
 
 export type MapFilter = 'SPOTS' | 'VISITED' | 'SAVED';
 
+// Advanced filter sheet (필터 버튼 → 시트). chip-row 의 1차 단축 필터와는
+// 별도 차원으로 stacked AND 조합 — 예: chip "도깨비" + sheet "강원" = 도깨비
+// 촬영지 중 강원 지역만. 평점 그룹은 MapMarkerDto 에 rating 이 아직 없어
+// 다음 PR 로 미룸.
+export type VisitStatus = 'ALL' | 'VISITED' | 'UNVISITED';
+export interface MapSheetFilters {
+  workIds: number[];        // 다중 선택 (빈 배열 = 전체)
+  regions: string[];        // 다중 선택 (빈 배열 = 전국). regionLabel 의
+                            // 첫 토큰 ("강원 강릉시 주문진읍" → "강원") 매칭.
+  maxDistanceKm: number | null; // null = 전체. distanceKm 가 채워진 marker 만 비교.
+  visitStatus: VisitStatus;
+}
+
+export const DEFAULT_SHEET_FILTERS: MapSheetFilters = Object.freeze({
+  workIds: [],
+  regions: [],
+  maxDistanceKm: null,
+  visitStatus: 'ALL',
+});
+
 // Bottom-sheet snap mode. Mirrors useDraggableSheet's SHEET_CLOSED/PEEK/FULL.
 // Stored here (not local to MapPage) so the sheet's open/closed state survives
 // cross-page hops, and so other actions (selectMarker, markLastViewed, close
@@ -77,6 +97,8 @@ interface State {
   // the server. Saved-place state is the savedStore's job (task #19 unified
   // that across the app).
   visitedIds: number[];
+  // 필터 시트의 fine-grained 필터 (chip-row 1차 필터 위에 stacked AND).
+  sheetFilters: MapSheetFilters;
 }
 
 // Approximate geographic centre of South Korea (between 충북 and 경북) — picked
@@ -88,6 +110,42 @@ export const KOREA_CENTER = { lat: 36.0, lng: 127.8 };
 // level 13 clipped to roughly 서울~충청 on the same viewport which was the
 // primary trigger of task #11's "first entry shows only Seoul" bug. 5 is
 // the regional detail zoom used when the sheet shows a selected place.
+// 17개 광역시도의 정식 명칭 ↔ 줄임 표기 정규화 맵. 같은 곳을 다르게 쓰는
+// 데이터(예: "강원 강릉시" vs "강원도 강릉시")를 하나의 버킷으로 묶기 위함.
+// 시·군·구(예: "강릉시") 까지 광역 단위로 끌어올리는 역매핑은 의도적으로
+// 빼둠 — 여기에 들어오면 ~200+ 항목이라 별도 기획 필요.
+const REGION_NORMALIZE: Record<string, string> = {
+  서울: '서울', 서울특별시: '서울',
+  부산: '부산', 부산광역시: '부산',
+  대구: '대구', 대구광역시: '대구',
+  인천: '인천', 인천광역시: '인천',
+  광주: '광주', 광주광역시: '광주',
+  대전: '대전', 대전광역시: '대전',
+  울산: '울산', 울산광역시: '울산',
+  세종: '세종', 세종특별자치시: '세종',
+  경기: '경기', 경기도: '경기',
+  강원: '강원', 강원도: '강원', 강원특별자치도: '강원',
+  충북: '충북', 충청북도: '충북',
+  충남: '충남', 충청남도: '충남',
+  전북: '전북', 전라북도: '전북', 전북특별자치도: '전북',
+  전남: '전남', 전라남도: '전남',
+  경북: '경북', 경상북도: '경북',
+  경남: '경남', 경상남도: '경남',
+  제주: '제주', 제주도: '제주', 제주특별자치도: '제주',
+};
+
+// regionLabel ("강원도 강릉시 주문진읍") → 광역 토큰 ("강원"). 시트의 지역
+// 필터 + 매칭에 같은 함수 — 토크나이즈 규칙이 한 곳으로 모임. 첫 토큰이
+// 광역 명에 매칭되면 줄임 표기로 정규화, 그렇지 않으면(시·군 단독 등) 원본
+// 그대로 노출.
+export function firstRegionToken(regionLabel: string | null | undefined): string {
+  if (!regionLabel) return '';
+  const trimmed = regionLabel.trim();
+  if (trimmed.length === 0) return '';
+  const first = trimmed.split(/\s+/)[0];
+  return REGION_NORMALIZE[first] ?? first;
+}
+
 export const COUNTRY_ZOOM = 14;
 export const DETAIL_ZOOM = 5;
 const MIN_ZOOM = 1;
@@ -107,22 +165,73 @@ export const useMapStore = defineStore('map', {
     hasBeenViewed: false,
     sheetMode: 'peek',
     visitedIds: [10],
+    sheetFilters: { ...DEFAULT_SHEET_FILTERS },
   }),
   getters: {
     visibleMarkers(state): MapMarker[] {
+      // Pass 1 — chip-row 의 1차 단축 필터.
+      let pool = state.markers;
       if (state.filter === 'VISITED') {
         const v = new Set(state.visitedIds);
-        return state.markers.filter((m) => v.has(m.id));
-      }
-      if (state.filter === 'SAVED') {
+        pool = pool.filter((m) => v.has(m.id));
+      } else if (state.filter === 'SAVED') {
         // Delegate to the unified savedStore so the map filter stays in sync
         // with bookmark state from every other page (Feed / Gallery / etc.).
         const saved = useSavedStore();
-        return state.markers.filter((m) => saved.isSaved(m.id));
+        pool = pool.filter((m) => saved.isSaved(m.id));
       }
-      return state.markers;
+      // Pass 2 — 시트의 fine-grained 필터를 stacked AND 로 적용.
+      const sf = state.sheetFilters;
+      if (sf.workIds.length > 0) {
+        const ids = new Set(sf.workIds);
+        pool = pool.filter((m) => ids.has(m.workId));
+      }
+      if (sf.regions.length > 0) {
+        const regions = new Set(sf.regions);
+        // regionLabel 첫 토큰 ("강원 강릉시 …") 만 비교. 사용자는 광역 단위로
+        // 고르고 시 / 군 / 구 까진 신경 안 쓰는 게 자연스러움.
+        pool = pool.filter((m) => regions.has(firstRegionToken(m.regionLabel)));
+      }
+      if (sf.maxDistanceKm !== null) {
+        const max = sf.maxDistanceKm;
+        // distanceKm 이 null 인 marker (위치 권한 없을 때) 는 거리 필터를
+        // 통과시킴 — 강제로 떨궈 빈 결과를 만드는 것보다 lenient.
+        pool = pool.filter((m) => m.distanceKm == null || m.distanceKm <= max);
+      }
+      if (sf.visitStatus !== 'ALL') {
+        const v = new Set(state.visitedIds);
+        pool = pool.filter((m) => sf.visitStatus === 'VISITED' ? v.has(m.id) : !v.has(m.id));
+      }
+      return pool;
     },
     isVisited: (state) => (id: number): boolean => state.visitedIds.includes(id),
+    // 활성 시트 필터 그룹 수 — 0 이면 필터 버튼에 뱃지 없음.
+    activeSheetFilterCount(state): number {
+      const sf = state.sheetFilters;
+      let n = 0;
+      if (sf.workIds.length > 0) n += 1;
+      if (sf.regions.length > 0) n += 1;
+      if (sf.maxDistanceKm !== null) n += 1;
+      if (sf.visitStatus !== 'ALL') n += 1;
+      return n;
+    },
+    // 시트의 작품 picker 가 보여줄 후보 — 현재 markers 에 등장한 distinct
+    // (workId, workTitle). 동적 list 라 server round-trip 없이 가능.
+    availableWorks(state): { id: number; title: string }[] {
+      const seen = new Map<number, string>();
+      for (const m of state.markers) {
+        if (!seen.has(m.workId)) seen.set(m.workId, m.workTitle);
+      }
+      return Array.from(seen, ([id, title]) => ({ id, title }));
+    },
+    // 시트의 지역 picker 가 보여줄 후보 — 현재 markers 의 distinct 광역 토큰.
+    availableRegions(state): string[] {
+      const seen = new Set<string>();
+      for (const m of state.markers) {
+        seen.add(firstRegionToken(m.regionLabel));
+      }
+      return Array.from(seen).filter((r) => r.length > 0).sort();
+    },
   },
   actions: {
     async fetchMap(opts: FetchOptions = {}): Promise<void> {
@@ -198,6 +307,16 @@ export const useMapStore = defineStore('map', {
     },
     setFilter(f: MapFilter): void {
       this.filter = f;
+      this.reconcileSelected();
+    },
+    // 시트 적용 — partial 로 받아 기존 키를 보존. visibleMarkers 가
+    // 클라이언트 측에서 즉시 좁히므로 서버 재요청은 안 함.
+    setSheetFilters(partial: Partial<MapSheetFilters>): void {
+      this.sheetFilters = { ...this.sheetFilters, ...partial };
+      this.reconcileSelected();
+    },
+    resetSheetFilters(): void {
+      this.sheetFilters = { ...DEFAULT_SHEET_FILTERS };
       this.reconcileSelected();
     },
     async setWork(id: number | null): Promise<void> {
