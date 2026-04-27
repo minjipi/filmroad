@@ -53,6 +53,31 @@ public class RegionCodeLookup {
 
     private static final String CLASSPATH_RESOURCE = "data/koreaTourism-region-codes-raw.json";
 
+    /**
+     * 광역 정식명 ↔ 축약형. 시드 / 사용자 입력 regionLabel 이 "강원 강릉시" 처럼 축약형으로
+     * 들어오는 경우가 빈번하므로, 정확 매칭과 토큰 매칭 모두 축약형도 함께 등록한다.
+     * 한국 17개 광역 단체 모두 커버.
+     */
+    private static final Map<String, String> REGN_ABBREV = Map.ofEntries(
+            Map.entry("서울특별시", "서울"),
+            Map.entry("부산광역시", "부산"),
+            Map.entry("대구광역시", "대구"),
+            Map.entry("인천광역시", "인천"),
+            Map.entry("광주광역시", "광주"),
+            Map.entry("대전광역시", "대전"),
+            Map.entry("울산광역시", "울산"),
+            Map.entry("세종특별자치시", "세종"),
+            Map.entry("경기도", "경기"),
+            Map.entry("강원특별자치도", "강원"),
+            Map.entry("충청북도", "충북"),
+            Map.entry("충청남도", "충남"),
+            Map.entry("전북특별자치도", "전북"),
+            Map.entry("전라남도", "전남"),
+            Map.entry("경상북도", "경북"),
+            Map.entry("경상남도", "경남"),
+            Map.entry("제주특별자치도", "제주")
+    );
+
     private final ObjectMapper objectMapper;
 
     /** regionName 정확 매칭용. lookup 입력의 정규화 결과를 key 로 사용. */
@@ -80,10 +105,22 @@ public class RegionCodeLookup {
                 String siggCd = textOrNull(node.get("lDongSignguCd"));
                 if (regnNm == null || regnCd == null || siggCd == null) continue;
                 RegionCode code = new RegionCode(regnCd, siggCd);
+                String abbrev = REGN_ABBREV.get(regnNm);
+
+                // 정확 매칭: 정식명 형태 + 축약형 형태 둘 다 키로 등록.
                 String composedName = siggNm == null ? regnNm : (regnNm + " " + siggNm);
                 exact.put(normalize(composedName), code);
+                if (abbrev != null) {
+                    String composedAbbrev = siggNm == null ? abbrev : (abbrev + " " + siggNm);
+                    exact.put(normalize(composedAbbrev), code);
+                }
+
+                // 토큰 매칭: 정식명 토큰 + 축약형 토큰 둘 다 등록.
                 if (siggNm != null) {
                     tokens.putIfAbsent(new RegionTokenKey(regnNm, siggNm), code);
+                    if (abbrev != null) {
+                        tokens.putIfAbsent(new RegionTokenKey(abbrev, siggNm), code);
+                    }
                 }
             }
             this.exactByName = Map.copyOf(exact);
