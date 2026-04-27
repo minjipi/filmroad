@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>08 · 스탬프북</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .top { padding: 8px 16px; display:flex; align-items:center; gap:12px; }
+  .top h1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; margin:0; flex:1; }
+  .top button { width:36px; height:36px; border-radius:50%; background:transparent; border:none; color:var(--fr-ink-2); display:flex; align-items:center; justify-content:center; }
+
+  .hero {
+    margin: 4px 16px 0; padding: 20px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    border-radius:22px; color:white; position:relative; overflow:hidden;
+  }
+  .hero::before { content:''; position:absolute; right:-40px; top:-40px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(20,188,237,.4), transparent 60%); }
+  .hero .label { font-size:11px; opacity:.7; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; }
+  .hero h2 { font-size:24px; font-weight:800; letter-spacing:-0.03em; margin: 4px 0 10px; position:relative; }
+  .hero .meter { display:flex; gap:12px; font-size:12px; }
+  .hero .meter .d { display:flex; align-items:center; gap:4px; }
+  .hero .meter .d b { font-size:14px; font-weight:800; }
+
+  .filter-tabs { display:flex; gap:8px; padding: 18px 16px 12px; overflow-x:auto; }
+  .ft { white-space:nowrap; padding:7px 13px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--fr-bg-muted); color:var(--fr-ink-2); }
+  .ft.on { background:var(--fr-ink); color:white; }
+
+  .section-title { display:flex; justify-content:space-between; padding: 8px 20px 12px; }
+  .section-title h3 { font-size:15px; font-weight:800; margin:0; letter-spacing:-0.02em; }
+  .section-title .see { font-size:12px; font-weight:700; color:var(--fr-primary); }
+
+  /* Drama list */
+  .drama-list { padding: 0 16px 0; display:flex; flex-direction:column; gap:10px; }
+  .drama-card {
+    background:white; border:1px solid var(--fr-line); border-radius:18px;
+    padding: 14px; display:flex; align-items:center; gap:14px; position:relative; overflow:hidden;
+  }
+  .drama-poster { width:56px; height:76px; border-radius:10px; overflow:hidden; flex-shrink:0; background:#eef2f6; }
+  .drama-poster img { width:100%; height:100%; object-fit:cover; }
+  .drama-mid { flex:1; }
+  .drama-mid .t { font-size:15px; font-weight:800; letter-spacing:-0.02em; }
+  .drama-mid .s { font-size:11.5px; color:var(--fr-ink-3); margin: 2px 0 8px; }
+  .bar { height:6px; background:var(--fr-bg-muted); border-radius:999px; overflow:hidden; }
+  .bar .f { height:100%; border-radius:999px; }
+  .drama-mid .meta { display:flex; justify-content:space-between; margin-top:6px; font-size:10.5px; color:var(--fr-ink-3); font-weight:700; }
+  .completed-badge {
+    position:absolute; top:8px; right:8px;
+    background:#fff7e6; color:#d97706; font-size:10px; font-weight:800;
+    padding:3px 8px; border-radius:999px; display:flex; align-items:center; gap:3px;
+  }
+
+  /* Badge grid */
+  .badges {
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
+    padding: 4px 16px 110px;
+  }
+  .badge {
+    background:white; border:1px solid var(--fr-line); border-radius:16px;
+    padding:14px 8px; text-align:center; position:relative;
+  }
+  .badge .circle {
+    width:60px; height:60px; border-radius:50%; margin: 0 auto 8px;
+    display:flex; align-items:center; justify-content:center; color:white;
+    position:relative;
+  }
+  .badge.locked .circle { background:#e2e8f0; color:#94a3b8; }
+  .badge.locked::after { content:''; position:absolute; inset:0; background: rgba(248,250,252,.4); border-radius:16px; }
+  .badge .t { font-size:11.5px; font-weight:800; letter-spacing:-0.02em; }
+  .badge .s { font-size:10px; color:var(--fr-ink-3); margin-top:2px; }
+  .badge .circle::before { content:''; position:absolute; inset:-4px; border-radius:50%; border:2px dashed rgba(15,23,42,.08); }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="top">
+    <button><i data-lucide="chevron-left" class="ic-22"></i></button>
+    <h1>스탬프북</h1>
+    <button><i data-lucide="share-2" class="ic-20"></i></button>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="hero">
+      <div class="label">COLLECTION</div>
+      <h2>8개 작품 · 42 성지<br/>수집 중</h2>
+      <div class="meter">
+        <div class="d"><i data-lucide="stamp" class="ic-16" style="color:#14BCED;"></i><b>42</b><span style="opacity:.8">성지</span></div>
+        <div class="d"><i data-lucide="award" class="ic-16" style="color:#f5a524;"></i><b>7</b><span style="opacity:.8">뱃지</span></div>
+        <div class="d"><i data-lucide="film" class="ic-16" style="color:#7c3aed;"></i><b>1</b><span style="opacity:.8">완주</span></div>
+      </div>
+    </div>
+
+    <div class="filter-tabs no-scrollbar">
+      <div class="ft on">작품</div>
+      <div class="ft">뱃지</div>
+      <div class="ft">완주한 것</div>
+      <div class="ft">진행 중</div>
+    </div>
+
+    <div class="section-title"><h3>수집 중인 작품</h3><span class="see">정렬 ↓</span></div>
+
+    <div class="drama-list">
+      <div class="drama-card">
+        <div class="drama-poster"><img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="drama-mid">
+          <div class="t">도깨비</div>
+          <div class="s">쓸쓸하고 찬란하神 · 2016</div>
+          <div class="bar"><div class="f" style="width:50%; background:linear-gradient(90deg,#14BCED,#7c3aed);"></div></div>
+          <div class="meta"><span>12 / 24 성지</span><span>50%</span></div>
+        </div>
+      </div>
+      <div class="drama-card">
+        <div class="completed-badge"><i data-lucide="trophy" class="ic-16"></i>완주</div>
+        <div class="drama-poster"><img src="https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="drama-mid">
+          <div class="t">이태원 클라쓰</div>
+          <div class="s">2020</div>
+          <div class="bar"><div class="f" style="width:100%; background:linear-gradient(90deg,#f5a524,#ff5a5f);"></div></div>
+          <div class="meta"><span>10 / 10 성지</span><span>100%</span></div>
+        </div>
+      </div>
+      <div class="drama-card">
+        <div class="drama-poster"><img src="https://images.unsplash.com/photo-1582200236025-a134371fa7db?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="drama-mid">
+          <div class="t">호텔 델루나</div>
+          <div class="s">2019</div>
+          <div class="bar"><div class="f" style="width:33%; background:linear-gradient(90deg,#7c3aed,#ff5a5f);"></div></div>
+          <div class="meta"><span>5 / 15 성지</span><span>33%</span></div>
+        </div>
+      </div>
+      <div class="drama-card">
+        <div class="drama-poster"><img src="https://images.unsplash.com/photo-1555042827-6d274530c333?auto=format&fit=crop&w=200&q=80"></div>
+        <div class="drama-mid">
+          <div class="t">갯마을 차차차</div>
+          <div class="s">2021</div>
+          <div class="bar"><div class="f" style="width:15%; background:linear-gradient(90deg,#10b981,#14BCED);"></div></div>
+          <div class="meta"><span>3 / 20 성지</span><span>15%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="padding-top:24px;"><h3>최근 획득 뱃지</h3><span class="see">전체 보기</span></div>
+
+    <div class="badges">
+      <div class="badge">
+        <div class="circle" style="background: linear-gradient(135deg,#14BCED,#7c3aed);"><i data-lucide="waves" class="ic-28"></i></div>
+        <div class="t">바다 러너</div>
+        <div class="s">해안 성지 5곳</div>
+      </div>
+      <div class="badge">
+        <div class="circle" style="background: linear-gradient(135deg,#f5a524,#ff5a5f);"><i data-lucide="flame" class="ic-28"></i></div>
+        <div class="t">연속 7일</div>
+        <div class="s">매일 인증</div>
+      </div>
+      <div class="badge">
+        <div class="circle" style="background: linear-gradient(135deg,#10b981,#14BCED);"><i data-lucide="sunrise" class="ic-28"></i></div>
+        <div class="t">얼리버드</div>
+        <div class="s">새벽 인증</div>
+      </div>
+      <div class="badge locked">
+        <div class="circle"><i data-lucide="lock" class="ic-24"></i></div>
+        <div class="t">전국 정복</div>
+        <div class="s">8 / 17 지역</div>
+      </div>
+      <div class="badge locked">
+        <div class="circle"><i data-lucide="lock" class="ic-24"></i></div>
+        <div class="t">저승사자</div>
+        <div class="s">도깨비 완주</div>
+      </div>
+      <div class="badge locked">
+        <div class="circle"><i data-lucide="lock" class="ic-24"></i></div>
+        <div class="t">100 성지</div>
+        <div class="s">42 / 100</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item is-active"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

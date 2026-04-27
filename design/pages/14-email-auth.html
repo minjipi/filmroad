@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>14 · 이메일 가입 / 로그인</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .auth-top { padding: 4px 20px 8px; display:flex; align-items:center; gap:8px; }
+  .back { width:40px; height:40px; border-radius:12px; background:var(--fr-bg-muted); color:var(--fr-ink-2); border:none; display:flex; align-items:center; justify-content:center; }
+  .auth-top .step { margin-left:auto; font-size:12px; color:var(--fr-ink-3); font-weight:700; letter-spacing:0.03em; }
+
+  /* Mode switch */
+  .seg-tabs { display:flex; margin: 8px 20px 24px; background:var(--fr-bg-muted); border-radius:14px; padding:4px; position:relative; }
+  .seg-tab { flex:1; text-align:center; padding:10px 0; font-size:14px; font-weight:700; color:var(--fr-ink-3); border-radius:10px; cursor:pointer; letter-spacing:-0.02em; z-index:1; transition: color .2s; }
+  .seg-tab.on { color:var(--fr-ink); background:white; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
+
+  /* Intro */
+  .auth-intro { padding: 0 24px 26px; }
+  .auth-intro h1 { font-size: 27px; font-weight:800; letter-spacing:-0.03em; line-height:1.25; margin:0 0 8px; }
+  .auth-intro p { font-size: 14px; color:var(--fr-ink-3); line-height:1.5; margin:0; }
+
+  /* Form */
+  .form { padding: 0 20px; display:flex; flex-direction:column; gap:16px; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field .lbl { font-size:12px; font-weight:700; color:var(--fr-ink-2); letter-spacing:-0.01em; padding-left:4px; }
+  .input-wrap { position:relative; }
+  .input-wrap input {
+    width:100%; height:54px; border-radius:14px; border:1.5px solid var(--fr-line);
+    background:white; padding: 0 48px 0 16px; font-size:15px;
+    font-family: inherit; color:var(--fr-ink); letter-spacing:-0.01em;
+    transition: border-color .15s;
+  }
+  .input-wrap input:focus { outline:none; border-color:var(--fr-primary); }
+  .input-wrap input::placeholder { color:var(--fr-ink-4); }
+  .input-wrap .ic-right {
+    position:absolute; top:50%; right:14px; transform:translateY(-50%);
+    width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    color:var(--fr-ink-4); cursor:pointer; border:none; background:transparent;
+  }
+  .input-wrap.valid input { border-color:var(--fr-mint); }
+  .input-wrap.valid .ic-right { color:var(--fr-mint); }
+  .input-wrap.has-error input { border-color:var(--fr-coral); }
+
+  .help {
+    display:flex; align-items:center; gap:5px;
+    font-size:11.5px; color:var(--fr-ink-3);
+    padding-left:4px; letter-spacing:-0.01em;
+  }
+  .help.err { color:var(--fr-coral); }
+  .help.ok { color:var(--fr-mint); }
+
+  /* Password strength */
+  .strength { display:flex; gap:4px; margin-top:4px; padding: 0 4px; }
+  .strength .bar { flex:1; height:3px; border-radius:2px; background:var(--fr-line); }
+  .strength .bar.on { background:var(--fr-mint); }
+  .strength .bar.warn { background:var(--fr-amber); }
+  .strength .txt { font-size:10.5px; color:var(--fr-mint); font-weight:700; margin-left:4px; letter-spacing:-0.01em; }
+
+  /* Terms */
+  .terms { padding: 20px 4px 8px; display:flex; flex-direction:column; gap:10px; }
+  .check-row { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--fr-ink-2); }
+  .check-row .box {
+    width:20px; height:20px; border-radius:6px;
+    border:1.5px solid var(--fr-line); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    color:transparent;
+  }
+  .check-row.on .box { background:var(--fr-primary); border-color:var(--fr-primary); color:white; }
+  .check-row.all { font-weight:800; padding-bottom:10px; border-bottom:1px solid var(--fr-line); color:var(--fr-ink); }
+  .check-row .arrow { margin-left:auto; color:var(--fr-ink-4); }
+  .check-row .req { font-size:10.5px; color:var(--fr-primary); font-weight:700; letter-spacing:0; padding:2px 6px; background:var(--fr-primary-soft); border-radius:4px; }
+
+  /* Forgot + submit */
+  .row-between { display:flex; align-items:center; justify-content:space-between; padding: 4px 4px 0; }
+  .remember { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fr-ink-2); }
+  .forgot { font-size:13px; color:var(--fr-primary); font-weight:700; }
+
+  .submit-area { padding: 24px 20px 12px; }
+  .submit { width:100%; height:54px; border-radius:16px; background:var(--fr-primary); color:white; border:none; font-weight:800; font-size:15.5px; letter-spacing:-0.02em; box-shadow: 0 10px 22px rgba(20,188,237,.35); }
+  .submit:disabled { background:var(--fr-line); color:var(--fr-ink-4); box-shadow:none; }
+
+  /* Divider + socials */
+  .divider { display:flex; align-items:center; gap:12px; padding: 16px 24px; color:var(--fr-ink-4); font-size:11.5px; font-weight:700; }
+  .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--fr-line); }
+
+  .socials { padding: 0 20px; display:flex; gap:10px; }
+  .soc-btn {
+    flex:1; height:52px; border-radius:14px; border:1px solid var(--fr-line);
+    background:white; display:flex; align-items:center; justify-content:center; gap:6px;
+    font-weight:700; font-size:13px; color:var(--fr-ink);
+  }
+  .soc-btn.kakao { background:#FEE500; border-color:#FEE500; color:#181600; }
+  .soc-btn.apple { background:#000; border-color:#000; color:white; }
+  .soc-btn.google { color:var(--fr-ink); }
+  .soc-btn svg { width:18px; height:18px; }
+
+  .bottom-cta { text-align:center; padding: 22px 20px 28px; font-size:13px; color:var(--fr-ink-3); }
+  .bottom-cta a { color:var(--fr-primary); font-weight:800; margin-left:4px; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="auth-top">
+    <button class="back"><i data-lucide="chevron-left" class="ic-22"></i></button>
+    <span class="step" id="stepLbl">STEP 2 / 3</span>
+  </div>
+
+  <div class="fr-scroll no-scrollbar" style="padding-bottom: 0;">
+    <div class="seg-tabs">
+      <div class="seg-tab" id="tab-login">로그인</div>
+      <div class="seg-tab on" id="tab-signup">회원가입</div>
+    </div>
+
+    <!-- SIGNUP VIEW -->
+    <div id="view-signup">
+      <div class="auth-intro">
+        <h1>이메일로<br/>필름로드 시작하기</h1>
+        <p>계정을 만들고 나만의 성지 지도를 채워보세요.</p>
+      </div>
+
+      <div class="form">
+        <div class="field">
+          <span class="lbl">이름</span>
+          <div class="input-wrap">
+            <input type="text" placeholder="본명 또는 닉네임" value="김소연">
+            <button class="ic-right"><i data-lucide="user" class="ic-20"></i></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">이메일</span>
+          <div class="input-wrap valid">
+            <input type="email" placeholder="your@email.com" value="soyeon@film.com">
+            <button class="ic-right"><i data-lucide="check-circle-2" class="ic-20"></i></button>
+          </div>
+          <div class="help ok"><i data-lucide="check" class="ic-16"></i>사용 가능한 이메일이에요</div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">비밀번호</span>
+          <div class="input-wrap">
+            <input type="password" placeholder="8자 이상, 문자·숫자 포함" value="filmroad1234">
+            <button class="ic-right" id="eyeBtn"><i data-lucide="eye-off" class="ic-20"></i></button>
+          </div>
+          <div class="strength">
+            <span class="bar on"></span>
+            <span class="bar on"></span>
+            <span class="bar on"></span>
+            <span class="bar"></span>
+            <span class="txt">강함</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">비밀번호 확인</span>
+          <div class="input-wrap valid">
+            <input type="password" placeholder="한 번 더 입력해 주세요" value="filmroad1234">
+            <button class="ic-right"><i data-lucide="check-circle-2" class="ic-20"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form terms">
+        <div class="check-row all on">
+          <span class="box"><i data-lucide="check" class="ic-16"></i></span>
+          <span>전체 동의</span>
+        </div>
+        <div class="check-row on">
+          <span class="box"><i data-lucide="check" class="ic-16"></i></span>
+          <span class="req">필수</span>
+          <span>만 14세 이상입니다</span>
+          <span class="arrow"><i data-lucide="chevron-right" class="ic-18"></i></span>
+        </div>
+        <div class="check-row on">
+          <span class="box"><i data-lucide="check" class="ic-16"></i></span>
+          <span class="req">필수</span>
+          <span>서비스 이용약관</span>
+          <span class="arrow"><i data-lucide="chevron-right" class="ic-18"></i></span>
+        </div>
+        <div class="check-row on">
+          <span class="box"><i data-lucide="check" class="ic-16"></i></span>
+          <span class="req">필수</span>
+          <span>개인정보 수집·이용 동의</span>
+          <span class="arrow"><i data-lucide="chevron-right" class="ic-18"></i></span>
+        </div>
+        <div class="check-row">
+          <span class="box"><i data-lucide="check" class="ic-16"></i></span>
+          <span style="font-size:10.5px; color:var(--fr-ink-3); font-weight:700; padding:2px 6px; background:var(--fr-bg-muted); border-radius:4px;">선택</span>
+          <span>마케팅 정보 수신</span>
+          <span class="arrow"><i data-lucide="chevron-right" class="ic-18"></i></span>
+        </div>
+      </div>
+
+      <div class="submit-area">
+        <button class="submit">가입 완료하기</button>
+      </div>
+    </div>
+
+    <!-- LOGIN VIEW (hidden by default) -->
+    <div id="view-login" style="display:none;">
+      <div class="auth-intro">
+        <h1>다시 만나서<br/>반가워요 👋</h1>
+        <p>이메일과 비밀번호로 로그인하세요.</p>
+      </div>
+
+      <div class="form">
+        <div class="field">
+          <span class="lbl">이메일</span>
+          <div class="input-wrap">
+            <input type="email" placeholder="your@email.com">
+            <button class="ic-right"><i data-lucide="mail" class="ic-20"></i></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">비밀번호</span>
+          <div class="input-wrap">
+            <input type="password" placeholder="비밀번호를 입력하세요">
+            <button class="ic-right"><i data-lucide="eye-off" class="ic-20"></i></button>
+          </div>
+        </div>
+
+        <div class="row-between">
+          <label class="remember">
+            <span class="box" style="width:18px; height:18px; border-radius:5px; border:1.5px solid var(--fr-line); display:inline-flex; align-items:center; justify-content:center;"></span>
+            로그인 유지
+          </label>
+          <span class="forgot">비밀번호 찾기</span>
+        </div>
+      </div>
+
+      <div class="submit-area">
+        <button class="submit">로그인</button>
+      </div>
+    </div>
+
+    <div class="divider">또는</div>
+
+    <div class="socials">
+      <button class="soc-btn kakao">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.48 3 2 6.58 2 11c0 2.85 1.87 5.35 4.68 6.76-.2.74-.74 2.71-.85 3.13-.13.52.19.51.4.37.16-.11 2.6-1.77 3.65-2.49.7.1 1.41.16 2.12.16 5.52 0 10-3.58 10-8S17.52 3 12 3z"/></svg>
+        카카오
+      </button>
+      <button class="soc-btn apple">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.61-2.2.43-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+        Apple
+      </button>
+      <button class="soc-btn google">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Google
+      </button>
+    </div>
+
+    <div class="bottom-cta" id="switchCta">
+      이미 계정이 있으신가요?<a href="#" id="switchLink">로그인</a>
+    </div>
+  </div>
+
+  <div class="fr-home-indicator"></div>
+</div>
+
+<script>
+  lucide.createIcons();
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  const viewLogin = document.getElementById('view-login');
+  const viewSignup = document.getElementById('view-signup');
+  const step = document.getElementById('stepLbl');
+  const switchCta = document.getElementById('switchCta');
+  const switchLink = document.getElementById('switchLink');
+
+  function setMode(mode) {
+    const login = mode === 'login';
+    tabLogin.classList.toggle('on', login);
+    tabSignup.classList.toggle('on', !login);
+    viewLogin.style.display = login ? 'block' : 'none';
+    viewSignup.style.display = login ? 'none' : 'block';
+    step.textContent = login ? '' : 'STEP 2 / 3';
+    switchCta.innerHTML = login
+      ? '아직 계정이 없으신가요?<a href="#" id="switchLink">회원가입</a>'
+      : '이미 계정이 있으신가요?<a href="#" id="switchLink">로그인</a>';
+    document.getElementById('switchLink').onclick = (e) => { e.preventDefault(); setMode(login ? 'signup' : 'login'); };
+  }
+  tabLogin.onclick = () => setMode('login');
+  tabSignup.onclick = () => setMode('signup');
+  switchLink.onclick = (e) => { e.preventDefault(); setMode('login'); };
+
+  // eye toggle
+  document.getElementById('eyeBtn').onclick = (e) => {
+    const input = e.currentTarget.previousElementSibling;
+    input.type = input.type === 'password' ? 'text' : 'password';
+  };
+</script>
+</body>
+</html>

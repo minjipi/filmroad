@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>13 · 탐색</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .feed-head { padding: 0 20px 8px; display:flex; align-items:center; justify-content:space-between; }
+  .feed-head h1 { font-size: 24px; font-weight: 900; letter-spacing:-0.03em; margin:0; }
+  .icon-btn { width:40px; height:40px; border-radius:12px; background:var(--fr-bg-muted); color:var(--fr-ink-2); border:none; display:flex; align-items:center; justify-content:center; position:relative; }
+  .icon-btn .dot { position:absolute; top:10px; right:10px; width:8px; height:8px; border-radius:50%; background:var(--fr-coral); border:2px solid var(--fr-bg-muted); }
+
+  .search-row { padding: 4px 20px 12px; }
+  .search-bar { display:flex; align-items:center; gap:8px; background:var(--fr-bg-muted); border-radius:14px; padding:11px 14px; color:var(--fr-ink-3); font-size:14px; }
+
+  .feed-tabs { display:flex; gap:22px; padding: 0 20px; border-bottom:1px solid var(--fr-line); }
+  .feed-tabs .t { padding: 10px 0; font-size:15px; font-weight:700; color:var(--fr-ink-4); border-bottom:2px solid transparent; letter-spacing:-0.02em; }
+  .feed-tabs .t.on { color:var(--fr-ink); border-bottom-color:var(--fr-ink); }
+
+  .chip-row { display:flex; gap:8px; overflow-x:auto; padding: 12px 20px 4px; }
+  .chip-row .c { flex-shrink:0; font-size:12px; font-weight:700; padding:7px 12px; border-radius:999px; background:var(--fr-bg-muted); color:var(--fr-ink-2); display:flex; align-items:center; gap:4px; letter-spacing:-0.01em; }
+  .chip-row .c.on { background:var(--fr-ink); color:white; }
+
+  /* Featured row (wide first row) */
+  .featured-wrap { padding: 10px 20px 4px; }
+  .featured {
+    position:relative; aspect-ratio: 16/9; border-radius:16px; overflow:hidden; background:#000;
+  }
+  .featured img { width:100%; height:100%; object-fit:cover; }
+  .featured::after { content:""; position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,.05) 50%, rgba(0,0,0,.78) 100%); }
+  .featured .info { position:absolute; left:0; right:0; bottom:0; padding:14px; color:white; z-index:2; }
+  .featured .tag { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:800; padding:4px 9px; border-radius:999px; background:rgba(20,188,237,.95); margin-bottom:7px; }
+  .featured .t { font-size:16px; font-weight:800; letter-spacing:-0.02em; line-height:1.25; }
+  .featured .s { font-size:11.5px; margin-top:3px; opacity:.9; display:flex; align-items:center; gap:6px; }
+  .featured .s .dot { width:3px; height:3px; border-radius:50%; background:white; opacity:.5; }
+
+  /* Grid */
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:2px; padding-bottom: 110px; }
+  .cell { position:relative; aspect-ratio:1; overflow:hidden; cursor:pointer; }
+  .cell img { width:100%; height:100%; object-fit:cover; transition: transform .2s; }
+  .cell:hover img { transform: scale(1.04); }
+  .cell .drama { position:absolute; left:5px; top:5px; font-size:9.5px; font-weight:800; color:white; background:rgba(0,0,0,.65); padding:3px 6px; border-radius:5px; backdrop-filter:blur(6px); letter-spacing:-0.01em; }
+  .cell .likes { position:absolute; right:5px; bottom:5px; font-size:9.5px; font-weight:800; color:white; text-shadow:0 1px 3px rgba(0,0,0,.7); display:flex; align-items:center; gap:2px; }
+  .cell.compare::before { content:""; position:absolute; left:50%; top:0; bottom:0; width:1.5px; background:white; z-index:1; opacity:.9; }
+  .cell.compare::after { content:"비교"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:8.5px; font-weight:900; color:white; background:rgba(20,188,237,.92); padding:2px 5px; border-radius:999px; z-index:2; letter-spacing:-0.01em; }
+  .cell .type-ic { position:absolute; right:5px; top:5px; color:white; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
+  .cell.tall { grid-row: span 2; aspect-ratio: auto; }
+
+  /* Section header inside scroll */
+  .sec-h { padding: 18px 20px 8px; font-size:13px; font-weight:800; letter-spacing:-0.02em; display:flex; align-items:center; justify-content:space-between; }
+  .sec-h .more { font-size:11.5px; font-weight:700; color:var(--fr-primary); }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="feed-head">
+    <h1>탐색</h1>
+    <div style="display:flex; gap:6px;">
+      <button class="icon-btn"><i data-lucide="heart" class="ic-20"></i><span class="dot"></span></button>
+      <button class="icon-btn"><i data-lucide="send" class="ic-20"></i></button>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <div class="search-bar">
+      <i data-lucide="search" class="ic-16"></i>
+      <span>작품, 장소, 사용자 검색</span>
+    </div>
+  </div>
+
+  <div class="feed-tabs">
+    <div class="t">팔로잉</div>
+    <div class="t on">인기</div>
+    <div class="t">내 주변</div>
+    <div class="t">작품별</div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="chip-row no-scrollbar">
+      <div class="c on"><i data-lucide="flame" class="ic-16"></i>전체</div>
+      <div class="c">도깨비</div>
+      <div class="c">갯마을차차차</div>
+      <div class="c">이상한변호사</div>
+      <div class="c">이태원클라쓰</div>
+      <div class="c">미스터션샤인</div>
+    </div>
+
+    <div class="featured-wrap">
+      <a href="13-feed-detail.html" class="featured" style="display:block;">
+        <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80">
+        <div class="info">
+          <span class="tag"><i data-lucide="flame" class="ic-16"></i>오늘의 인기</span>
+          <div class="t">메밀꽃 한 다발 들고 기다렸어요 🌾</div>
+          <div class="s">soyeon_film · 도깨비 <span class="dot"></span>♥ 1,248</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="sec-h"><span>최근 인증샷</span><span class="more">전체보기 ›</span></div>
+
+    <div class="grid">
+      <a href="13-feed-detail.html" class="cell compare">
+        <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">도깨비</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>1.2k</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">미스터션샤인</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>834</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell compare">
+        <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">갯차</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>562</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">우영우</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>624</span>
+        <i data-lucide="layers" class="ic-16 type-ic"></i>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">이태원</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>388</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell compare">
+        <img src="https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">갯차</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>934</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1559305616-3f99cd43e353?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">미스터션샤인</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>712</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1504198458649-3128b932f49e?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">갯차</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>1.8k</span>
+        <i data-lucide="play" class="ic-16 type-ic" style="fill:currentColor"></i>
+      </a>
+      <a href="13-feed-detail.html" class="cell compare">
+        <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">도깨비</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>2.1k</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">도깨비</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>472</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell">
+        <img src="https://images.unsplash.com/photo-1502378735452-bc7d86632805?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">이태원</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>293</span>
+      </a>
+      <a href="13-feed-detail.html" class="cell compare">
+        <img src="https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&w=400&q=80">
+        <span class="drama">도깨비</span>
+        <span class="likes"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>812</span>
+      </a>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item is-active"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

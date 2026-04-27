@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>02 · 지도</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .map {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 30% 30%, #e6eef7 0%, transparent 50%),
+      radial-gradient(circle at 70% 60%, #dde9f2 0%, transparent 60%),
+      linear-gradient(180deg, #eef3f8, #e3ecf4);
+  }
+  .map::before {
+    content:''; position:absolute; inset:0;
+    background-image:
+      linear-gradient(to right, rgba(0,0,0,.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .road { position:absolute; height:14px; border-radius:999px; background:#fff; box-shadow:0 0 0 2px #e1ebf3; }
+  .road.v { width:14px; height:auto; }
+  .pin { position:absolute; transform:translate(-50%,-100%); cursor:pointer; z-index:2; }
+  .pin .bubble {
+    background:white; border-radius:999px; padding: 5px 10px 5px 5px;
+    display:flex; align-items:center; gap:6px;
+    box-shadow: 0 6px 18px rgba(15,23,42,.2), 0 0 0 1px rgba(15,23,42,.06);
+    font-size:11px; font-weight:700; color:var(--fr-ink); letter-spacing:-0.02em;
+  }
+  .pin .dot { width:22px; height:22px; border-radius:50%; background:var(--fr-primary); color:white; display:flex; align-items:center; justify-content:center; }
+  .pin .bubble::after {
+    content:''; position:absolute; left:50%; bottom:-5px; transform:translateX(-50%) rotate(45deg);
+    width:8px; height:8px; background:white; box-shadow: 1px 1px 0 rgba(15,23,42,.06);
+  }
+  .pin.active { z-index:5; }
+  .pin.active .dot { background:#0f172a; transform:scale(1.1); }
+  .pin.active .bubble { background:#0f172a; color:white; }
+  .pin.active .bubble::after { background:#0f172a; }
+  .pin.visited .dot { background:var(--fr-mint); }
+
+  .me { position:absolute; left:50%; top:52%; transform:translate(-50%,-50%);
+    width: 18px; height:18px; border-radius:50%; background:var(--fr-primary); border:3px solid white;
+    box-shadow: 0 0 0 8px rgba(20,188,237,.25); z-index:3; }
+
+  .top-bar { position:absolute; top:44px; left:16px; right:16px; z-index:20; display:flex; gap:8px; }
+  .search-box { flex:1; height:48px; background:white; border-radius:16px; display:flex; align-items:center; padding: 0 16px; gap:10px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.08), 0 0 0 1px rgba(15,23,42,.04); font-size:14px; color:var(--fr-ink-3); }
+  .icon-btn { width:48px; height:48px; background:white; border-radius:16px; display:flex; align-items:center; justify-content:center; color:var(--fr-ink);
+    box-shadow: 0 8px 24px rgba(15,23,42,.08), 0 0 0 1px rgba(15,23,42,.04); }
+  .chip-row { position:absolute; top:102px; left:0; right:0; z-index:20; display:flex; gap:8px; padding: 0 16px; overflow-x:auto; }
+  .filter-chip { white-space:nowrap; background:white; border-radius:999px; padding:8px 14px;
+    font-size:12px; font-weight:700; color:var(--fr-ink); box-shadow: 0 4px 12px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04); display:flex; align-items:center; gap:5px; }
+  .filter-chip.on { background: var(--fr-ink); color:white; }
+
+  /* Reopen floating button (when sheet closed) */
+  .reopen {
+    position:absolute; left:50%; bottom:100px; transform: translateX(-50%); z-index: 30;
+    height:44px; padding: 0 18px; border-radius:999px; background:var(--fr-ink); color:white;
+    border:none; font-weight:800; font-size:13px; display:none; align-items:center; gap:8px;
+    box-shadow: 0 10px 28px rgba(15,23,42,.25);
+  }
+
+  /* Bottom sheet */
+  .sheet {
+    position:absolute; left:0; right:0; bottom:84px; z-index:25;
+    background:white; border-radius:22px 22px 0 0;
+    box-shadow: 0 -10px 40px rgba(15,23,42,.12);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    transition: height .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .sheet.dragging { transition: none; }
+  .sheet .handle-area { position:relative; padding: 8px 20px 4px; cursor: grab; touch-action: none; flex-shrink:0; }
+  .sheet .handle-area:active { cursor: grabbing; }
+  .sheet .handle { width:44px; height:5px; background:#cbd5e1; border-radius:3px; margin: 0 auto; }
+  .sheet .close-btn {
+    position:absolute; top:6px; right:14px; width:30px; height:30px; border:none;
+    background:var(--fr-bg-muted); color:var(--fr-ink-2); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .sheet-body { overflow-y:auto; padding: 6px 20px 20px; flex:1; }
+  .sheet-body::-webkit-scrollbar { display:none; }
+
+  .title-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+  .t1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+  .t2 { font-size:12px; color:var(--fr-ink-3); margin-top:2px; }
+  .save-btn { width:36px; height:36px; border-radius:12px; background:var(--fr-bg-muted); display:flex; align-items:center; justify-content:center; color:var(--fr-ink-3); border:none; }
+
+  .sheet-preview { display:flex; gap:10px; }
+  .sheet-thumb { width:74px; height:74px; border-radius:14px; overflow:hidden; flex-shrink:0; }
+  .sheet-thumb img { width:100%; height:100%; object-fit:cover; }
+  .sheet-meta { flex:1; display:flex; flex-direction:column; justify-content:space-between; }
+  .stat-row { display:flex; gap:14px; font-size:11px; color:var(--fr-ink-3); }
+  .stat-row .s { display:flex; align-items:center; gap:3px; }
+  .go-btn { flex:1; height:42px; border-radius:12px; background:var(--fr-primary); color:white; font-weight:700; font-size:13px; border:none; display:flex; align-items:center; justify-content:center; gap:6px; padding: 0 14px; }
+  .save-inline { width:42px; height:42px; border-radius:12px; background:var(--fr-bg-muted); border:1.5px solid var(--fr-line); color:var(--fr-ink-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition: all .15s; }
+  .save-inline.on { background: var(--fr-primary-soft); border-color: var(--fr-primary); color: var(--fr-primary); }
+  .save-inline.on i { fill: currentColor; }
+  .cta-row { display:flex; gap:8px; align-items:center; margin-top: 12px; }
+
+  /* Kakao info (shown when expanded) */
+  .kakao-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--fr-line); }
+  .kakao-head { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .kakao-badge { display:inline-flex; align-items:center; gap:6px; padding: 5px 10px; background:#FEE500; color:#3C1E1E; border-radius:8px; font-size:11px; font-weight:800; letter-spacing:-0.01em; }
+  .kakao-badge .k { width:16px; height:16px; border-radius:50%; background:#3C1E1E; color:#FEE500; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:10px; }
+  .kakao-head .sync { margin-left:auto; font-size:11px; color:var(--fr-ink-4); display:inline-flex; align-items:center; gap:3px; }
+
+  .k-hours { display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13px; }
+  .k-hours .open-chip { display:inline-flex; align-items:center; gap:4px; padding: 3px 8px; background:#dcfce7; color:#166534; border-radius:6px; font-size:11px; font-weight:800; }
+  .k-hours .sep { color:var(--fr-ink-4); }
+  .k-hours .time { color:var(--fr-ink-2); font-weight:600; }
+
+  .k-info-row { display:flex; gap:10px; padding: 12px 0; border-bottom:1px solid var(--fr-line-soft); align-items:flex-start; font-size:13px; }
+  .k-info-row .ico { flex-shrink:0; width:20px; color:var(--fr-ink-3); padding-top:1px; }
+  .k-info-row .txt { flex:1; color:var(--fr-ink); line-height:1.5; }
+  .k-info-row .txt .sub { font-size:11.5px; color:var(--fr-ink-3); margin-top:2px; }
+  .k-info-row .act { font-size:11.5px; color:var(--fr-primary); font-weight:700; padding:4px 8px; background:var(--fr-primary-soft); border-radius:7px; }
+
+  .k-actions { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin: 14px 0 18px; }
+  .k-act-btn { background:var(--fr-bg-muted); border:none; border-radius:12px; padding: 10px 4px; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--fr-ink); font-size:11px; font-weight:700; }
+  .k-act-btn i { color:var(--fr-primary); }
+
+  .k-review { padding: 14px 0; border-top:1px solid var(--fr-line-soft); }
+  .k-review h4 { margin:0 0 10px; font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px; }
+  .k-review h4 .cnt { font-size:11px; color:var(--fr-ink-4); font-weight:700; }
+  .k-stars { display:inline-flex; gap:2px; color:var(--fr-amber); }
+  .k-rev-item { display:flex; gap:10px; padding: 10px 0; }
+  .k-rev-item .av { width:32px; height:32px; border-radius:50%; background:var(--fr-primary-soft); color:var(--fr-primary); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0; }
+  .k-rev-item .body { flex:1; font-size:12px; }
+  .k-rev-item .meta-row { display:flex; justify-content:space-between; margin-bottom:3px; }
+  .k-rev-item .nm { font-weight:700; font-size:12px; }
+  .k-rev-item .dt { font-size:10.5px; color:var(--fr-ink-4); }
+  .k-rev-item .body p { margin:0; color:var(--fr-ink-2); line-height:1.5; }
+
+  .k-menu-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .k-menu-img { aspect-ratio: 1; border-radius:10px; background:#eef2f6; overflow:hidden; }
+  .k-menu-img img { width:100%; height:100%; object-fit:cover; }
+
+  .k-nearby { padding: 14px 0; border-top:1px solid var(--fr-line-soft); }
+  .k-nearby h4 { margin:0 0 10px; font-size:13px; font-weight:800; }
+  .k-nearby-row { display:flex; gap:10px; overflow-x:auto; }
+  .k-nearby-card { flex-shrink:0; width:140px; }
+  .k-nearby-card .th { width:100%; height:90px; border-radius:10px; background:#eef2f6; overflow:hidden; margin-bottom:6px; }
+  .k-nearby-card .th img { width:100%; height:100%; object-fit:cover; }
+  .k-nearby-card .nm { font-size:12px; font-weight:700; }
+  .k-nearby-card .d { font-size:11px; color:var(--fr-ink-3); margin-top:2px; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page" style="position:relative;">
+  <div class="fr-status" style="position:absolute; top:0; left:0; right:0;">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="map">
+    <div class="road" style="top:180px; left:-20px; width:320px; transform:rotate(-8deg);"></div>
+    <div class="road" style="top:320px; left:40px; width:380px; transform:rotate(4deg);"></div>
+    <div class="road" style="top:480px; left:-30px; width:440px; transform:rotate(-2deg);"></div>
+    <div class="road v" style="top:120px; left:160px; height:560px;"></div>
+    <div class="road v" style="top:200px; left:280px; height:480px; transform:rotate(6deg);"></div>
+    <div style="position:absolute; top:220px; left:40px; width:110px; height:90px; background:#cfe3cf; border-radius: 60% 40% 50% 50%; opacity:.7;"></div>
+    <div style="position:absolute; top:560px; left:-20px; right:-20px; height:280px; background:linear-gradient(180deg, #d5e6f1, #c0d7e6);"></div>
+
+    <div class="me"></div>
+    <div class="pin visited" style="left:28%; top:40%;"><div class="bubble"><span class="dot"><i data-lucide="check" class="ic-16"></i></span>영진해변</div></div>
+    <div class="pin active" style="left:52%; top:50%;"><div class="bubble"><span class="dot"><i data-lucide="camera" class="ic-16"></i></span>주문진 방파제</div></div>
+    <div class="pin" style="left:72%; top:36%;"><div class="bubble"><span class="dot"><i data-lucide="camera" class="ic-16"></i></span>강릉커피거리</div></div>
+    <div class="pin" style="left:40%; top:64%;"><div class="bubble"><span class="dot"><i data-lucide="camera" class="ic-16"></i></span>안목해변</div></div>
+    <div class="pin" style="left:78%; top:60%;"><div class="bubble"><span class="dot"><i data-lucide="camera" class="ic-16"></i></span>경포대</div></div>
+  </div>
+
+  <div class="top-bar">
+    <div class="search-box">
+      <i data-lucide="search" class="ic-18" style="color:var(--fr-ink-4)"></i>
+      <span>강릉 · 도깨비 촬영지</span>
+    </div>
+    <div class="icon-btn"><i data-lucide="sliders-horizontal" class="ic-20"></i></div>
+  </div>
+  <div class="chip-row no-scrollbar">
+    <div class="filter-chip on"><i data-lucide="map-pin" class="ic-16"></i>성지</div>
+    <div class="filter-chip"><i data-lucide="check" class="ic-16"></i>방문완료</div>
+    <div class="filter-chip"><i data-lucide="users" class="ic-16"></i>친구 방문</div>
+    <div class="filter-chip"><i data-lucide="film" class="ic-16"></i>도깨비</div>
+  </div>
+
+  <button class="reopen" id="reopenBtn"><i data-lucide="map-pin" class="ic-18"></i>장소 정보 열기</button>
+
+  <div class="sheet" id="sheet">
+    <div class="handle-area" id="handleArea">
+      <div class="handle"></div>
+      <button class="close-btn" id="closeBtn" aria-label="닫기"><i data-lucide="x" class="ic-18"></i></button>
+    </div>
+    <div class="sheet-body" id="sheetBody">
+      <div class="title-row">
+        <div>
+          <span class="fr-chip fr-chip-soft" style="margin-bottom:6px;">도깨비 · 1회</span>
+          <div class="t1">주문진 영진해변 방파제</div>
+          <div class="t2">강릉시 주문진읍 영진리 · 1.2km</div>
+        </div>
+      </div>
+      <div class="sheet-preview">
+        <div class="sheet-thumb"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80"></div>
+        <div class="sheet-meta">
+          <div class="stat-row">
+            <span class="s"><i data-lucide="camera" class="ic-16"></i>1,204</span>
+            <span class="s"><i data-lucide="heart" class="ic-16"></i>3.2k</span>
+            <span class="s"><i data-lucide="star" class="ic-16" style="color:var(--fr-amber); fill:var(--fr-amber)"></i>4.8</span>
+          </div>
+          <div style="font-size:11.5px; color:var(--fr-ink-3);">이 곳에서 도깨비 1회 오프닝 촬영</div>
+        </div>
+      </div>
+      <div class="cta-row">
+        <button class="save-inline" id="saveInline" aria-label="저장"><i data-lucide="bookmark" class="ic-20"></i></button>
+        <button class="go-btn">인증하러 가기 <i data-lucide="arrow-right" class="ic-16"></i></button>
+      </div>
+
+      <!-- Kakao Map info (visible when expanded) -->
+      <div class="kakao-section">
+        <div class="kakao-head">
+          <span class="kakao-badge"><span class="k">K</span>카카오맵</span>
+          <span class="sync"><i data-lucide="refresh-cw" class="ic-16"></i>방금 동기화</span>
+        </div>
+
+        <div class="k-hours">
+          <span class="open-chip"><i data-lucide="circle" class="ic-16" style="fill:#16a34a; color:#16a34a; width:8px; height:8px;"></i>영업 중</span>
+          <span class="time">24시간 개방</span>
+          <span class="sep">·</span>
+          <span class="time">주차 가능</span>
+        </div>
+
+        <div class="k-info-row">
+          <i data-lucide="map-pin" class="ic-20 ico"></i>
+          <div class="txt">
+            강원 강릉시 주문진읍 교항리 산51-2
+            <div class="sub">지번 · 교항리 산51-2</div>
+          </div>
+          <span class="act">복사</span>
+        </div>
+        <div class="k-info-row">
+          <i data-lucide="phone" class="ic-20 ico"></i>
+          <div class="txt">033-662-3639<div class="sub">주문진읍 관광안내소</div></div>
+          <span class="act">전화</span>
+        </div>
+        <div class="k-info-row">
+          <i data-lucide="globe" class="ic-20 ico"></i>
+          <div class="txt">gn.go.kr/tour<div class="sub">공식 관광정보</div></div>
+          <span class="act">열기</span>
+        </div>
+
+        <div class="k-actions">
+          <button class="k-act-btn"><i data-lucide="navigation" class="ic-22"></i>길찾기</button>
+          <button class="k-act-btn" id="saveBtn2"><i data-lucide="bookmark" class="ic-22"></i>저장</button>
+          <button class="k-act-btn"><i data-lucide="share-2" class="ic-22"></i>공유</button>
+          <button class="k-act-btn"><i data-lucide="car" class="ic-22"></i>자동차</button>
+        </div>
+
+        <div class="k-review">
+          <h4>카카오맵 리뷰
+            <span class="k-stars">
+              <i data-lucide="star" class="ic-16" style="fill:currentColor"></i>
+              <i data-lucide="star" class="ic-16" style="fill:currentColor"></i>
+              <i data-lucide="star" class="ic-16" style="fill:currentColor"></i>
+              <i data-lucide="star" class="ic-16" style="fill:currentColor"></i>
+              <i data-lucide="star" class="ic-16" style="fill:currentColor"></i>
+            </span>
+            <span style="font-weight:800; font-size:13px;">4.8</span>
+            <span class="cnt">· 812개</span>
+          </h4>
+          <div class="k-rev-item">
+            <div class="av">민</div>
+            <div class="body">
+              <div class="meta-row"><span class="nm">민수아빠</span><span class="dt">3일 전</span></div>
+              <p>드라마 덕분에 찾은 곳인데 석양이 정말 예술. 평일 낮에는 사람 적어서 사진 찍기 좋아요.</p>
+            </div>
+          </div>
+          <div class="k-rev-item">
+            <div class="av">소</div>
+            <div class="body">
+              <div class="meta-row"><span class="nm">소연</span><span class="dt">1주 전</span></div>
+              <p>메밀꽃은 주변 편의점에서 3천원에 판매 중. 방파제 끝까지 걸어가야 포토존이에요.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="k-nearby">
+          <h4>주변 맛집 · 카페</h4>
+          <div class="k-nearby-row no-scrollbar">
+            <div class="k-nearby-card">
+              <div class="th"><img src="https://images.unsplash.com/photo-1559305616-3f99cd43e353?auto=format&fit=crop&w=300&q=80"></div>
+              <div class="nm">영진회집</div>
+              <div class="d">⭐ 4.6 · 도보 3분</div>
+            </div>
+            <div class="k-nearby-card">
+              <div class="th"><img src="https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=300&q=80"></div>
+              <div class="nm">테라로사 커피</div>
+              <div class="d">⭐ 4.7 · 차 8분</div>
+            </div>
+            <div class="k-nearby-card">
+              <div class="th"><img src="https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=300&q=80"></div>
+              <div class="nm">주문진 수산시장</div>
+              <div class="d">⭐ 4.5 · 차 5분</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 14px 0 0; font-size:10.5px; color:var(--fr-ink-4); text-align:center;">
+          카카오맵 정보 제공 · 실시간 동기화
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item is-active"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+
+<script>
+  lucide.createIcons();
+
+  const sheet = document.getElementById('sheet');
+  const handle = document.getElementById('handleArea');
+  const closeBtn = document.getElementById('closeBtn');
+  const reopenBtn = document.getElementById('reopenBtn');
+  const body = document.getElementById('sheetBody');
+
+  // heights (px) — sheet bottom is 84px (nav)
+  const CLOSED = 0;
+  const PEEK = 240;   // default
+  const FULL = 680;   // expanded shows kakao info
+
+  let currentH = PEEK;
+  let startY = 0;
+  let startH = PEEK;
+  let dragging = false;
+
+  function setHeight(h, animate = true) {
+    if (!animate) sheet.classList.add('dragging');
+    else sheet.classList.remove('dragging');
+    sheet.style.height = h + 'px';
+    currentH = h;
+    // if closed, show reopen button
+    if (h <= 8) {
+      sheet.style.display = 'none';
+      reopenBtn.style.display = 'inline-flex';
+    } else {
+      sheet.style.display = 'flex';
+      reopenBtn.style.display = 'none';
+    }
+  }
+
+  setHeight(PEEK);
+
+  function onStart(e) {
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    startY = y;
+    startH = currentH;
+    dragging = true;
+    sheet.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, {passive:false});
+    document.addEventListener('touchend', onEnd);
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    if (e.cancelable) e.preventDefault();
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const delta = startY - y; // drag up = positive
+    let h = startH + delta;
+    h = Math.max(0, Math.min(FULL, h));
+    sheet.style.height = h + 'px';
+    currentH = h;
+  }
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    // snap to closest
+    const distances = [
+      {h: 0, d: Math.abs(currentH - 0)},
+      {h: PEEK, d: Math.abs(currentH - PEEK)},
+      {h: FULL, d: Math.abs(currentH - FULL)},
+    ];
+    distances.sort((a,b) => a.d - b.d);
+    setHeight(distances[0].h, true);
+  }
+  handle.addEventListener('mousedown', onStart);
+  handle.addEventListener('touchstart', onStart, {passive:true});
+
+  closeBtn.addEventListener('click', () => setHeight(0));
+  reopenBtn.addEventListener('click', () => setHeight(PEEK));
+
+  // click on handle (no drag): toggle between peek and full
+  let downY = 0, downT = 0;
+  handle.addEventListener('mousedown', (e) => { downY = e.clientY; downT = Date.now(); });
+  handle.addEventListener('click', (e) => {
+    const dy = Math.abs(e.clientY - downY);
+    const dt = Date.now() - downT;
+    if (dy < 5 && dt < 300 && !e.target.closest('.close-btn')) {
+      setHeight(currentH < FULL ? FULL : PEEK);
+    }
+  });
+
+  // Bookmark toggle (sync both buttons)
+  const saveInline = document.getElementById('saveInline');
+  const saveBtn2 = document.getElementById('saveBtn2');
+  let saved = false;
+  function syncSave() {
+    saveInline.classList.toggle('on', saved);
+    const lbl = saveBtn2.querySelector('i');
+    saveBtn2.innerHTML = saved
+      ? '<i data-lucide="bookmark-check" class="ic-22"></i>저장됨'
+      : '<i data-lucide="bookmark" class="ic-22"></i>저장';
+    saveBtn2.style.color = saved ? 'var(--fr-primary)' : '';
+    lucide.createIcons();
+  }
+  saveInline.addEventListener('click', (e) => { e.stopPropagation(); saved = !saved; syncSave(); });
+  saveBtn2.addEventListener('click', (e) => { e.stopPropagation(); saved = !saved; syncSave(); });
+</script>
+</body>
+</html>

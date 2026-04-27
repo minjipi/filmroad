@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>07 · 내 프로필</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .top-bar { padding: 4px 16px 8px; display:flex; justify-content:space-between; align-items:center; }
+  .top-bar h1 { font-size:18px; font-weight:800; letter-spacing:-0.02em; margin:0; }
+  .top-bar .r { display:flex; gap:4px; }
+  .top-bar .r button { width:36px; height:36px; border-radius:10px; background:transparent; border:none; color:var(--fr-ink-2); display:flex; align-items:center; justify-content:center; }
+
+  .profile-card { padding: 8px 20px 20px; display:flex; gap:16px; align-items:center; }
+  .avatar { width:72px; height:72px; border-radius:50%; border:3px solid white; box-shadow:0 0 0 2px var(--fr-primary); background:#fce7f3; overflow:hidden; }
+  .avatar img { width:100%; height:100%; object-fit:cover; }
+  .me-info { flex:1; }
+  .me-info .n { font-size:18px; font-weight:800; letter-spacing:-0.02em; display:flex; align-items:center; gap:5px; }
+  .me-info .handle { font-size:12px; color:var(--fr-ink-3); margin-top:2px; }
+  .level-pill { margin-top:6px; display:inline-flex; align-items:center; gap:4px; padding:4px 10px; background: linear-gradient(135deg, #14BCED, #7c3aed); color:white; border-radius:999px; font-size:11px; font-weight:800; }
+
+  .stats { display:flex; padding: 4px 20px 0; gap:10px; }
+  .stat { flex:1; text-align:center; padding:10px 0; }
+  .stat .n { font-size:19px; font-weight:800; letter-spacing:-0.02em; }
+  .stat .l { font-size:11.5px; color:var(--fr-ink-3); margin-top:2px; }
+  .stat + .stat { border-left:1px solid var(--fr-line); }
+
+  .cta { padding: 16px 20px 4px; display:flex; gap:8px; }
+  .cta .btn { flex:1; height:40px; border-radius:12px; background:var(--fr-bg-muted); font-size:13px; font-weight:700; border:none; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .cta .btn.primary { background:var(--fr-primary); color:white; }
+
+  .mini-map { margin: 18px 20px 0; height:160px; border-radius:18px; overflow:hidden; position:relative;
+    background:
+      radial-gradient(circle at 20% 40%, #e6eef7 0%, transparent 50%),
+      radial-gradient(circle at 70% 60%, #dde9f2 0%, transparent 60%),
+      linear-gradient(180deg, #eef3f8, #e3ecf4);
+    border:1px solid var(--fr-line);
+  }
+  .mini-map::before { content:''; position:absolute; inset:0; background-image: linear-gradient(to right, rgba(0,0,0,.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,.04) 1px, transparent 1px); background-size: 30px 30px; }
+  .mini-pin { position:absolute; width:16px; height:16px; border-radius:50% 50% 50% 0; transform: rotate(-45deg); }
+  .mini-pin.p { background:var(--fr-primary); box-shadow:0 2px 4px rgba(0,0,0,.2); }
+  .mini-pin.v { background:var(--fr-violet); }
+  .mini-pin.g { background:var(--fr-mint); }
+  .map-overlay {
+    position:absolute; left:14px; bottom:14px; right:14px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .map-overlay .l { background:rgba(15,23,42,.85); color:white; padding:6px 12px; border-radius:999px; font-size:11px; font-weight:700; backdrop-filter:blur(6px); }
+  .map-overlay .r { background:white; padding:6px 12px; border-radius:999px; font-size:11px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.08); display:flex; align-items:center; gap:4px; }
+
+  .tabs { padding: 20px 20px 12px; display:flex; justify-content:space-around; border-bottom:1px solid var(--fr-line); }
+  .tab-i { color:var(--fr-ink-4); padding:8px 0; font-weight:700; font-size:13px; position:relative; }
+  .tab-i.on { color:var(--fr-ink); }
+  .tab-i.on::after { content:''; position:absolute; left:50%; transform:translateX(-50%); bottom:-13px; width:32px; height:3px; background:var(--fr-ink); border-radius:2px; }
+
+  .grid3 { display:grid; grid-template-columns: repeat(3, 1fr); gap:3px; padding: 2px 0 100px; }
+  .grid3 .c { aspect-ratio:1; background:#eef2f6; position:relative; overflow:hidden; }
+  .grid3 .c img { width:100%; height:100%; object-fit:cover; }
+  .grid3 .c .tag { position:absolute; bottom:6px; left:6px; background:rgba(0,0,0,.55); color:white; padding:2px 6px; border-radius:999px; font-size:9px; font-weight:700; backdrop-filter:blur(4px); }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page">
+  <div class="fr-status">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="top-bar">
+    <h1>@miru</h1>
+    <div class="r">
+      <button><i data-lucide="share-2" class="ic-20"></i></button>
+      <button><i data-lucide="menu" class="ic-20"></i></button>
+    </div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="profile-card">
+      <div class="avatar"><img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80"></div>
+      <div class="me-info">
+        <div class="n">김미루 <i data-lucide="badge-check" style="width:18px; height:18px; color:var(--fr-primary); fill:var(--fr-primary-soft);"></i></div>
+        <div class="handle">전국 성지 다 털어보는 중 🎬</div>
+        <span class="level-pill"><i data-lucide="star" class="ic-16" style="fill:currentColor"></i>LV.5 · 성지 순례자</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n">42</div><div class="l">방문 성지</div></div>
+      <div class="stat"><div class="n">186</div><div class="l">인증샷</div></div>
+      <div class="stat"><div class="n">1.2k</div><div class="l">팔로워</div></div>
+      <div class="stat"><div class="n">234</div><div class="l">팔로잉</div></div>
+    </div>
+
+    <div class="cta">
+      <button class="btn primary"><i data-lucide="pencil" class="ic-16"></i>프로필 편집</button>
+      <button class="btn"><i data-lucide="share-2" class="ic-16"></i>공유</button>
+    </div>
+
+    <div class="mini-map">
+      <div class="mini-pin p" style="left:22%; top:36%;"></div>
+      <div class="mini-pin v" style="left:40%; top:50%;"></div>
+      <div class="mini-pin p" style="left:58%; top:28%;"></div>
+      <div class="mini-pin g" style="left:70%; top:62%;"></div>
+      <div class="mini-pin p" style="left:30%; top:68%;"></div>
+      <div class="mini-pin v" style="left:82%; top:40%;"></div>
+      <div class="mini-pin g" style="left:48%; top:75%;"></div>
+      <div class="map-overlay">
+        <span class="l"><i data-lucide="map-pin" class="ic-16" style="vertical-align:-3px"></i> 전국 42곳 방문</span>
+        <span class="r">지도로 보기 <i data-lucide="chevron-right" class="ic-16"></i></span>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab-i on"><i data-lucide="grid-3x3" class="ic-18" style="vertical-align:-4px"></i> 인증샷</div>
+      <div class="tab-i"><i data-lucide="stamp" class="ic-18" style="vertical-align:-4px"></i> 스탬프북</div>
+      <div class="tab-i"><i data-lucide="bookmark" class="ic-18" style="vertical-align:-4px"></i> 저장</div>
+    </div>
+
+    <div class="grid3">
+      <div class="c"><img src="https://images.unsplash.com/photo-1520626337972-005d3cdb8978?auto=format&fit=crop&w=300&q=80"><span class="tag">도깨비</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=300&q=80"><span class="tag">미스터션샤인</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1617152664536-11f42e3f5383?auto=format&fit=crop&w=300&q=80"><span class="tag">이태원</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1555042827-6d274530c333?auto=format&fit=crop&w=300&q=80"><span class="tag">갯마을</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1582200236025-a134371fa7db?auto=format&fit=crop&w=300&q=80"><span class="tag">델루나</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=300&q=80"><span class="tag">도깨비</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=300&q=80"><span class="tag">도깨비</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=80"><span class="tag">도깨비</span></div>
+      <div class="c"><img src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=300&q=80"><span class="tag">델루나</span></div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item is-active"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
