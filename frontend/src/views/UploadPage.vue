@@ -363,6 +363,11 @@
             class="rewards"
             data-testid="completion-rewards"
           >
+            <div class="reward" data-testid="completion-score">
+              <div class="ico ico-violet"><ion-icon :icon="sparklesOutline" class="ic-20" /></div>
+              <div class="n">{{ scoreTotal ?? 0 }}점</div>
+              <div class="l">인증 점수</div>
+            </div>
             <div class="reward">
               <div class="ico ico-amber"><ion-icon :icon="star" class="ic-20" /></div>
               <div class="n">+{{ completionReward.pointsEarned }}</div>
@@ -429,6 +434,16 @@
         </div>
       </template>
       <!-- ============== /Stage A & B ============== -->
+
+      <!-- 레벨 업 — 인증완료 연출과 분리된 별도 오버레이로 띄운다. -->
+      <LevelUpOverlay
+        v-if="completionReward"
+        :open="levelUpOpen"
+        :level="completionReward.level"
+        :previous-level="completionReward.previousLevel"
+        :level-name="completionReward.levelName"
+        @close="onLevelUpClose"
+      />
     </ion-content>
   </ion-page>
 </template>
@@ -463,6 +478,7 @@ import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useToast } from '@/composables/useToast';
 import { useOnline } from '@/composables/useOnline';
 import ScoreRevealOverlay from '@/components/upload/ScoreRevealOverlay.vue';
+import LevelUpOverlay from '@/components/upload/LevelUpOverlay.vue';
 
 const router = useRouter();
 const uploadStore = useUploadStore();
@@ -492,6 +508,32 @@ function clearStageTimer(): void {
   if (pendingStageTimer !== null) {
     clearTimeout(pendingStageTimer);
     pendingStageTimer = null;
+  }
+}
+
+// stamp-card / rewards 노출 타이밍 — authenticated stage 진입 후 잠깐 뒤에
+// 띄워서 "인증 완료!" 헤더가 자리 잡고 나서 fade-up 애니메이션으로 따라
+// 들어오게 한다. scoring 단계에서는 미노출.
+const EXTRAS_REVEAL_DELAY_MS = 500;
+const extrasVisible = ref(false);
+let extrasRevealTimer: ReturnType<typeof setTimeout> | null = null;
+function clearExtrasTimer(): void {
+  if (extrasRevealTimer !== null) {
+    clearTimeout(extrasRevealTimer);
+    extrasRevealTimer = null;
+  }
+}
+
+// 레벨 업 오버레이 — rewards 가 자리 잡은 뒤 한 번 더 텀을 두고 띄운다
+// (인증완료 → rewards → 레벨업 순서). 응답에 previousLevel 이 빠진
+// 레거시 케이스는 maybeRevealLevelUp 에서 조용히 스킵.
+const LEVELUP_REVEAL_DELAY_MS = 400;
+const levelUpOpen = ref(false);
+let levelUpRevealTimer: ReturnType<typeof setTimeout> | null = null;
+function clearLevelUpTimer(): void {
+  if (levelUpRevealTimer !== null) {
+    clearTimeout(levelUpRevealTimer);
+    levelUpRevealTimer = null;
   }
 }
 
@@ -636,6 +678,10 @@ function resetCompletionState(): void {
   scoreSimilarity.value = null;
   scoreGps.value = null;
   clearStageTimer();
+  clearExtrasTimer();
+  extrasVisible.value = false;
+  clearLevelUpTimer();
+  levelUpOpen.value = false;
 }
 
 async function onShare(): Promise<void> {
@@ -684,7 +730,34 @@ function onCountUpComplete(): void {
   pendingStageTimer = setTimeout(() => {
     pendingStageTimer = null;
     stage.value = 'authenticated';
+    scheduleExtrasReveal();
   }, STAGE_BEAT_MS);
+}
+
+// "인증 완료!" 헤더가 자리 잡고 나면 stamp-card / rewards 를 fade-up 으로
+// 띄운다. 다 자리 잡은 뒤에 레벨업 모달이 따라 들어옴 (해당하는 경우).
+function scheduleExtrasReveal(): void {
+  clearExtrasTimer();
+  extrasRevealTimer = setTimeout(() => {
+    extrasRevealTimer = null;
+    extrasVisible.value = true;
+    maybeRevealLevelUp();
+  }, EXTRAS_REVEAL_DELAY_MS);
+}
+
+function maybeRevealLevelUp(): void {
+  clearLevelUpTimer();
+  const reward = lastResult.value?.reward;
+  if (!reward) return;
+  if (reward.level <= reward.previousLevel) return;
+  levelUpRevealTimer = setTimeout(() => {
+    levelUpRevealTimer = null;
+    levelUpOpen.value = true;
+  }, LEVELUP_REVEAL_DELAY_MS);
+}
+
+function onLevelUpClose(): void {
+  levelUpOpen.value = false;
 }
 
 // ---------- Stage B (인증 완료) reads ----------
@@ -699,15 +772,12 @@ const nextMilestoneCount = computed(() => {
   return Math.max(0, s.totalCount - s.collectedCount);
 });
 
-// stamp-card / rewards now ride along with stage A as well as stage B so the
-// user has more to look at while the count-up animation plays out (task #10).
-// Hidden during the loading sub-phase of stage A — the response hasn't
-// arrived yet, so even if `lastResult` is stale from a prior run we don't
-// want to flash old totals.
+// stamp-card / rewards 는 "인증 완료!" 헤더가 들어오고 EXTRAS_REVEAL_DELAY_MS
+// 뒤에 fade-up 으로 따라 들어온다. scoring 단계에서는 노출하지 않는다 —
+// 사용자가 점수 카운트업에 집중하도록 두고, authenticated 후에 보상이
+// 차례로 보이는 흐름이 더 자연스러움.
 const showCompletionExtras = computed<boolean>(() => {
-  if (stage.value === 'authenticated') return true;
-  if (stage.value === 'scoring') return !scoreLoading.value;
-  return false;
+  return stage.value === 'authenticated' && extrasVisible.value;
 });
 
 interface ConfettiDot {
@@ -756,6 +826,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearStageTimer();
+  clearExtrasTimer();
+  clearLevelUpTimer();
 });
 </script>
 
@@ -1344,6 +1416,20 @@ ion-content.up-content.up-stage-authenticated {
   font-weight: 800;
 }
 
+/* "인증 완료!" 헤더가 자리잡은 뒤 stamp-card / rewards 가 차례로 들어오는
+   진입 애니메이션. v-if 토글로 mount 되는 순간 자동 재생. .rewards 에 미세한
+   stagger 를 줘서 두 섹션이 같이 튀어 나오지 않게 한다. */
+@keyframes extras-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ----- 06-reward stamp + reward + badges + actions (verbatim, 1:1) ----- */
 .stamp-card {
   margin-top: 26px;
@@ -1353,6 +1439,7 @@ ion-content.up-content.up-stage-authenticated {
   padding: 20px 18px;
   border: 1px solid var(--fr-line);
   position: relative;
+  animation: extras-fade-up 380ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
 }
 .stamp-card::before,
 .stamp-card::after {
@@ -1456,6 +1543,7 @@ ion-content.up-content.up-stage-authenticated {
   gap: 8px;
   width: 100%;
   margin-top: 20px;
+  animation: extras-fade-up 380ms cubic-bezier(0.34, 1.2, 0.64, 1) 120ms both;
 }
 .reward {
   flex: 1;
@@ -1476,6 +1564,7 @@ ion-content.up-content.up-stage-authenticated {
 .ico-amber { background: #fff7e6; color: #f5a524; }
 .ico-primary { background: #e6f8fd; color: var(--fr-primary); }
 .ico-mint { background: #ecfdf5; color: var(--fr-mint); }
+.ico-violet { background: #f3eefe; color: #7c3aed; }
 .reward .n {
   font-size: 18px;
   font-weight: 800;
