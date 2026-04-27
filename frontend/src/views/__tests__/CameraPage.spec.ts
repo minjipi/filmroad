@@ -209,7 +209,8 @@ describe('CameraPage.vue', () => {
       public onload: (() => void) | null = null;
       public onerror: (() => void) | null = null;
       public result: string | null = null;
-      public readAsDataURL(_blob: Blob): void {
+      public readAsDataURL(blob: Blob): void {
+        void blob;
         this.result = 'data:image/jpeg;base64,ZmFrZQ==';
         queueMicrotask(() => this.onload?.());
       }
@@ -254,5 +255,107 @@ describe('CameraPage.vue', () => {
       ((c[0] as { message?: string })?.message ?? '').includes('jpg, png, webp'),
     );
     expect(hasMimeToast).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// task #3 — 우상단 가이드 사진 썸네일 + 토글 (plain 모드 한정 노출)
+// -----------------------------------------------------------------------------
+
+describe('CameraPage.vue — 가이드 썸네일 토글 (task #3)', () => {
+  beforeEach(() => {
+    pushSpy.mockClear();
+    replaceSpy.mockClear();
+    backSpy.mockClear();
+    toastCreateSpy.mockClear();
+  });
+
+  /** 기본 mode='overlay' 라 .guide-thumb 미렌더. plain 으로 전환해야 토글 케이스 검증 가능. */
+  async function switchToPlain(wrapper: ReturnType<typeof mountCamera>['wrapper']) {
+    const modes = wrapper.findAll('.mode');
+    // 0:비교, 1:오버레이, 2:일반
+    await modes[2].trigger('click');
+    await flushPromises();
+  }
+
+  it('F1: plain 모드 + targetPlace 있음 → guide-thumb 컨테이너+이미지 렌더, aria-pressed=true', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    await switchToPlain(wrapper);
+
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(true);
+    expect(wrapper.find('.guide-thumb__img').exists()).toBe(true);
+    const toggle = wrapper.find('[data-testid="guide-thumb-toggle"]');
+    expect(toggle.exists()).toBe(true);
+    expect(toggle.attributes('aria-pressed')).toBe('true');
+    // aria-label은 정적 — 접근성 명세
+    expect(toggle.attributes('aria-label')).toBe('가이드 사진 보이기/숨기기');
+  });
+
+  it('F2: 토글 클릭 → 이미지(.guide-thumb__img) v-if false, 컨테이너는 유지, aria-pressed=false', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    await switchToPlain(wrapper);
+    const toggle = wrapper.find('[data-testid="guide-thumb-toggle"]');
+
+    await toggle.trigger('click');
+    expect(wrapper.find('.guide-thumb__img').exists()).toBe(false);
+    expect(toggle.attributes('aria-pressed')).toBe('false');
+    // 컨테이너는 토글 버튼 자체를 위해 유지
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(true);
+  });
+
+  it('F3: 한 번 더 클릭 → 다시 visible (aria-pressed=true, 이미지 재렌더)', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    await switchToPlain(wrapper);
+    const toggle = wrapper.find('[data-testid="guide-thumb-toggle"]');
+
+    await toggle.trigger('click');  // hide
+    await toggle.trigger('click');  // show
+    expect(wrapper.find('.guide-thumb__img').exists()).toBe(true);
+    expect(toggle.attributes('aria-pressed')).toBe('true');
+  });
+
+  it('F4: targetPlace=null → plain 모드여도 컨테이너 자체 미렌더 (overlaySrc null)', async () => {
+    const { wrapper } = mountCamera({ ...baseUploadState, targetPlace: null });
+    await flushPromises();
+    await switchToPlain(wrapper);
+
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="guide-thumb-toggle"]').exists()).toBe(false);
+  });
+
+  it('F5: compare 모드 → guide-thumb 미렌더, .guide-card 노출 (UI 충돌 방지 회귀)', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    // 기본 overlay → compare 로 전환
+    const modes = wrapper.findAll('.mode');
+    await modes[0].trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(false);
+    expect(wrapper.find('.guide-card').exists()).toBe(true);
+  });
+
+  it('F6: overlay 모드(기본) → guide-thumb 미렌더, .guide-card 노출', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    // mode='overlay' 기본값 그대로
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(false);
+    expect(wrapper.find('.guide-card').exists()).toBe(true);
+  });
+
+  it('F7: plain → overlay 로 다시 전환 → guide-thumb 사라짐 (모드 전환 회귀)', async () => {
+    const { wrapper } = mountCamera();
+    await flushPromises();
+    await switchToPlain(wrapper);
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(true);
+
+    // overlay 로 복귀
+    const modes = wrapper.findAll('.mode');
+    await modes[1].trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="guide-thumb"]').exists()).toBe(false);
   });
 });

@@ -126,3 +126,175 @@ curl -w '\nHTTP %{http_code}\n' http://localhost:8080/api/places/99999/kakao-inf
 - 카카오 API 가 영업시간/리뷰/메뉴는 안 줌 — 프론트는 "카카오맵에서 보기" CTA 로 우회 (응답 `kakaoPlaceUrl`).
 - nearby 는 캐시 안 함. quota 보호는 캐시되는 장소 메타데이터 쪽에만 24h TTL 로 적용.
 - 외부 호출 timeout 3s. 실패는 디버그 로그 + 빈 결과 — endpoint 가 500 으로 안 떨어진다.
+
+---
+
+# Backend Implementation — feat/place-photo-score-gps (Task #1)
+
+브랜치: `feat/place-photo-score-gps` · 커밋: `fca1ab9`
+
+## 작업 범위
+인증샷 채점 시스템(가이드 사진 유사도 + 성지 GPS 근접도) 의 데이터 컬럼/DTO 토대 마련.
+실제 점수 산출 로직은 후속 task #2 (점수 계산 서비스) 가 담당. 본 task 는 컬럼 + 입출력 통로만.
+
+## 변경된 파일 (production)
+
+### 수정
+- `src/main/java/com/filmroad/api/domain/place/PlacePhoto.java`
+  - 신규 컬럼 5개:
+    - `total_score INT NOT NULL DEFAULT 0` (0~100)
+    - `similarity_score INT NOT NULL DEFAULT 0` (0~100)
+    - `gps_score INT NOT NULL DEFAULT 0` (0~100)
+    - `captured_latitude DOUBLE NULL`
+    - `captured_longitude DOUBLE NULL`
+  - 헬퍼: `applyScores(int similarity, int gps, int total)`, `setCapturedCoordinates(Double lat, Double lng)`
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoUploadRequest.java`
+  - `Double latitude` (`@DecimalMin -90.0` / `@DecimalMax 90.0`, nullable)
+  - `Double longitude` (`@DecimalMin -180.0` / `@DecimalMax 180.0`, nullable)
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoUploadResponse.java`
+  - `int totalScore / similarityScore / gpsScore`, `Double capturedLatitude / capturedLongitude` 노출
+  - `of(post, stamp, reward)` 매퍼에 점수/좌표 매핑 5줄 추가
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoDetailResponse.java`
+  - 동일 5개 필드 노출
+- `src/main/java/com/filmroad/api/domain/place/PhotoUploadService.java`
+  - `PlacePhoto.builder()` 에 `.capturedLatitude(req.getLatitude()).capturedLongitude(req.getLongitude())` 2줄 추가
+  - 점수 3종은 0(미채점) 으로 시작, 후속 task #2 의 채점 서비스가 `applyScores` 로 채워줄 자리
+- `src/main/java/com/filmroad/api/domain/place/PhotoDetailService.java`
+  - `PhotoDetailResponse.builder()` 에 점수 3종 + 좌표 2종 5줄 매핑 추가
+
+## 스키마 변경 (DDL)
+`spring.jpa.hibernate.ddl-auto: update` (application-dev.yml) 환경에서 부팅 시 Hibernate 가
+`place_photo` 테이블에 5개 컬럼을 자동 추가. 기존 row 는 default 값(점수 0, 좌표 NULL) 으로 후방 호환.
+
+운영(`update` 미사용) 환경에서는 다음 마이그레이션 SQL 실행:
+```sql
+ALTER TABLE place_photo
+  ADD COLUMN total_score INT NOT NULL DEFAULT 0,
+  ADD COLUMN similarity_score INT NOT NULL DEFAULT 0,
+  ADD COLUMN gps_score INT NOT NULL DEFAULT 0,
+  ADD COLUMN captured_latitude DOUBLE NULL,
+  ADD COLUMN captured_longitude DOUBLE NULL;
+```
+
+## API 계약 (frontend-dev 와 합의)
+
+### `POST /api/photos` 요청 (multipart/form-data, `meta` 파트 JSON)
+기존 필드(`placeId`, `caption`, `tags`, `visibility`, `addToStampbook`) 유지 + 추가:
+```json
+{
+  "placeId": 10,
+  "caption": "...",
+  "latitude": 37.8927,
+  "longitude": 128.8350
+}
+```
+- `latitude` / `longitude` 는 nullable. 권한 거부/획득 실패 시 미전송 가능.
+- 범위 검증 실패 시 400.
+
+### `POST /api/photos` 응답 / `GET /api/photos/{id}` 응답
+공통으로 신규 5개 필드 추가:
+```json
+{
+  "totalScore": 0,
+  "similarityScore": 0,
+  "gpsScore": 0,
+  "capturedLatitude": 37.8927,
+  "capturedLongitude": 128.8350
+}
+```
+- 본 task 시점에서는 점수 3종은 항상 0 (채점 미수행). task #2 머지 후 실제 값.
+- 기존 row 는 좌표 null + 점수 0.
+
+## 테스트 결과
+- 환경 이슈: WSL 에서 Gradle FileLock 이 IO error 로 실패 (`./gradlew compileJava` 가 데몬/싱글유즈 모두 동일하게 `Could not create service of type FileHasher`).
+  → 빌드 환경 문제로 기존 테스트는 로컬 IDE / CI 에서 검증 필요.
+- 코드 정합성 검토: 모든 변경은 기존 패턴(@Builder + Lombok @Getter, Bean Validation, 정적 팩토리) 그대로 따름.
+  - `PlacePhoto.builder().capturedLatitude(...).capturedLongitude(...)` — Lombok @Builder 가 Double 필드 받아 정상 처리.
+  - `PhotoUploadResponse.of(...)` 매퍼 5줄 추가 — 기존 builder 체이닝과 동형.
+
+## 후속 task 영향
+- task #2 (백엔드 채점 서비스): `PlacePhoto.applyScores(...)` 헬퍼 사용해 업로드 직후 점수 산출 → 저장.
+  본 task 의 컬럼/헬퍼가 그 토대.
+- task #4 (프론트 GPS 전송): `PhotoUploadRequest.latitude/longitude` 로 전송.
+  iOS/Android 권한 거부 시 둘 다 빠져도 200 응답 보장.
+- task #5 (프론트 채점 결과 표시): `PhotoUploadResponse.totalScore/similarityScore/gpsScore` 사용.
+- task #6 (QA 백엔드 테스트): 본 commit 의 컬럼 + DTO 위에 task #2 채점 로직을 검증.
+
+## 비고
+- `PhotoUploadResponse` 매퍼에 점수/좌표 echo 매핑이 들어가지만, task #2 채점 서비스가 commit 전에
+  `applyScores` 호출만 하면 응답에 자동 반영됨 (DTO 매핑은 entity 기준).
+
+---
+
+# Backend Implementation — Task #2 (ShotScoringService)
+
+브랜치: `feat/place-photo-score-gps` · 커밋: `fc3fc35`
+
+## 작업 범위
+업로드된 인증샷을 (1) Place 등록 좌표와의 거리 (2) 가이드 사진(`Place.sceneImageUrl`) 과의
+시각적 유사도 두 축으로 0~100 점 환산하여 PlacePhoto 에 저장.
+
+## 변경된 파일
+
+### 신규 (production)
+- `src/main/java/com/filmroad/api/domain/place/ShotScoringService.java`
+  - `score(Place, MultipartFile, Double lat, Double lng)` 진입점 → `ShotScoreDto` 반환.
+  - GPS: Haversine 거리. 0m=100 / 50m=80 / 200m=50 / 1km+=0 의 구간별 선형 보간.
+    좌표 null / 범위 밖이면 0 점.
+  - 유사도: pHash. 32x32 grayscale → 자체 구현 2D DCT-II → 8x8 top-left → median 비트 해시(64비트)
+    → Hamming distance 0=100 / 32+=0 선형 환산. JDK 만으로 (`java.awt.image.BufferedImage`,
+    `javax.imageio.ImageIO`) 외부 의존성 없음.
+  - 총점: `round(similarity * 0.6 + gps * 0.4)` clamp [0,100].
+  - scene URL 로더: `/uploads/...` 로컬 경로와 `http(s)://...` 외부 URL 둘 다 지원.
+    traversal 방어 (정규화 후 base 안에 머무는지 확인). HTTP timeout 3s connect / 5s read.
+  - 디코딩/다운로드/IO 실패는 모두 내부에서 catch 후 0점 fallback — 예외 throw 안 함.
+- `src/main/java/com/filmroad/api/domain/place/dto/ShotScoreDto.java`
+  - `record ShotScoreDto(int similarityScore, int gpsScore, int totalScore)`.
+  - `zero()` 정적 팩토리 — fallback 케이스용.
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/domain/place/PhotoUploadService.java`
+  - `ShotScoringService` 생성자 주입.
+  - 요청 좌표를 `sanitizeLatitude/Longitude` 로 정규화하여 [-90,90] / [-180,180] 범위 밖이면
+    null. 한쪽만 있어도 둘 다 null (정책 b — UX 우선).
+  - 첫 파일을 batch 대표로 `shotScoringService.score(...)` 호출 → `post.applyScores(...)` 적용.
+  - `RuntimeException` 안전망 — 채점 실패는 warn 로그 + 0점 fallback, 업로드 흐름 유지.
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoUploadRequest.java`
+  - `@DecimalMin/@DecimalMax` 제거 — strict bean validation 으로 400 거부 대신 서비스 단
+    정규화 + `gpsScore=0` 으로 처리하기로 결정 (정책 b).
+
+## 알고리즘 결정 — 백엔드 재량으로 확정
+
+| 항목 | 값 | 근거 |
+|---|---|---|
+| GPS 환산 곡선 | 0m=100, 50m=80, 200m=50, 1km=0 (구간 선형) | 일반 GPS 정확도 ~10m, 도보 1분 거리(50m) 까지 우대 |
+| 유사도 알고리즘 | pHash (32x32 DCT 후 8x8 비트 해시) | 회전/평행이동에 강하고 외부 의존성 없음. 컬러 히스토그램은 같은 색상의 다른 장면을 못 거름 |
+| Hamming → 점수 | 0=100, 32+=0 선형 | 32비트(50%) 차이부터는 random 수준이라 점수 0 처리 |
+| 가중치 | sim 0.6 + gps 0.4 | similarity 가 "성지 인증" 본질적 신호. GPS 는 디바이스 흔들림 영향 큼 |
+| 잘못된 좌표 | null 정규화 → gps=0, 업로드는 통과 | 정책 b. 업로드 자체 실패로 만들지 않는 UX 우선 |
+
+## 외부 의존성 / 빌드 변경
+**없음**. `build.gradle` 무수정. JDK 표준 라이브러리만 사용.
+
+## 테스트 결과
+- 환경 이슈로 `./gradlew` 가 WSL FileLock 으로 실패하는 상태 그대로 — 로컬 IDE / CI 에서
+  검증 필요. 코드는 기존 `PhotoUploadService` 트랜잭션 흐름과 동일 패턴.
+- 자체 검토:
+  - `ShotScoreDto` record 의 accessor `.similarityScore() / .gpsScore() / .totalScore()` —
+    `PlacePhoto.applyScores(int, int, int)` 시그니처와 정확히 매칭.
+  - `MultipartFile.getInputStream()` 은 호출마다 fresh stream — 검증 단계의 `readNBytes(12)`
+    이후에도 ImageIO 디코딩 정상 동작.
+  - DCT N=32 → ~1M ops 로 부담 없음.
+- task #6 (QA) 가 다음 케이스로 검증 예정:
+  1. 좌표 0m → gpsScore=100
+  2. 좌표 50m → gpsScore=80, 200m → 50, 1km → 0
+  3. 좌표 위도 91.0 / null → gpsScore=0, 업로드 200
+  4. 동일 이미지 업로드 → similarityScore≈100
+  5. scene URL 누락 → similarityScore=0
+  6. totalScore = round(sim*0.6 + gps*0.4)
+
+## 후속 영향
+- frontend-dev (task #5): 업로드 응답의 `totalScore / similarityScore / gpsScore` 가 이제
+  실제 점수로 들어옴. 0 인 경우는 (a) 미채점 row(이전 데이터) (b) 좌표 누락 + scene 디코딩 실패
+  의 두 케이스 — UI 에서 "채점 미수행" 표시 vs "0점" 표시 분기 필요시 응답에 별도 플래그 추가
+  요청 가능.

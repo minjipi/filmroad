@@ -3,6 +3,7 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 import { compressDataUrl, dataUrlByteSize } from '@/utils/imageCompress';
+import { requestLocation } from '@/composables/useGeolocation';
 
 // Server-side multipart cap is 10MB/file; we enforce a stricter 5MB cap per
 // file after compression so even a failed compression round-trip stays well
@@ -81,6 +82,21 @@ export interface PhotoResponse {
   images: PhotoImageSummary[];
   stamp?: StampProgress;
   reward?: RewardDelta;
+  // Scoring fields (task #2 backend) — present once the scoring service ships.
+  // Backend currently emits these on every PhotoUploadResponse / PhotoDetailResponse:
+  //   totalScore = round(similarityScore * 0.6 + gpsScore * 0.4), clamped [0,100]
+  //   similarityScore = pHash distance → linear 0..100
+  //   gpsScore = haversine distance → linear 0..100 (50m → 80, 200m → 50, 1km+ → 0)
+  // Pre-feature rows (and rows with neither coords nor scene image) come back with
+  // all three at 0; we don't get a separate `scored: boolean` flag from the API.
+  totalScore?: number | null;
+  similarityScore?: number | null;
+  gpsScore?: number | null;
+  // Server-normalized capture coordinates. Out-of-range or one-sided submissions
+  // get coerced to null on the backend (no 400). Useful for "where you stood"
+  // pins on later screens — not surfaced in the score overlay itself.
+  capturedLatitude?: number | null;
+  capturedLongitude?: number | null;
 }
 
 interface State {
@@ -240,12 +256,29 @@ export const useUploadStore = defineStore('upload', {
           const ext = extForMime(blob.type);
           form.append('files', blob, `capture-${i}.${ext}`);
         }
+        // Best-effort GPS capture (task #4). 5s timeout, silent fail —
+        // backend treats missing coords as 0 GPS score rather than blocking
+        // the upload. Permission denial / unavailable / timeout all just
+        // skip the lat/lng fields with a console warning.
+        const geo = await requestLocation({ timeoutMs: 5000 });
+        let latitude: number | undefined;
+        let longitude: number | undefined;
+        if (geo.ok) {
+          latitude = geo.coords.lat;
+          longitude = geo.coords.lng;
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn(`[upload] geolocation skipped (${geo.reason}); proceeding without coords`);
+        }
+
         const meta = {
           placeId: this.targetPlace.placeId,
           caption: this.caption.trim() || undefined,
           tags: this.tags.length > 0 ? this.tags.join(',') : undefined,
           visibility: this.visibility,
           addToStampbook: this.addToStampbook,
+          latitude,
+          longitude,
         };
         form.append('meta', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
         const { data } = await api.post<PhotoResponse>('/api/photos', form, {

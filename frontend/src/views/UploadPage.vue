@@ -1,6 +1,8 @@
 <template>
   <ion-page>
-    <ion-content :fullscreen="true" class="up-content">
+    <ion-content :fullscreen="true" class="up-content" :class="`up-stage-${stage}`">
+      <!-- ============== Stage 0: Compose form ============== -->
+      <template v-if="stage === 'compose'">
       <header class="top">
         <span class="cancel" @click="onCancel">취소</span>
         <h1>인증샷 올리기</h1>
@@ -241,12 +243,161 @@
           </div>
         </div>
       </div>
+      </template>
+      <!-- ============== /Stage 0 ============== -->
+
+      <!-- ============== Stage A & B: 채점 / 인증 완료 ============== -->
+      <template v-else>
+        <div class="rw-bg" aria-hidden="true">
+          <div
+            v-for="c in confettiDots"
+            :key="c.key"
+            class="confetti"
+            :style="c.style"
+          />
+        </div>
+
+        <div
+          class="rw-page-content no-scrollbar"
+          data-testid="upload-completion"
+        >
+          <!-- Stage A: 채점 카운트업 (check-wrap 위치) -->
+          <div
+            v-if="stage === 'scoring'"
+            class="check-wrap scoring-wrap"
+            data-testid="upload-stage-scoring"
+          >
+            <ScoreRevealOverlay
+              :loading="scoreLoading"
+              :total-score="scoreTotal"
+              :similarity-score="scoreSimilarity"
+              :gps-score="scoreGps"
+              @count-up-complete="onCountUpComplete"
+            />
+          </div>
+
+          <!-- Stage B header (인증 완료 타이틀 + sub) -->
+          <template v-if="stage === 'authenticated'">
+            <div class="check-wrap" data-testid="upload-stage-authenticated">
+              <div class="check-ring">
+                <ion-icon :icon="checkmark" class="check-ic" />
+              </div>
+            </div>
+
+            <h1 class="rw-title">인증 완료!</h1>
+            <p class="rw-sub" data-testid="completion-place-name">
+              <span class="bold-k">'{{ completionPlaceName }}'</span> 성지를<br />성공적으로 수집하셨어요 ✨
+            </p>
+          </template>
+
+          <!-- Common to scoring + authenticated (task #10): stamp-card and
+               rewards stay on screen across both stages once the response has
+               landed, so the user has more to look at while the count-up
+               plays out. Auto-hide individually when the field is missing. -->
+          <section
+            v-if="showCompletionExtras && completionStamp"
+            class="stamp-card"
+            data-testid="completion-stamp-card"
+          >
+            <div class="stamp-top">
+              <div class="stamp-badge">
+                <ion-icon :icon="filmOutline" class="ic-22" />
+                <span class="num">{{ completionStamp.collectedCount }}</span>
+              </div>
+              <div class="stamp-info">
+                <div class="t">{{ completionStamp.workTitle }} 스탬프북</div>
+                <div class="s">{{ completionStamp.collectedCount }} / {{ completionStamp.totalCount }} 성지 수집</div>
+              </div>
+            </div>
+            <div class="progress">
+              <span class="p-t">컬렉션 진행률</span>
+              <span class="p-v">{{ completionStamp.percent }}%</span>
+            </div>
+            <div class="bar">
+              <div class="fill" :style="{ width: `${completionStamp.percent}%` }" />
+            </div>
+            <div v-if="nextMilestoneCount > 0" class="next-milestone">
+              다음 <b>{{ nextMilestoneCount }}곳</b> 모으면 <b>{{ completionStamp.workTitle }} 완주</b>!
+            </div>
+          </section>
+
+          <section
+            v-if="showCompletionExtras && completionReward"
+            class="rewards"
+            data-testid="completion-rewards"
+          >
+            <div class="reward">
+              <div class="ico ico-amber"><ion-icon :icon="star" class="ic-20" /></div>
+              <div class="n">+{{ completionReward.pointsEarned }}</div>
+              <div class="l">성지 포인트</div>
+            </div>
+            <div class="reward">
+              <div class="ico ico-primary"><ion-icon :icon="flameOutline" class="ic-20" /></div>
+              <div class="n">{{ completionReward.streakDays }}일</div>
+              <div class="l">연속 인증</div>
+            </div>
+            <div class="reward">
+              <div class="ico ico-mint"><ion-icon :icon="trendingUpOutline" class="ic-20" /></div>
+              <div class="n">LV.{{ completionReward.level }}</div>
+              <div class="l">{{ completionReward.levelName }}</div>
+            </div>
+          </section>
+
+          <!-- Stage B trailing: new-badges and action buttons remain
+               authenticated-only — the user shouldn't be able to "go home"
+               while the count-up is still running. -->
+          <template v-if="stage === 'authenticated'">
+            <section
+              v-if="completionReward && completionReward.newBadges.length > 0"
+              class="new-badges"
+            >
+              <h3>새 뱃지!</h3>
+              <div class="nb-list">
+                <div
+                  v-for="b in completionReward.newBadges"
+                  :key="b.badgeId"
+                  class="nb-card"
+                >
+                  <div
+                    class="nb-circle"
+                    :style="b.gradient ? { background: b.gradient } : undefined"
+                  >
+                    <ion-icon :icon="sparklesOutline" class="ic-24" />
+                  </div>
+                  <div class="nb-t">{{ b.name }}</div>
+                  <div v-if="b.description" class="nb-s">{{ b.description }}</div>
+                </div>
+              </div>
+            </section>
+
+            <div class="rw-actions">
+              <button
+                class="fr-btn primary"
+                type="button"
+                data-testid="upload-boast"
+                @click="onBoast"
+              >
+                <ion-icon :icon="shareSocialOutline" class="ic-20" />친구에게 자랑하기
+              </button>
+              <button
+                class="link"
+                type="button"
+                data-testid="upload-go-home"
+                @click="onGoHome"
+              >
+                홈으로 돌아가기
+              </button>
+            </div>
+          </template>
+        </div>
+      </template>
+      <!-- ============== /Stage A & B ============== -->
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   sparklesOutline,
@@ -260,6 +411,12 @@ import {
   closeOutline,
   searchOutline,
   cloudOfflineOutline,
+  // Stage B (인증 완료 / 06-reward) icons.
+  checkmark,
+  star,
+  flameOutline,
+  trendingUpOutline,
+  shareSocialOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -267,14 +424,38 @@ import { MAX_PHOTOS_PER_POST, useUploadStore } from '@/stores/upload';
 import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useToast } from '@/composables/useToast';
 import { useOnline } from '@/composables/useOnline';
+import ScoreRevealOverlay from '@/components/upload/ScoreRevealOverlay.vue';
 
 const router = useRouter();
 const uploadStore = useUploadStore();
 const homeStore = useHomeStore();
-const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading, uploadProgress, error: errorText } = storeToRefs(uploadStore);
+const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading, uploadProgress, error: errorText, lastResult } = storeToRefs(uploadStore);
 const selectedPhoto = computed(() => uploadStore.selectedPhoto);
 const { showError, showInfo } = useToast();
 const online = useOnline();
+
+// ---------- Stage machine (task #8) ----------
+// /upload now hosts the entire compose → scoring → authenticated flow in one
+// page (no /reward redirect). Stage transitions:
+//   compose  → user fills form, taps 공유하기
+//   scoring  → submit() in flight (loading) and then count-up reveal
+//   authenticated → 06-reward style 인증 완료 page (stamp + rewards + actions)
+type Stage = 'compose' | 'scoring' | 'authenticated';
+const stage = ref<Stage>('compose');
+const scoreLoading = ref(false);
+const scoreTotal = ref<number | null>(null);
+const scoreSimilarity = ref<number | null>(null);
+const scoreGps = ref<number | null>(null);
+
+// Pending timer for the count-up → authenticated handoff (~700ms beat so the
+// final score lingers long enough to register before the screen swaps).
+let pendingStageTimer: ReturnType<typeof setTimeout> | null = null;
+function clearStageTimer(): void {
+  if (pendingStageTimer !== null) {
+    clearTimeout(pendingStageTimer);
+    pendingStageTimer = null;
+  }
+}
 
 const fileInput = ref<HTMLInputElement | null>(null);
 
@@ -397,29 +578,132 @@ async function onCancel(): Promise<void> {
   await router.replace('/home');
 }
 
+// ---------- Submit / score / completion (task #8) ----------
+// onShare drives the whole compose → scoring → authenticated trip without
+// leaving /upload. submit() flips the page into 'scoring' stage with a
+// "채점 중" placeholder, then the inline ScoreRevealOverlay count-up takes
+// over once a response is in. count-up-complete → 700ms beat → 'authenticated'.
+
+function applyScoreFromResponse(res: { placeId: number; totalScore?: number | null; similarityScore?: number | null; gpsScore?: number | null }): void {
+  scoreTotal.value = res.totalScore ?? null;
+  scoreSimilarity.value = res.similarityScore ?? null;
+  scoreGps.value = res.gpsScore ?? null;
+  scoreLoading.value = false;
+}
+
+function resetCompletionState(): void {
+  scoreLoading.value = false;
+  scoreTotal.value = null;
+  scoreSimilarity.value = null;
+  scoreGps.value = null;
+  clearStageTimer();
+}
+
 async function onShare(): Promise<void> {
-  const placeId = targetPlace.value?.placeId;
+  resetCompletionState();
+  scoreLoading.value = true;
+  stage.value = 'scoring';
+
   const res = await uploadStore.submit();
   if (!res) {
+    // Upload failed — fall back to the compose form so the inline error
+    // banner / retry affordance is visible again.
+    stage.value = 'compose';
+    scoreLoading.value = false;
     if (uploadStore.error) await showError(uploadStore.error);
     return;
   }
-  await showInfo('인증샷이 공유되었습니다');
-  await router.replace(`/reward/${placeId ?? res.placeId}`);
+  applyScoreFromResponse(res);
 }
 
 // Re-attempt a failed upload. Uses the same state as onShare — photos,
 // caption, tags, visibility are all still populated. On success, behaves
-// identically to the first attempt (info toast + redirect to reward).
+// identically to the first attempt (scoring → authenticated stage flow).
 async function onRetry(): Promise<void> {
-  const placeId = targetPlace.value?.placeId;
+  resetCompletionState();
+  scoreLoading.value = true;
+  stage.value = 'scoring';
+
   const res = await uploadStore.retry();
   if (!res) {
+    stage.value = 'compose';
+    scoreLoading.value = false;
     if (uploadStore.error) await showError(uploadStore.error);
     return;
   }
-  await showInfo('인증샷이 공유되었습니다');
-  await router.replace(`/reward/${placeId ?? res.placeId}`);
+  applyScoreFromResponse(res);
+}
+
+// 600~800ms hold so the bounced final score has presence before the screen
+// hands off to the 인증 완료 view. Anything shorter feels jumpy; anything
+// longer feels like it stalled.
+const STAGE_BEAT_MS = 700;
+
+function onCountUpComplete(): void {
+  if (stage.value !== 'scoring') return;
+  clearStageTimer();
+  pendingStageTimer = setTimeout(() => {
+    pendingStageTimer = null;
+    stage.value = 'authenticated';
+  }, STAGE_BEAT_MS);
+}
+
+// ---------- Stage B (인증 완료) reads ----------
+const completionStamp = computed(() => lastResult.value?.stamp ?? null);
+const completionReward = computed(() => lastResult.value?.reward ?? null);
+const completionPlaceName = computed(() =>
+  completionStamp.value?.placeName ?? targetPlace.value?.placeName ?? '성지',
+);
+const nextMilestoneCount = computed(() => {
+  const s = completionStamp.value;
+  if (!s) return 0;
+  return Math.max(0, s.totalCount - s.collectedCount);
+});
+
+// stamp-card / rewards now ride along with stage A as well as stage B so the
+// user has more to look at while the count-up animation plays out (task #10).
+// Hidden during the loading sub-phase of stage A — the response hasn't
+// arrived yet, so even if `lastResult` is stale from a prior run we don't
+// want to flash old totals.
+const showCompletionExtras = computed<boolean>(() => {
+  if (stage.value === 'authenticated') return true;
+  if (stage.value === 'scoring') return !scoreLoading.value;
+  return false;
+});
+
+interface ConfettiDot {
+  key: string;
+  style: Record<string, string>;
+}
+const CONFETTI_COLORS = ['#14BCED', '#7c3aed', '#f5a524', '#10b981', '#14BCED', '#ff5a5f'];
+const CONFETTI_POSITIONS: Array<{ left: string; top: string; rotate: number }> = [
+  { left: '10%', top: '12%', rotate: 0 },
+  { left: '85%', top: '18%', rotate: 20 },
+  { left: '20%', top: '28%', rotate: 0 },
+  { left: '78%', top: '40%', rotate: -20 },
+  { left: '12%', top: '55%', rotate: 0 },
+  { left: '88%', top: '60%', rotate: 0 },
+];
+const confettiDots = computed<ConfettiDot[]>(() =>
+  CONFETTI_POSITIONS.map((p, i) => ({
+    key: `c-${i}`,
+    style: {
+      background: CONFETTI_COLORS[i],
+      left: p.left,
+      top: p.top,
+      transform: `rotate(${p.rotate}deg)`,
+    },
+  })),
+);
+
+async function onBoast(): Promise<void> {
+  await showInfo('공유는 곧 공개됩니다');
+}
+
+async function onGoHome(): Promise<void> {
+  uploadStore.reset();
+  stage.value = 'compose';
+  await router.replace('/home');
 }
 
 onMounted(async () => {
@@ -429,6 +713,10 @@ onMounted(async () => {
   if (photos.value.length === 0) {
     await router.replace('/home');
   }
+});
+
+onBeforeUnmount(() => {
+  clearStageTimer();
 });
 </script>
 
@@ -860,5 +1148,330 @@ ion-content.up-content {
   text-align: center;
   font-size: 13px;
   color: var(--fr-ink-3);
+}
+
+/* ====================================================================
+   Stage A (scoring) + Stage B (authenticated) — design/pages/06-reward.html
+   ==================================================================== */
+
+ion-content.up-content.up-stage-scoring,
+ion-content.up-content.up-stage-authenticated {
+  --background: #fafbfd;
+}
+
+.rw-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(20, 188, 237, 0.15), transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(124, 58, 237, 0.1), transparent 40%),
+    #fafbfd;
+}
+.confetti {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 2px;
+}
+
+.rw-page-content {
+  position: relative;
+  z-index: 1;
+  padding: calc(60px + env(safe-area-inset-top)) 24px calc(40px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+.check-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 30px 0 20px;
+}
+.check-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--fr-primary);
+  box-shadow: 0 20px 50px rgba(20, 188, 237, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+.check-ring::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(20, 188, 237, 0.3);
+}
+.check-ic {
+  width: 56px;
+  height: 56px;
+  font-size: 56px;
+}
+
+/* Stage A — the count-up reveal does NOT live inside the small primary
+   ring (the 64px score number wouldn't fit). Instead the wrap is the
+   card itself: light card with a subtle ring shadow. The 인증 완료 ring
+   takes back over in stage B. */
+.scoring-wrap {
+  width: auto;
+  height: auto;
+  min-width: 220px;
+  margin: 30px 0 20px;
+  padding: 20px 24px;
+  border-radius: 24px;
+}
+
+.rw-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin: 8px 0;
+  color: var(--fr-ink);
+}
+.rw-sub {
+  font-size: 14px;
+  color: var(--fr-ink-3);
+  line-height: 1.5;
+  margin: 0;
+}
+.bold-k {
+  color: var(--fr-primary);
+  font-weight: 800;
+}
+
+/* ----- 06-reward stamp + reward + badges + actions (verbatim, 1:1) ----- */
+.stamp-card {
+  margin-top: 26px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 22px;
+  padding: 20px 18px;
+  border: 1px solid var(--fr-line);
+  position: relative;
+}
+.stamp-card::before,
+.stamp-card::after {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fafbfd;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--fr-line);
+}
+.stamp-card::before { left: -8px; }
+.stamp-card::after { right: -8px; }
+
+.stamp-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--fr-line);
+}
+.stamp-badge {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #14BCED, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  position: relative;
+  flex-shrink: 0;
+}
+.stamp-badge .num {
+  position: absolute;
+  right: -4px; top: -4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--fr-coral);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+}
+.stamp-info { flex: 1; }
+.stamp-info .t {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.stamp-info .s {
+  font-size: 12px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+
+.progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.progress .p-t {
+  font-weight: 700;
+  color: var(--fr-ink);
+}
+.progress .p-v {
+  color: var(--fr-ink-3);
+}
+.bar {
+  height: 8px;
+  background: var(--fr-bg-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar .fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #14BCED, #7c3aed);
+}
+.next-milestone {
+  font-size: 11px;
+  color: var(--fr-ink-3);
+  margin-top: 10px;
+  text-align: left;
+}
+.next-milestone b {
+  color: var(--fr-primary);
+  font-weight: 700;
+}
+
+.rewards {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 20px;
+}
+.reward {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid var(--fr-line);
+  border-radius: 16px;
+  padding: 14px 10px;
+  text-align: center;
+}
+.reward .ico {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ico-amber { background: #fff7e6; color: #f5a524; }
+.ico-primary { background: #e6f8fd; color: var(--fr-primary); }
+.ico-mint { background: #ecfdf5; color: var(--fr-mint); }
+.reward .n {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.reward .l {
+  font-size: 10.5px;
+  color: var(--fr-ink-3);
+  margin-top: 1px;
+}
+
+.new-badges {
+  width: 100%;
+  margin-top: 18px;
+  text-align: left;
+}
+.new-badges h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+.nb-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+.nb-card {
+  flex-shrink: 0;
+  width: 120px;
+  background: #ffffff;
+  border: 1px solid var(--fr-line);
+  border-radius: 14px;
+  padding: 10px;
+  text-align: center;
+}
+.nb-circle {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #14BCED, #7c3aed);
+  color: #ffffff;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nb-t {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+.nb-s {
+  font-size: 10px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+
+.rw-actions {
+  margin-top: auto;
+  padding-top: 28px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fr-btn {
+  height: 52px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+}
+.fr-btn.primary {
+  background: var(--fr-primary);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(20, 188, 237, 0.35);
+}
+.link {
+  color: var(--fr-ink-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 </style>
