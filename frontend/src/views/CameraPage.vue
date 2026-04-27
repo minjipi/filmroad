@@ -46,6 +46,31 @@
         </button>
       </div>
 
+      <div
+        v-if="overlaySrc && mode === 'plain'"
+        class="guide-thumb"
+        :class="{ 'guide-thumb--collapsed': !guideThumbVisible }"
+        data-testid="guide-thumb"
+      >
+        <button
+          class="guide-thumb__toggle"
+          type="button"
+          aria-label="가이드 사진 보이기/숨기기"
+          :aria-pressed="guideThumbVisible"
+          data-testid="guide-thumb-toggle"
+          @click="onToggleGuideThumb"
+        >
+          <ion-icon :icon="guideThumbVisible ? eyeOutline : eyeOffOutline" class="ic-18" />
+        </button>
+        <img
+          v-if="guideThumbVisible"
+          :src="overlaySrc"
+          alt="가이드 사진"
+          class="guide-thumb__img"
+          draggable="false"
+        />
+      </div>
+
       <div v-if="overlaySrc && mode !== 'plain'" class="guide-card">
         <div class="ico"><ion-icon :icon="sparklesOutline" class="ic-18" /></div>
         <div class="txt">
@@ -115,6 +140,8 @@ import {
   syncOutline,
   locationOutline,
   imagesOutline,
+  eyeOutline,
+  eyeOffOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -137,6 +164,7 @@ const overlayOpacity = ref(42);
 const facingMode = ref<'user' | 'environment'>('environment');
 const flashOn = ref(false);
 const liveActive = ref(false);
+const guideThumbVisible = ref(true);
 let stream: MediaStream | null = null;
 
 const modeList: Array<{ key: Mode; label: string }> = [
@@ -258,6 +286,10 @@ function onSliderPointerDown(e: PointerEvent): void {
 
 function onToggleFlash(): void {
   flashOn.value = !flashOn.value;
+}
+
+function onToggleGuideThumb(): void {
+  guideThumbVisible.value = !guideThumbVisible.value;
 }
 
 async function onFlip(): Promise<void> {
@@ -576,6 +608,42 @@ onBeforeUnmount(() => {
   font-size: 9px;
   opacity: 0.7;
   font-weight: 700;
+}
+
+.guide-thumb {
+  position: absolute;
+  top: calc(72px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.guide-thumb__toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.guide-thumb__img {
+  width: 96px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .capture-canvas {

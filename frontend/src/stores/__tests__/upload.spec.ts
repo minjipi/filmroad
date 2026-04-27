@@ -5,7 +5,16 @@ vi.mock('@/services/api', () => ({
   default: { post: vi.fn() },
 }));
 
+// Geolocation hook — stubbed per-test so we can drive ok/fail paths without
+// touching the real navigator.geolocation (jsdom has none).
+vi.mock('@/composables/useGeolocation', () => ({
+  requestLocation: vi.fn().mockResolvedValue({ ok: false, reason: 'unavailable' }),
+}));
+
 import api from '@/services/api';
+import { requestLocation } from '@/composables/useGeolocation';
+
+const mockRequestLocation = requestLocation as unknown as ReturnType<typeof vi.fn>;
 import {
   useUploadStore,
   type CaptureTarget,
@@ -45,6 +54,11 @@ describe('upload store', () => {
   beforeEach(() => {
     setActivePinia(createPinia()); signInForTest();
     mockApi.post.mockReset();
+    // Default to "no GPS" — tests that need coords opt in by overriding the
+    // mock for that case. Keeps the meta-shape assertions in older tests
+    // unchanged (lat/lng absent when geolocation is unavailable).
+    mockRequestLocation.mockReset();
+    mockRequestLocation.mockResolvedValue({ ok: false, reason: 'unavailable' });
   });
 
   it('beginCapture sets targetPlace and reset wipes everything back', () => {
@@ -345,6 +359,67 @@ describe('upload store', () => {
     resolvePost({ data: fakeResponse });
     await submitP;
     expect(store.uploadProgress).toBe(100);
+  });
+
+  it('submit includes latitude/longitude in meta when geolocation succeeds (task #4)', async () => {
+    mockRequestLocation.mockResolvedValueOnce({
+      ok: true,
+      coords: { lat: 37.5665, lng: 126.978 },
+    });
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+
+    const result = await store.submit();
+    expect(result).toEqual(fakeResponse);
+
+    const [, form] = mockApi.post.mock.calls[0];
+    const metaEntry = (form as FormData).get('meta');
+    const metaText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(metaEntry as Blob);
+    });
+    const metaJson = JSON.parse(metaText);
+
+    expect(metaJson.latitude).toBe(37.5665);
+    expect(metaJson.longitude).toBe(126.978);
+    expect(metaJson.placeId).toBe(10);
+  });
+
+  it('submit silently omits latitude/longitude when geolocation fails (silent fail, task #4)', async () => {
+    mockRequestLocation.mockResolvedValueOnce({ ok: false, reason: 'denied' });
+    mockApi.post.mockResolvedValueOnce({ data: fakeResponse });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const store = useUploadStore();
+    store.beginCapture(target);
+    store.addPhoto(JPEG_DATA_URL);
+
+    const result = await store.submit();
+    // Upload still goes through — geo failure is silent.
+    expect(result).toEqual(fakeResponse);
+    expect(store.error).toBeNull();
+
+    const [, form] = mockApi.post.mock.calls[0];
+    const metaEntry = (form as FormData).get('meta');
+    const metaText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(metaEntry as Blob);
+    });
+    const metaJson = JSON.parse(metaText);
+
+    // JSON.stringify drops undefined keys — lat/lng absent rather than null.
+    expect('latitude' in metaJson).toBe(false);
+    expect('longitude' in metaJson).toBe(false);
+    // We left a console.warn breadcrumb (per task #4 brief — silent UX, not silent debug).
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
   });
 
   it('retry() is a named alias for submit() — re-uses current state and POSTs again', async () => {

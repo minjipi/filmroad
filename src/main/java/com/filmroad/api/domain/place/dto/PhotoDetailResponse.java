@@ -27,6 +27,17 @@ public class PhotoDetailResponse {
     private boolean liked;                  // viewer 가 좋아요 눌렀는지
     private boolean saved;                  // place 를 저장했는지 (북마크)
 
+    /** 종합 채점 점수 0~100 — similarity + gps 합산. 미채점이면 0. */
+    private int totalScore;
+    /** 가이드 사진 vs 업로드 사진 유사도 0~100. */
+    private int similarityScore;
+    /** 성지 GPS 와 촬영 GPS 근접도 0~100. */
+    private int gpsScore;
+    /** 촬영 위도 — null 가능. */
+    private Double capturedLatitude;
+    /** 촬영 경도 — null 가능. */
+    private Double capturedLongitude;
+
     private PhotoDetailAuthorDto author;
     private PhotoDetailPlaceDto place;
     private PhotoDetailWorkDto work;

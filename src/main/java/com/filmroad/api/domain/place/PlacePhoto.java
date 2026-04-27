@@ -59,6 +59,37 @@ public class PlacePhoto extends BaseEntity {
     private int commentCount;
 
     /**
+     * 인증샷 채점 — 0~100. 가이드 사진 유사도 + 성지 GPS 근접도를 합산한 종합 점수.
+     * 업로드 시 채점 서비스가 산출해 저장하며, 기본값 0(미채점) 으로 시작.
+     */
+    @Column(name = "total_score", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int totalScore;
+
+    /**
+     * 가이드(scene) 사진과 업로드 사진의 시각적 유사도 점수 — 0~100.
+     */
+    @Column(name = "similarity_score", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int similarityScore;
+
+    /**
+     * 성지 등록 GPS 와 촬영 GPS 의 근접도 점수 — 0~100. 거리가 가까울수록 높음.
+     */
+    @Column(name = "gps_score", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int gpsScore;
+
+    /**
+     * 촬영 위도. 업로드 시 디바이스 GPS / 메타데이터에서 받음. null 가능(권한 미허용 등).
+     */
+    @Column(name = "captured_latitude")
+    private Double capturedLatitude;
+
+    /**
+     * 촬영 경도. 업로드 시 디바이스 GPS / 메타데이터에서 받음. null 가능(권한 미허용 등).
+     */
+    @Column(name = "captured_longitude")
+    private Double capturedLongitude;
+
+    /**
      * 첨부 이미지 — `imageOrderIndex` ASC 순. cascade ALL + orphanRemoval 로 PlacePhoto 와 함께 생/삭.
      */
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -80,6 +111,24 @@ public class PlacePhoto extends BaseEntity {
 
     public void applyCommentDelta(int delta) {
         this.commentCount = Math.max(0, this.commentCount + delta);
+    }
+
+    /**
+     * 채점 결과 일괄 적용. 점수 산출 서비스가 (similarity, gps, total) 을 한 번에 세팅.
+     * 0~100 범위는 호출자(서비스) 책임 — 엔티티는 그대로 저장.
+     */
+    public void applyScores(int similarityScore, int gpsScore, int totalScore) {
+        this.similarityScore = similarityScore;
+        this.gpsScore = gpsScore;
+        this.totalScore = totalScore;
+    }
+
+    /**
+     * 촬영 GPS 좌표 세팅. null 허용.
+     */
+    public void setCapturedCoordinates(Double latitude, Double longitude) {
+        this.capturedLatitude = latitude;
+        this.capturedLongitude = longitude;
     }
 
     /**

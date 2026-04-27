@@ -82,6 +82,7 @@ public class PhotoUploadService {
     private final BadgeRepository badgeRepository;
     private final UserBadgeRepository userBadgeRepository;
     private final CurrentUser currentUser;
+    private final ShotScoringService shotScoringService;
 
     @Value("${project.upload.path}")
     private String uploadPath;
@@ -114,6 +115,14 @@ public class PhotoUploadService {
         int nextOrderIndex = placePhotoRepository.findMaxOrderIndexByPlaceId(place.getId()) + 1;
         String tagsCsv = normalizeTags(req.getTags());
 
+        // 좌표 정규화 — 한쪽이라도 null/범위 밖이면 둘 다 null. 잘못된 값으로 업로드 자체를 막지는 않음 (정책 b).
+        Double capturedLat = sanitizeLatitude(req.getLatitude());
+        Double capturedLng = sanitizeLongitude(req.getLongitude());
+        if (capturedLat == null || capturedLng == null) {
+            capturedLat = null;
+            capturedLng = null;
+        }
+
         // 2) DB 저장 먼저, 파일 write 는 가장 마지막 — file write 실패해도 트랜잭션 롤백으로 DB 엔티티 남지 않음.
         //    1 PlacePhoto post + N PlacePhotoImage (cascade ALL). 대표 url 은 images.get(0) 기준.
         PlacePhoto post = PlacePhoto.builder()
@@ -124,7 +133,19 @@ public class PhotoUploadService {
                 .caption(req.getCaption())
                 .visibility(visibility)
                 .tagsCsv(tagsCsv)
+                .capturedLatitude(capturedLat)
+                .capturedLongitude(capturedLng)
                 .build();
+
+        // 채점 — 첫 번째 파일을 batch 대표로 사용. 5장 업로드해도 점수는 1세트.
+        // 실패는 0점 fallback (예외 throw X) 이므로 업로드 흐름을 막지 않는다.
+        post.applyScores(0, 0, 0);
+        try {
+            var scoreResult = shotScoringService.score(place, files.get(0), capturedLat, capturedLng);
+            post.applyScores(scoreResult.similarityScore(), scoreResult.gpsScore(), scoreResult.totalScore());
+        } catch (RuntimeException scoringEx) {
+            log.warn("[UPLOAD] 채점 실패 — 0점 fallback 으로 진행: {}", scoringEx.toString());
+        }
 
         List<Path> pendingWrites = new ArrayList<>(files.size());
         for (int i = 0; i < files.size(); i++) {
@@ -281,6 +302,20 @@ public class PhotoUploadService {
         int dot = base.lastIndexOf('.');
         if (dot < 0 || dot == base.length() - 1) return "";
         return base.substring(dot + 1).toLowerCase();
+    }
+
+    /** 위도 정규화 — null 이거나 [-90, 90] 범위 밖이면 null. */
+    private static Double sanitizeLatitude(Double lat) {
+        if (lat == null) return null;
+        if (lat < -90.0 || lat > 90.0) return null;
+        return lat;
+    }
+
+    /** 경도 정규화 — null 이거나 [-180, 180] 범위 밖이면 null. */
+    private static Double sanitizeLongitude(Double lng) {
+        if (lng == null) return null;
+        if (lng < -180.0 || lng > 180.0) return null;
+        return lng;
     }
 
     private static String normalizeTags(String tags) {

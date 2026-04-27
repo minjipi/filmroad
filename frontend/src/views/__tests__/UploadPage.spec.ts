@@ -40,6 +40,31 @@ const target: CaptureTarget = {
 const photoA = 'data:image/jpeg;base64,AAAA';
 const photoB = 'data:image/jpeg;base64,BBBB';
 
+// Stub for ScoreRevealOverlay — synchronously emits count-up-complete the
+// instant it sees a numeric totalScore + loading=false. Lets task #8 stage
+// transition tests advance past the RAF-driven count-up without depending on
+// fake-timer RAF integration (vitest doesn't fake RAF by default).
+const ScoreRevealOverlayStub = {
+  name: 'ScoreRevealOverlay',
+  props: ['loading', 'totalScore', 'similarityScore', 'gpsScore'],
+  emits: ['count-up-complete'],
+  template:
+    '<div data-testid="score-total">{{ totalScore ?? "" }}</div>',
+  mounted(this: { loading: boolean; totalScore: number | null | undefined; $emit: (e: string) => void }) {
+    if (!this.loading && typeof this.totalScore === 'number') {
+      this.$emit('count-up-complete');
+    }
+  },
+  watch: {
+    loading(this: { loading: boolean; totalScore: number | null | undefined; $emit: (e: string) => void }, v: boolean) {
+      if (!v && typeof this.totalScore === 'number') this.$emit('count-up-complete');
+    },
+    totalScore(this: { loading: boolean; totalScore: number | null | undefined; $emit: (e: string) => void }, v: number | null | undefined) {
+      if (!this.loading && typeof v === 'number') this.$emit('count-up-complete');
+    },
+  },
+};
+
 function mountUpload(overrides: Partial<{
   photos: string[];
   selectedIndex: number;
@@ -59,6 +84,7 @@ function mountUpload(overrides: Partial<{
   }>;
 }> = {}) {
   return mountWithStubs(UploadPage, {
+    stubs: { ScoreRevealOverlay: ScoreRevealOverlayStub },
     initialState: {
       upload: {
         targetPlace:
@@ -226,31 +252,219 @@ describe('UploadPage.vue', () => {
     expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(false);
   });
 
-  it('"공유하기" button triggers uploadStore.submit and routes to /reward/:id on success', async () => {
-    const { wrapper } = mountUpload();
-    await flushPromises();
-    const store = useUploadStore();
+  it('"공유하기" → stage transitions compose → scoring → authenticated; no /reward redirect (task #8)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
 
-    const fakeRes: PhotoResponse = {
-      id: 99,
-      imageUrl: 'https://cdn/p/99.jpg',
-      placeId: 10,
-      workId: 1,
-      workTitle: '도깨비',
-      workEpisode: '1회',
-      caption: null,
-      tags: [],
-      visibility: 'PUBLIC',
-      createdAt: '2026-04-22T00:00:00Z',
-      images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
-    };
-    const submitSpy = vi.spyOn(store, 'submit').mockResolvedValue(fakeRes);
+      const fakeRes: PhotoResponse = {
+        id: 99,
+        imageUrl: 'https://cdn/p/99.jpg',
+        placeId: 10,
+        workId: 1,
+        workTitle: '도깨비',
+        workEpisode: '1회',
+        caption: null,
+        tags: [],
+        visibility: 'PUBLIC',
+        createdAt: '2026-04-22T00:00:00Z',
+        images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
+        totalScore: 84,
+        similarityScore: 82,
+        gpsScore: 86,
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 12,
+          totalCount: 24,
+          percent: 50,
+        },
+      };
+      const submitSpy = vi.spyOn(store, 'submit').mockResolvedValue(fakeRes);
 
-    await wrapper.find('button.post').trigger('click');
-    await flushPromises();
+      // Compose stage initial state.
+      expect(wrapper.find('button.post').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="upload-completion"]').exists()).toBe(false);
 
-    expect(submitSpy).toHaveBeenCalledTimes(1);
-    expect(replaceSpy).toHaveBeenCalledWith('/reward/10');
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+
+      expect(submitSpy).toHaveBeenCalledTimes(1);
+      // Scoring stage: count-up overlay mounted; total testid present.
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="score-total"]').exists()).toBe(true);
+      // Compose form (post button) hidden — stage swap is exclusive.
+      expect(wrapper.find('button.post').exists()).toBe(false);
+
+      // count-up-complete + 700ms beat → authenticated stage.
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-place-name"]').text())
+        .toContain('주문진 영진해변 방파제');
+
+      // Crucially, /reward routing is gone — UploadPage hosts the entire flow.
+      expect(replaceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/^\/reward\//));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scoring stage keeps stamp-card and rewards on screen alongside the count-up once the response lands (task #10)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
+
+      const fakeRes: PhotoResponse = {
+        id: 99,
+        imageUrl: 'https://cdn/p/99.jpg',
+        placeId: 10,
+        workId: 1,
+        workTitle: '도깨비',
+        workEpisode: '1회',
+        caption: null,
+        tags: [],
+        visibility: 'PUBLIC',
+        createdAt: '2026-04-22T00:00:00Z',
+        images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
+        totalScore: 84,
+        similarityScore: 82,
+        gpsScore: 86,
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 12,
+          totalCount: 24,
+          percent: 50,
+        },
+        reward: {
+          pointsEarned: 50,
+          currentPoints: 400,
+          streakDays: 7,
+          level: 5,
+          levelName: '성지 순례자',
+          newBadges: [],
+        },
+      };
+      vi.spyOn(store, 'submit').mockImplementation(async () => {
+        // Mirror what the real submit() would do so the parent's stamp/reward
+        // computeds (which read from lastResult) have something to project.
+        store.lastResult = fakeRes;
+        return fakeRes;
+      });
+
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+
+      // Still in scoring stage (the 700ms beat hasn't elapsed) — but the
+      // response has arrived so stamp-card / rewards should already render.
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
+      // 인증 완료 타이틀 / sub / 액션 버튼은 stage B 전용 — 아직 안 뜸.
+      expect(wrapper.find('[data-testid="completion-place-name"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="upload-boast"]').exists()).toBe(false);
+
+      // After the 700ms beat → stage B, but stamp-card / rewards remain.
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scoring stage hides stamp-card / rewards when the response carries no stamp or reward (task #10 auto-hide)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
+
+      // No stamp / no reward in the response.
+      const bareRes: PhotoResponse = {
+        id: 77,
+        imageUrl: 'https://cdn/p/77.jpg',
+        placeId: 10,
+        workId: 1,
+        workTitle: '도깨비',
+        workEpisode: '1회',
+        caption: null,
+        tags: [],
+        visibility: 'PUBLIC',
+        createdAt: '2026-04-22T00:00:00Z',
+        images: [{ id: 77, imageUrl: 'https://cdn/p/77.jpg', imageOrderIndex: 0 }],
+        totalScore: 60,
+      };
+      vi.spyOn(store, 'submit').mockImplementation(async () => {
+        store.lastResult = bareRes;
+        return bareRes;
+      });
+
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+
+      // Scoring stage rendered, but neither stamp-card nor rewards because
+      // the response simply doesn't include them — graceful fallback.
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('"홈으로 돌아가기" in stage B resets the upload store and replaces to /home (task #8)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
+      const resetSpy = vi.spyOn(store, 'reset');
+
+      const fakeRes: PhotoResponse = {
+        id: 99,
+        imageUrl: 'https://cdn/p/99.jpg',
+        placeId: 10,
+        workId: 1,
+        workTitle: '도깨비',
+        workEpisode: '1회',
+        caption: null,
+        tags: [],
+        visibility: 'PUBLIC',
+        createdAt: '2026-04-22T00:00:00Z',
+        images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
+        totalScore: 70,
+      };
+      vi.spyOn(store, 'submit').mockResolvedValue(fakeRes);
+
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      replaceSpy.mockClear();
+      await wrapper.find('[data-testid="upload-go-home"]').trigger('click');
+      await flushPromises();
+
+      expect(resetSpy).toHaveBeenCalledTimes(1);
+      expect(replaceSpy).toHaveBeenCalledWith('/home');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('upload error surfaces an inline retry banner; tapping 재시도 calls uploadStore.retry (task #31)', async () => {
@@ -285,7 +499,10 @@ describe('UploadPage.vue', () => {
     await flushPromises();
 
     expect(retrySpy).toHaveBeenCalledTimes(1);
-    expect(replaceSpy).toHaveBeenCalledWith('/reward/10');
+    // Same compose → scoring → authenticated flow as 공유하기 (task #8) —
+    // /reward redirect is gone; the page itself shows 인증 완료.
+    expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+    expect(replaceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/^\/reward\//));
   });
 
   it('error banner is hidden while loading (progress bar takes over)', async () => {
@@ -333,6 +550,306 @@ describe('UploadPage.vue', () => {
         delete (window.navigator as unknown as { onLine?: boolean }).onLine;
       }
       window.dispatchEvent(new Event('online'));
+    }
+  });
+});
+
+// -----------------------------------------------------------------------------
+// task #9 — /upload 단계 B (인증완료) 마크업 회귀
+// -----------------------------------------------------------------------------
+
+describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
+  beforeEach(() => {
+    pushSpy.mockClear();
+    replaceSpy.mockClear();
+    backSpy.mockClear();
+    toastCreateSpy.mockClear();
+  });
+
+  /**
+   * 단계 B 진입까지 일관된 helper. 응답 mock 받아서 mount→submit→advance→authenticated 까지.
+   *
+   * 주의: `mockResolvedValue` 만 쓰면 store.submit 안의 `this.lastResult = data` 가 실행되지
+   * 않아 컴포넌트의 completionStamp / completionReward / completionPlaceName 이 stamp/reward
+   * 분기를 못 받는다. `mockImplementation` 으로 lastResult 까지 직접 세팅해서 실 흐름을 흉내.
+   */
+  async function reachAuthenticatedStage(
+    response: PhotoResponse,
+    overrides: Parameters<typeof mountUpload>[0] = {},
+  ) {
+    const { wrapper } = mountUpload(overrides);
+    await flushPromises();
+    const store = useUploadStore();
+    vi.spyOn(store, 'submit').mockImplementation(async () => {
+      store.lastResult = response;
+      return response;
+    });
+
+    await wrapper.find('button.post').trigger('click');
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(800);
+    await flushPromises();
+    return wrapper;
+  }
+
+  function baseResponse(overrides: Partial<PhotoResponse> = {}): PhotoResponse {
+    return {
+      id: 99,
+      imageUrl: 'https://cdn/p/99.jpg',
+      placeId: 10,
+      workId: 1,
+      workTitle: '도깨비',
+      workEpisode: '1회',
+      caption: null,
+      tags: [],
+      visibility: 'PUBLIC',
+      createdAt: '2026-04-22T00:00:00Z',
+      images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
+      totalScore: 84,
+      similarityScore: 82,
+      gpsScore: 86,
+      ...overrides,
+    };
+  }
+
+  it('U5: stamp-card 노출 + workTitle/collectedCount/totalCount/percent 텍스트 매핑', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 12,
+          totalCount: 24,
+          percent: 50,
+        },
+      }));
+
+      // task #10 후 testid 셀렉터 사용 — class 보다 회귀 안정적
+      const stampCard = wrapper.find('[data-testid="completion-stamp-card"]');
+      expect(stampCard.exists()).toBe(true);
+      expect(stampCard.find('.stamp-info .t').text()).toBe('도깨비 스탬프북');
+      expect(stampCard.find('.stamp-info .s').text()).toBe('12 / 24 성지 수집');
+      expect(stampCard.find('.p-v').text()).toBe('50%');
+      expect(stampCard.find('.fill').attributes('style')).toContain('width: 50%');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U6: rewards 카드 3종 — pointsEarned / streakDays / level/levelName 텍스트', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await reachAuthenticatedStage(baseResponse({
+        reward: {
+          pointsEarned: 50,
+          currentPoints: 350,
+          streakDays: 7,
+          level: 3,
+          levelName: '여행 중급자',
+          newBadges: [],
+        },
+      }));
+
+      const rewardsContainer = wrapper.find('[data-testid="completion-rewards"]');
+      expect(rewardsContainer.exists()).toBe(true);
+      const rewards = rewardsContainer.findAll('.reward');
+      expect(rewards).toHaveLength(3);
+      expect(rewards[0].find('.n').text()).toBe('+50');
+      expect(rewards[1].find('.n').text()).toBe('7일');
+      expect(rewards[2].find('.n').text()).toBe('LV.3');
+      expect(rewards[2].find('.l').text()).toBe('여행 중급자');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U7: nextMilestoneCount 분기 — 미수집 남았으면 노출, 완주(=)면 미렌더', async () => {
+    vi.useFakeTimers();
+    try {
+      // collected < total → "다음 12곳 모으면..." 노출
+      let wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 12,
+          totalCount: 24,
+          percent: 50,
+        },
+      }));
+      expect(wrapper.find('.next-milestone').exists()).toBe(true);
+      expect(wrapper.find('.next-milestone').text()).toContain('12곳');
+
+      // collected == total → 미렌더 (회귀)
+      wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1,
+          workTitle: '도깨비',
+          collectedCount: 24,
+          totalCount: 24,
+          percent: 100,
+        },
+      }));
+      expect(wrapper.find('.next-milestone').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U8: completionPlaceName fallback — stamp.placeName 우선, 없으면 targetPlace.placeName', async () => {
+    vi.useFakeTimers();
+    try {
+      // 1) 응답에 stamp.placeName 있으면 그게 우선 (target 과 다른 값으로 검증)
+      let wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: '응답 우선 이름',
+          workId: 1, workTitle: '도깨비',
+          collectedCount: 1, totalCount: 24, percent: 4,
+        },
+      }));
+      expect(wrapper.find('[data-testid="completion-place-name"]').text())
+        .toContain("'응답 우선 이름'");
+
+      // 2) 응답에 stamp 없음 → targetPlace.placeName fallback
+      wrapper = await reachAuthenticatedStage(baseResponse({}));  // stamp undefined
+      expect(wrapper.find('[data-testid="completion-place-name"]').text())
+        .toContain("'주문진 영진해변 방파제'");  // mountUpload 의 기본 target
+
+      // 참고: targetPlace=null 상태에서 단계 B 도달은 정상 흐름 아님 (button.post 가 disabled
+      // 처리되어 단계 전환 트리거 자체가 막힘). 따라서 '성지' literal fallback 은 unit
+      // 레벨에서 컴포넌트로 검증하지 않고 computed 정의 자체로 신뢰.
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U9: placeName XSS escape 회귀 — `<script>` 가 raw HTML 로 주입되지 않음', async () => {
+    vi.useFakeTimers();
+    try {
+      const malicious = '<script>alert(1)</script>';
+      const wrapper = await reachAuthenticatedStage(baseResponse({
+        stamp: {
+          placeName: malicious,
+          workId: 1, workTitle: '도깨비',
+          collectedCount: 1, totalCount: 24, percent: 4,
+        },
+      }));
+      const sub = wrapper.find('[data-testid="completion-place-name"]');
+      // text 는 그대로(escape 후 원문) 노출
+      expect(sub.text()).toContain(malicious);
+      // innerHTML 안에 raw <script> 노드가 없어야 함 (Vue 가 entity 로 escape)
+      const html = sub.html();
+      expect(html).not.toMatch(/<script\b/i);
+      expect(html).toContain('&lt;script');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U10: 친구에게 자랑하기 CTA 클릭 → toast 호출 (현 단계 placeholder 동작)', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await reachAuthenticatedStage(baseResponse({}));
+      const boastBtn = wrapper.find('[data-testid="upload-boast"]');
+      expect(boastBtn.exists()).toBe(true);
+      // fakeTimers 가 활성화 중이라 toastController.create 의 await 구간을 풀어준다
+      await boastBtn.trigger('click');
+      await vi.advanceTimersByTimeAsync(0);
+      await flushPromises();
+      expect(toastCreateSpy).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U11: stage B 마크업 — h1 "인증 완료!" + check-ring + ion-icon stub 노출 (디자인 회귀)', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await reachAuthenticatedStage(baseResponse({}));
+      expect(wrapper.find('h1.rw-title').text()).toBe('인증 완료!');
+      expect(wrapper.find('.check-ring').exists()).toBe(true);
+      // stage B 단독 노출 — scoring 영역은 사라짐
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // task #10 — stamp/rewards 가 scoring 단계에도 노출되도록 변경됐다.
+  // showCompletionExtras = (stage==='authenticated') || (stage==='scoring' && !scoreLoading)
+  // 핵심 분기 2건을 회귀로 고정.
+
+  it('U12: scoring 단계 + 응답 도착(loaded) → stamp-card / rewards 노출, 액션 버튼은 미노출', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
+
+      const fakeRes: PhotoResponse = baseResponse({
+        stamp: {
+          placeName: '주문진 영진해변 방파제',
+          workId: 1, workTitle: '도깨비',
+          collectedCount: 12, totalCount: 24, percent: 50,
+        },
+        reward: {
+          pointsEarned: 50, currentPoints: 350, streakDays: 7,
+          level: 3, levelName: '여행 중급자', newBadges: [],
+        },
+      });
+      vi.spyOn(store, 'submit').mockImplementation(async () => {
+        store.lastResult = fakeRes;
+        return fakeRes;
+      });
+
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+      // 700ms beat 전 — 아직 stage='scoring' (아직 advanceTimers 안 함).
+      // ScoreRevealOverlayStub 가 mount 시 count-up-complete 즉시 emit 하지만 부모의 700ms
+      // setTimeout 이 vi.useFakeTimers 안에서 멈춰있음 → stage='scoring' 그대로.
+
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="upload-stage-authenticated"]').exists()).toBe(false);
+
+      // task #10 핵심: scoring(loaded) 단계에도 stamp/rewards 가 노출.
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(true);
+
+      // 액션 버튼 / placeName 문장은 단계 B 전용 → 아직 미노출.
+      expect(wrapper.find('[data-testid="upload-go-home"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="upload-boast"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-place-name"]').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('U13: scoring 단계 + 응답에 stamp/reward 없음 → stamp-card / rewards 미노출 (응답 분기 회귀)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountUpload();
+      await flushPromises();
+      const store = useUploadStore();
+
+      // stamp/reward 없는 응답
+      const fakeRes = baseResponse({});
+      vi.spyOn(store, 'submit').mockImplementation(async () => {
+        store.lastResult = fakeRes;
+        return fakeRes;
+      });
+
+      await wrapper.find('button.post').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="upload-stage-scoring"]').exists()).toBe(true);
+      // showCompletionExtras 는 true 지만 v-if 의 completionStamp/completionReward 가 null
+      expect(wrapper.find('[data-testid="completion-stamp-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="completion-rewards"]').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
