@@ -227,3 +227,77 @@
 - (M) `frontend/src/views/UploadPage.vue`
 - (M) `frontend/src/views/__tests__/UploadPage.spec.ts`
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #11 — design: 13-feed-detail.html split view → 토글 버튼으로 대체
+
+## 완료 항목
+
+### `design/pages/13-feed-detail.html` 비교 영역 재구성
+- **기존**: 4:5 컨테이너에 두 이미지를 stacked 후 위쪽 이미지에 `clip-path: inset(0 0 50% 0)` 으로 상단 절반만 보이게 하고, 가운데에 `.compare-divider` 흰선 + 양쪽 24px 원형 핸들. 상단=드라마 원본, 하단=내 인증샷이 동시에 보이는 split view.
+- **신규**: 같은 컨테이너에서 두 이미지를 모두 absolute 로 겹쳐두고 opacity 220ms ease-out 으로 fade. 컨테이너 `data-mode="shot"` (기본) 또는 `"guide"` 로 활성 이미지가 결정됨.
+- 우하단 토글 버튼 `.compare-toggle` 추가 — 검정 반투명 pill, eye 아이콘 + 텍스트 ("가이드 보기" / "원본으로"). `aria-pressed` 동기화, guide 모드에서 primary blue 배경으로 톤 변경.
+
+### CSS 변경
+- 제거: `.compare-top { clip-path }`, `.compare-divider`, `.compare-divider::before/::after`.
+- 추가: `.compare-img { opacity:0 }` + `[data-mode="shot"] .is-shot { opacity:1 }`/`[data-mode="guide"] .is-guide { opacity:1 }` 매핑.
+- 모드별 표시: shot 모드에서 `.compare-lbl-top` 숨김, guide 모드에서 `.compare-lbl-bot` 숨김.
+- `drama-badge` 는 `.compare-wrap` 내부에서만 shot 모드에 숨김 (회차/타임코드는 드라마 이미지가 보일 때만 의미). 단독 이미지 포스트(`.single-img` 외부)의 drama-badge 는 영향 없음 (셀렉터 한정).
+
+### JS 핸들러
+- `<script>` 블록에서 `lucide.createIcons()` 직전에 `document.querySelectorAll('.compare-wrap .compare-toggle')` 로 각 wrap 내 토글에 click 핸들러 바인딩.
+- 클릭 시 `data-mode` 토글 + `aria-pressed` 토글 + 라벨 textContent 교체.
+
+### 마크업
+- Post 1 (도깨비, 주문진 영진해변)와 Post 3 (갯마을차차차, 청하공진시장) 두 compare-wrap 모두 동일 패턴으로 변환.
+- Post 2 (단일 이미지) 는 `.single-img` 사용으로 영향 없음 — drama-badge 그대로 노출.
+- 각 이미지에 한국어 alt text 부여 ("드라마 원본 장면" / "내가 찍은 인증샷").
+
+## 검증
+- Vue 빌드 무관 (정적 HTML). 브라우저에서 `design/pages/13-feed-detail.html` 직접 열어 토글 클릭 시 fade 전환 확인 가능.
+- 기존 디자인 톤 (Pretendard 폰트, primary 컬러 #14BCED, 12-14px 라벨, backdrop-filter blur) 유지.
+- 다른 섹션(헤더/탭/스토리/추천/피드 액션/코멘트 영역) 회귀 없음 — 셀렉터 충돌 없는 신규 클래스 (`.compare-img`, `.compare-toggle`, `.compare-toggle-lbl`).
+
+## 변경 파일
+- (M) `design/pages/13-feed-detail.html`
+- (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #12 — ShotDetailPage UI를 13-feed-detail.html 디자인으로 재구성
+
+## 완료 항목
+
+### `frontend/src/views/ShotDetailPage.vue` compare 영역 변환
+- 기존 단일/멀티 이미지 두 경로 모두에서 `clip-path: inset(0 50% 0 0)` 좌우 split + 흰선 divider + swap-handle 핸들 → task #11 의 toggle 패턴으로 통일.
+- 이미지 마크업: `compare-img is-guide` (드라마 원본) + `compare-img is-shot` (촬영 사진) 두 장을 absolute 로 겹쳐두고, `data-mode`="shot"|"guide" 로 활성 레이어 결정. opacity 220ms ease-out fade.
+- 우하단에 floating `.compare-toggle` 버튼: eye 아이콘 + "가이드 보기" / "원본으로" 텍스트 토글, `aria-pressed` 동기화, guide 모드에선 primary blue 배경 강조.
+- `sceneImageUrl` 이 null 이면 토글 미렌더 (전환할 가이드 이미지가 없으므로). 기존 동작 — null 일 때 `<img>` 한 장만 노출 — 그대로 유지.
+- `compareMode` 로컬 ref 신규 + shot 변경 시 watch 에서 `'shot'` 으로 자동 리셋 (다른 shot 으로 이동했을 때 stale 모드 잔류 방지).
+
+### CSS 정리
+- 제거: `.compare img { clip-path }`, `.compare .top-img`, `.divider`, `.divider-handle` 룰 + `swapHorizontal` 아이콘 import.
+- 추가: `.compare .compare-img { opacity:0; transition:opacity 220ms }` + `[data-mode="shot"] .is-shot { opacity:1 }` / `[data-mode="guide"] .is-guide { opacity:1 }` 매핑.
+- 라벨 모드별 자동 숨김: shot 모드에서 `.lbl-chip.l` (드라마 원본) 숨김, guide 모드에서 `.lbl-chip.r` (내 인증샷) 숨김.
+- `.compare-toggle` 버튼 — 검정 반투명 pill, 12px 우하단, primary blue tint when pressed. 13-feed-detail 의 `.compare-toggle` 와 동일 톤.
+
+### 다른 섹션
+- `.sd-user`, `.sd-stats`, `.sd-caption`, `.loc-card`, `.scene-card`, `.comments`, `.cmt-input-wrap` 모두 비즈니스 기능 (좋아요/저장/팔로우/댓글/장소 카드/원본 장면 카드) 보존 — 기존 회귀 spec 의존성도 그대로 유지.
+- `section.compare` 로 두 `<img>` 직계 child 패턴은 유지 — 기존 spec `wrapper.findAll('section.compare img').length === 2` + `imgs[0].src === sceneImageUrl` / `imgs[1].src === imageUrl` 단언 모두 통과.
+
+### 단위 테스트
+- `frontend/src/views/__tests__/ShotDetailPage.spec.ts` (신규 2 케이스, 기존 15 케이스 전부 통과)
+  - `compare hero toggles data-mode + aria-pressed + label on click (task #12)` — 기본 mode='shot' / aria-pressed=false / "가이드 보기" → 클릭 후 'guide' / true / "원본으로" → 다시 클릭 시 'shot' 복귀.
+  - `compare toggle is hidden when sceneImageUrl is null` — sceneImageUrl null 응답일 때 section.compare 는 그대로지만 sd-compare-toggle 은 미렌더.
+
+## 검증
+- `npx vue-tsc --noEmit` 그린.
+- `npm run test:unit` — 50 files / **520 tests** 통과 (이전 508 + 신규 2 + QA 작업분).
+- `npm run build` 그린.
+- `npm run lint` — 신규 위반 0건 (사전 3 error 그대로).
+
+## 변경 파일
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `_workspace/03_frontend_implementation.md`

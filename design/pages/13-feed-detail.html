@@ -44,22 +44,49 @@
   .post-head .loc .drama { color:var(--fr-primary); font-weight:700; }
   .post-head .more { width:28px; height:28px; color:var(--fr-ink-3); display:flex; align-items:center; justify-content:center; }
 
-  /* Scene compare (split) */
+  /* Scene compare (toggle) — single image with "가이드 보기" toggle button.
+     Replaces the previous split-view layout (top half drama / bottom half
+     user shot) with a stacked-image setup keyed off [data-mode]. The user's
+     own shot is the default; tapping the toggle fades in the drama original
+     in place. */
   .post-image { position:relative; background:#000; }
   .compare-wrap { position:relative; aspect-ratio: 4/5; overflow:hidden; }
-  .compare-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .compare-top { clip-path: inset(0 0 50% 0); }
-  .compare-divider { position:absolute; left:0; right:0; top:50%; height:2px; background:white; z-index:2; }
-  .compare-divider::before, .compare-divider::after {
-    content:""; position:absolute; width:24px; height:24px; border-radius:50%; background:white; top:50%; transform:translateY(-50%);
-    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  .compare-wrap .compare-img {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover;
+    opacity:0;
+    transition: opacity 220ms ease-out;
   }
-  .compare-divider::before { left:-12px; }
-  .compare-divider::after { right:-12px; }
+  .compare-wrap[data-mode="shot"] .compare-img.is-shot { opacity:1; }
+  .compare-wrap[data-mode="guide"] .compare-img.is-guide { opacity:1; }
+
   .compare-lbl-top, .compare-lbl-bot { position:absolute; z-index:3; background:rgba(0,0,0,.75); color:white; font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; letter-spacing:-0.01em; backdrop-filter:blur(6px); }
   .compare-lbl-top { top:12px; left:12px; }
   .compare-lbl-bot { bottom:12px; left:12px; }
+
+  /* Mode-bound label visibility: only the active image's label is shown. */
+  .compare-wrap[data-mode="shot"] .compare-lbl-top { display:none; }
+  .compare-wrap[data-mode="guide"] .compare-lbl-bot { display:none; }
+
   .drama-badge { position:absolute; top:12px; right:12px; z-index:3; background:rgba(20,188,237,.95); color:white; padding:5px 10px; border-radius:999px; font-size:10.5px; font-weight:700; display:flex; align-items:center; gap:4px; backdrop-filter:blur(6px); }
+  /* Drama scene metadata (회차/타임코드) only makes sense when the drama
+     image is on screen — hide it in the user's-shot mode. Single-img posts
+     keep the badge regardless because they aren't compare-wraps. */
+  .compare-wrap[data-mode="shot"] .drama-badge { display:none; }
+
+  .compare-toggle {
+    position:absolute; right:12px; bottom:12px; z-index:4;
+    display:inline-flex; align-items:center; gap:5px;
+    background:rgba(0,0,0,.65); color:white;
+    padding:7px 12px; border-radius:999px;
+    font-size:11.5px; font-weight:700; letter-spacing:-0.01em;
+    border:none; cursor:pointer;
+    backdrop-filter:blur(6px);
+    transition: background-color 160ms ease-out;
+  }
+  .compare-toggle:hover { background:rgba(0,0,0,.78); }
+  .compare-toggle:active { transform:translateY(1px); }
+  .compare-toggle[aria-pressed="true"] { background:rgba(20,188,237,.92); }
 
   /* Single image post */
   .single-img { aspect-ratio: 4/5; }
@@ -136,13 +163,16 @@
       </div>
 
       <div class="post-image">
-        <div class="compare-wrap">
-          <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80" class="compare-top">
-          <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80">
-          <div class="compare-divider"></div>
+        <div class="compare-wrap" data-mode="shot">
+          <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80" class="compare-img is-guide" alt="드라마 원본 장면">
+          <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80" class="compare-img is-shot" alt="내가 찍은 인증샷">
           <div class="compare-lbl-top">드라마 원본</div>
           <div class="compare-lbl-bot">내 인증샷</div>
           <div class="drama-badge"><i data-lucide="film" class="ic-16"></i>1회 00:15:24</div>
+          <button type="button" class="compare-toggle" aria-pressed="false">
+            <i data-lucide="eye" class="ic-16"></i>
+            <span class="compare-toggle-lbl">가이드 보기</span>
+          </button>
         </div>
       </div>
 
@@ -228,13 +258,16 @@
       </div>
 
       <div class="post-image">
-        <div class="compare-wrap">
-          <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80" class="compare-top">
-          <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80">
-          <div class="compare-divider"></div>
+        <div class="compare-wrap" data-mode="shot">
+          <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80" class="compare-img is-guide" alt="드라마 원본 장면">
+          <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80" class="compare-img is-shot" alt="내가 찍은 인증샷">
           <div class="compare-lbl-top">드라마 원본</div>
           <div class="compare-lbl-bot">내 인증샷</div>
           <div class="drama-badge"><i data-lucide="film" class="ic-16"></i>3회 00:42:11</div>
+          <button type="button" class="compare-toggle" aria-pressed="false">
+            <i data-lucide="eye" class="ic-16"></i>
+            <span class="compare-toggle-lbl">가이드 보기</span>
+          </button>
         </div>
       </div>
 
@@ -267,6 +300,24 @@
   </nav>
   <div class="fr-home-indicator"></div>
 </div>
-<script>lucide.createIcons();</script>
+<script>
+  // "가이드 보기" toggle — flips compare-wrap data-mode between "shot" and
+  // "guide" so the active image, label, and drama-badge fade in/out via CSS.
+  // Each compare-wrap is independent (one per post), so the click handler
+  // resolves the nearest wrap and toggles only that block.
+  document.querySelectorAll('.compare-wrap .compare-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.compare-wrap');
+      if (!wrap) return;
+      const next = wrap.dataset.mode === 'guide' ? 'shot' : 'guide';
+      wrap.dataset.mode = next;
+      btn.setAttribute('aria-pressed', String(next === 'guide'));
+      const lbl = btn.querySelector('.compare-toggle-lbl');
+      if (lbl) lbl.textContent = next === 'guide' ? '원본으로' : '가이드 보기';
+    });
+  });
+
+  lucide.createIcons();
+</script>
 </body>
 </html>

@@ -46,18 +46,18 @@
             @scroll="onCarouselScroll"
           >
             <div class="carousel-slide" data-testid="sd-slide">
-              <div class="compare">
+              <div class="compare" :data-mode="compareMode">
                 <img
                   v-if="shot.sceneImageUrl"
                   :src="shot.sceneImageUrl"
-                  alt="드라마 원본"
+                  class="compare-img is-guide"
+                  alt="드라마 원본 장면"
                 />
-                <img :src="images[0].imageUrl" class="top-img" :alt="shot.place.name" />
-                <div class="divider">
-                  <span class="divider-handle">
-                    <ion-icon :icon="swapHorizontal" class="ic-16" />
-                  </span>
-                </div>
+                <img
+                  :src="images[0].imageUrl"
+                  class="compare-img is-shot"
+                  :alt="shot.place.name"
+                />
                 <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
                 <span class="lbl-chip r">
                   <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
@@ -70,6 +70,17 @@
                     <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
                   </template>
                 </div>
+                <button
+                  v-if="shot.sceneImageUrl"
+                  type="button"
+                  class="compare-toggle"
+                  :aria-pressed="compareMode === 'guide'"
+                  data-testid="sd-compare-toggle"
+                  @click="onToggleCompare"
+                >
+                  <ion-icon :icon="eyeOutline" class="ic-16" />
+                  <span class="compare-toggle-lbl">{{ compareMode === 'guide' ? '원본으로' : '가이드 보기' }}</span>
+                </button>
               </div>
             </div>
             <div
@@ -93,19 +104,22 @@
           </span>
         </section>
 
-        <!-- Single-image post (existing behavior). -->
-        <section v-else class="compare">
+        <!-- Single-image post — task #12: clip-path split → toggle.
+             Two stacked images opacity-swap on data-mode; "가이드 보기"
+             button flips between drama-scene and user-shot. Mirrors the
+             pattern from design/pages/13-feed-detail.html. -->
+        <section v-else class="compare" :data-mode="compareMode">
           <img
             v-if="shot.sceneImageUrl"
             :src="shot.sceneImageUrl"
-            alt="드라마 원본"
+            class="compare-img is-guide"
+            alt="드라마 원본 장면"
           />
-          <img :src="shot.imageUrl" class="top-img" :alt="shot.place.name" />
-          <div class="divider">
-            <span class="divider-handle">
-              <ion-icon :icon="swapHorizontal" class="ic-16" />
-            </span>
-          </div>
+          <img
+            :src="shot.imageUrl"
+            class="compare-img is-shot"
+            :alt="shot.place.name"
+          />
           <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
           <span class="lbl-chip r">
             <ion-icon :icon="checkmark" class="ic-16" />내 인증샷
@@ -118,6 +132,17 @@
               <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
             </template>
           </div>
+          <button
+            v-if="shot.sceneImageUrl"
+            type="button"
+            class="compare-toggle"
+            :aria-pressed="compareMode === 'guide'"
+            data-testid="sd-compare-toggle"
+            @click="onToggleCompare"
+          >
+            <ion-icon :icon="eyeOutline" class="ic-16" />
+            <span class="compare-toggle-lbl">{{ compareMode === 'guide' ? '원본으로' : '가이드 보기' }}</span>
+          </button>
         </section>
 
         <section class="sd-user">
@@ -334,7 +359,6 @@ import {
   chevronBack,
   chevronForwardOutline,
   ellipsisHorizontal,
-  swapHorizontal,
   checkmark,
   checkmarkCircle,
   filmOutline,
@@ -348,6 +372,7 @@ import {
   paperPlaneOutline,
   arrowForward,
   play,
+  eyeOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -376,6 +401,15 @@ const commentsRef = ref<HTMLElement | null>(null);
 const carouselEl = ref<HTMLElement | null>(null);
 const currentSlide = ref(0);
 const commentSheetOpen = ref(false);
+
+// task #11/#12: compare hero swapped from a clip-path split view to a toggle.
+// Default = "shot" (user's photo). Tapping the floating "가이드 보기" button
+// flips to "guide" (drama scene). aria-pressed mirrors the boolean for SR.
+type CompareMode = 'shot' | 'guide';
+const compareMode = ref<CompareMode>('shot');
+function onToggleCompare(): void {
+  compareMode.value = compareMode.value === 'guide' ? 'shot' : 'guide';
+}
 
 // Always fall back to the lead frame as a length-1 list so the template can
 // treat `images` as non-empty regardless of how old the backend response is.
@@ -522,11 +556,13 @@ watch(
 );
 
 // Reset the carousel to the first slide whenever a new shot lands, so
-// navigating between posts doesn't keep the old index.
+// navigating between posts doesn't keep the old index. Also reset the
+// compare toggle to "shot" so each new post starts on the user's photo.
 watch(
   () => shot.value?.id,
   () => {
     currentSlide.value = 0;
+    compareMode.value = 'shot';
     if (carouselEl.value) carouselEl.value.scrollLeft = 0;
   },
 );
@@ -631,7 +667,9 @@ ion-content.sd-content {
   pointer-events: none;
 }
 
-/* Compare hero */
+/* Compare hero — task #12: clip-path split → toggle (mirrors design/pages/
+   13-feed-detail.html). Two stacked images opacity-swap on data-mode and
+   the floating "가이드 보기" button flips the active layer. */
 .compare {
   position: relative;
   width: 100%;
@@ -639,42 +677,18 @@ ion-content.sd-content {
   background: #000000;
   overflow: hidden;
 }
-.compare img {
+.compare .compare-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  opacity: 0;
+  transition: opacity 220ms ease-out;
 }
-.compare .top-img {
-  clip-path: inset(0 50% 0 0);
-}
-.divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  background: #ffffff;
-  transform: translateX(-50%);
-  z-index: 3;
-}
-.divider-handle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--fr-ink);
-}
+.compare[data-mode="shot"] .compare-img.is-shot { opacity: 1; }
+.compare[data-mode="guide"] .compare-img.is-guide { opacity: 1; }
 
 .lbl-chip {
   position: absolute;
@@ -701,6 +715,36 @@ ion-content.sd-content {
   align-items: center;
   gap: 4px;
 }
+
+/* Active-side label only — keep both labels in DOM (so the markup mirrors
+   13-feed-detail) but mode-bind their visibility to the active image. */
+.compare[data-mode="shot"] .lbl-chip.l { display: none; }
+.compare[data-mode="guide"] .lbl-chip.r { display: none; }
+
+/* Floating "가이드 보기" / "원본으로" toggle — bottom-right above scene-meta. */
+.compare-toggle {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  border: none;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background-color 160ms ease-out;
+}
+.compare-toggle:hover { background: rgba(0, 0, 0, 0.78); }
+.compare-toggle:active { transform: translateY(1px); }
+.compare-toggle[aria-pressed="true"] { background: rgba(20, 188, 237, 0.92); }
 
 .scene-meta {
   position: absolute;

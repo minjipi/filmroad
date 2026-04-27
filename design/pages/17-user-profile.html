@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390">
+<title>17 · 다른 사용자 프로필</title>
+<link rel="stylesheet" href="shared.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .up-top { position:absolute; top:44px; left:0; right:0; z-index:20; padding: 8px 16px; display:flex; align-items:center; justify-content:space-between; }
+  .up-top .ic-btn { width:40px; height:40px; border-radius:50%; background:rgba(15,23,42,.5); backdrop-filter:blur(10px); color:white; border:none; display:flex; align-items:center; justify-content:center; }
+  .up-top .title { color:white; font-weight:800; font-size:14px; letter-spacing:-0.02em; display:flex; align-items:center; gap:4px; }
+  .up-top .right { display:flex; gap:8px; }
+
+  /* Cover */
+  .cover { height:170px; position:relative; overflow:hidden; background:#111; }
+  .cover img { width:100%; height:100%; object-fit:cover; opacity:.85; }
+  .cover::after { content:""; position:absolute; inset:0; background: linear-gradient(180deg, rgba(15,23,42,.2), rgba(15,23,42,.55)); }
+
+  /* Profile header */
+  .up-head { padding: 0 20px; margin-top: -44px; position:relative; z-index:5; }
+  .up-avatar {
+    width:88px; height:88px; border-radius:50%; overflow:hidden;
+    border:4px solid white; background:#eee; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  }
+  .up-avatar img { width:100%; height:100%; object-fit:cover; }
+  .up-nm-row { display:flex; align-items:center; gap:6px; margin-top:12px; }
+  .up-nm { font-size:22px; font-weight:900; letter-spacing:-0.03em; }
+  .up-badge { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:999px; background:#fff7ed; color:#c2410c; }
+  .up-handle { font-size:12.5px; color:var(--fr-ink-3); margin-top:2px; }
+  .up-bio { font-size:13px; color:var(--fr-ink); line-height:1.55; margin-top:10px; letter-spacing:-0.01em; }
+  .up-bio .tag { color:var(--fr-primary); font-weight:700; }
+  .up-meta-row { display:flex; gap:14px; margin-top:10px; font-size:11.5px; color:var(--fr-ink-3); font-weight:700; }
+  .up-meta-row .m { display:flex; align-items:center; gap:4px; }
+
+  /* Stats */
+  .up-stats { display:flex; padding: 16px 20px 14px; gap:12px; border-bottom:1px solid var(--fr-line-soft); align-items:center; }
+  .up-stat { text-align:left; flex-shrink:0; }
+  .up-stat .n { font-size:16px; font-weight:900; letter-spacing:-0.02em; }
+  .up-stat .l { font-size:10.5px; color:var(--fr-ink-3); font-weight:700; margin-top:1px; }
+  .btn-follow-inline { margin-left:auto; height:32px; padding: 0 12px; border-radius:10px; background:var(--fr-primary); color:white; border:none; font-weight:800; font-size:12px; display:flex; align-items:center; gap:4px; box-shadow: 0 4px 10px rgba(20,188,237,.28); letter-spacing:-0.01em; flex-shrink:0; }
+  .btn-follow-inline.on { background:var(--fr-bg-muted); color:var(--fr-ink); box-shadow:none; border:1px solid var(--fr-line); }
+
+  /* Highlights (favorite dramas) */
+  .highlights { padding: 16px 20px 6px; }
+  .hl-label { font-size:11.5px; font-weight:800; color:var(--fr-ink-3); letter-spacing:.04em; text-transform:uppercase; margin-bottom:10px; }
+  .hl-row { display:flex; gap:12px; overflow-x:auto; }
+  .hl { flex-shrink:0; width:68px; display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .hl .ring { width:64px; height:64px; border-radius:50%; padding:2px; background: linear-gradient(135deg,#14BCED,#ff5a5f); }
+  .hl .ring .inner { width:100%; height:100%; border-radius:50%; border:2px solid white; overflow:hidden; background:#eee; }
+  .hl .ring .inner img { width:100%; height:100%; object-fit:cover; }
+  .hl .nm { font-size:10.5px; font-weight:700; max-width:68px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hl .c { font-size:10px; color:var(--fr-ink-4); font-weight:700; }
+
+  /* Tabs */
+  .up-tabs { display:flex; border-bottom:1px solid var(--fr-line); margin-top:10px; }
+  .up-tabs .t { flex:1; text-align:center; padding:11px 0; font-size:13px; font-weight:800; color:var(--fr-ink-4); border-bottom:2px solid transparent; display:flex; align-items:center; justify-content:center; gap:5px; letter-spacing:-0.02em; }
+  .up-tabs .t.on { color:var(--fr-ink); border-bottom-color:var(--fr-ink); }
+
+  /* Grid */
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding-bottom:110px; }
+  .grid .cell { aspect-ratio: 1; position:relative; overflow:hidden; }
+  .grid .cell img { width:100%; height:100%; object-fit:cover; }
+  .grid .cell .ov { position:absolute; left:6px; top:6px; display:flex; align-items:center; gap:3px; font-size:10px; font-weight:800; color:white; padding: 3px 6px; border-radius:6px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); }
+  .grid .cell .stat { position:absolute; right:6px; bottom:6px; display:flex; gap:6px; font-size:10px; font-weight:800; color:white; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  .grid .cell .stat .s { display:flex; align-items:center; gap:2px; }
+  .grid .cell.compare::before { content:""; position:absolute; inset:0; background: linear-gradient(to right, transparent 49.5%, white 49.5%, white 50.5%, transparent 50.5%); z-index:1; }
+  .grid .cell.compare::after { content:"비교"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:9px; font-weight:900; color:white; background:rgba(20,188,237,.9); padding:2px 6px; border-radius:999px; z-index:2; letter-spacing:-0.01em; }
+</style>
+</head>
+<body class="fr-frame">
+<div class="fr-page" style="position:relative;">
+  <div class="fr-status" style="position:absolute; top:0; left:0; right:0; z-index:30; color:white;">
+    <span>9:41</span>
+    <span class="right"><i data-lucide="signal" class="ic-16"></i><i data-lucide="wifi" class="ic-16"></i><i data-lucide="battery-full" class="ic-20"></i></span>
+  </div>
+
+  <div class="up-top">
+    <button class="ic-btn"><i data-lucide="chevron-left" class="ic-22"></i></button>
+    <span class="title">soyeon_film</span>
+    <div class="right">
+      <button class="ic-btn"><i data-lucide="bell" class="ic-20"></i></button>
+      <button class="ic-btn"><i data-lucide="more-horizontal" class="ic-20"></i></button>
+    </div>
+  </div>
+
+  <div class="fr-scroll no-scrollbar">
+    <div class="cover">
+      <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80">
+    </div>
+
+    <div class="up-head">
+      <div class="up-avatar"><img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80"></div>
+      <div class="up-nm-row">
+        <span class="up-nm">김소연</span>
+        <span class="up-badge"><i data-lucide="crown" class="ic-16" style="color:#f59e0b"></i>Lv.12 성지지기</span>
+      </div>
+      <div class="up-handle">@soyeon_film · 강릉 거주</div>
+      <p class="up-bio">
+        드라마 성지 순례 4년차. 도깨비·갯차·우영우 덕후 🎬<br/>
+        매주 주말 새벽 5시, 해 뜨는 성지로.
+        <span class="tag">#도깨비</span> <span class="tag">#갯마을차차차</span>
+      </p>
+      <div class="up-meta-row">
+        <span class="m"><i data-lucide="map-pin" class="ic-16"></i>강원 강릉시</span>
+        <span class="m"><i data-lucide="link" class="ic-16"></i>blog.naver.com/soyeon_film</span>
+      </div>
+    </div>
+
+    <div class="up-stats">
+      <div class="up-stat"><div class="n">214</div><div class="l">인증샷</div></div>
+      <div class="up-stat"><div class="n">1.2k</div><div class="l">팔로워</div></div>
+      <div class="up-stat"><div class="n">186</div><div class="l">팔로잉</div></div>
+      <div class="up-stat"><div class="n">47</div><div class="l">뱃지</div></div>
+      <button class="btn-follow-inline"><i data-lucide="user-plus" class="ic-16"></i>팔로우</button>
+    </div>
+
+    <div class="highlights">
+      <div class="hl-label">스탬프 북</div>
+      <div class="hl-row no-scrollbar">
+        <div class="hl">
+          <div class="ring"><div class="inner"><img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=200&q=80"></div></div>
+          <div class="nm">도깨비</div>
+          <div class="c">24회</div>
+        </div>
+        <div class="hl">
+          <div class="ring"><div class="inner"><img src="https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=200&q=80"></div></div>
+          <div class="nm">갯차</div>
+          <div class="c">18회</div>
+        </div>
+        <div class="hl">
+          <div class="ring"><div class="inner"><img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=200&q=80"></div></div>
+          <div class="nm">우영우</div>
+          <div class="c">12회</div>
+        </div>
+        <div class="hl">
+          <div class="ring"><div class="inner"><img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=200&q=80"></div></div>
+          <div class="nm">이태원</div>
+          <div class="c">9회</div>
+        </div>
+        <div class="hl">
+          <div class="ring"><div class="inner"><img src="https://images.unsplash.com/photo-1559305616-3f99cd43e353?auto=format&fit=crop&w=200&q=80"></div></div>
+          <div class="nm">미스터션샤인</div>
+          <div class="c">7회</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="up-tabs">
+      <div class="t on"><i data-lucide="grid-3x3" class="ic-16"></i>인증샷</div>
+      <div class="t"><i data-lucide="bookmark" class="ic-16"></i>컬렉션</div>
+      <div class="t"><i data-lucide="map-pin" class="ic-16"></i>지도</div>
+    </div>
+
+    <div class="grid">
+      <div class="cell compare">
+        <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">도깨비</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>1.2k</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">도깨비</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>842</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1504198458649-3128b932f49e?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">갯차</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>1.8k</span></span>
+      </div>
+      <div class="cell compare">
+        <img src="https://images.unsplash.com/photo-1546874177-9e664107314e?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">우영우</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>624</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">도깨비</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>512</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">이태원</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>388</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">도깨비</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>2.1k</span></span>
+      </div>
+      <div class="cell">
+        <img src="https://images.unsplash.com/photo-1559305616-3f99cd43e353?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">미스터션샤인</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>712</span></span>
+      </div>
+      <div class="cell compare">
+        <img src="https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=400&q=80">
+        <span class="ov">갯차</span>
+        <span class="stat"><span class="s"><i data-lucide="heart" class="ic-16" style="fill:currentColor"></i>934</span></span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="fr-nav">
+    <div class="fr-nav-row">
+      <div class="fr-nav-item"><i data-lucide="home" class="ic-24"></i><span class="lbl">홈</span></div>
+      <div class="fr-nav-item"><i data-lucide="map" class="ic-24"></i><span class="lbl">지도</span></div>
+      <div class="fr-nav-cta"><i data-lucide="camera" class="ic-24"></i></div>
+      <div class="fr-nav-item is-active"><i data-lucide="search" class="ic-24"></i><span class="lbl">탐색</span></div>
+      <div class="fr-nav-item"><i data-lucide="user" class="ic-24"></i><span class="lbl">나</span></div>
+    </div>
+  </nav>
+  <div class="fr-home-indicator"></div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

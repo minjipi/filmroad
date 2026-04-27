@@ -325,6 +325,51 @@ describe('ShotDetailPage.vue', () => {
     expect(stub.attributes('data-photo-id')).toBe('77');
   });
 
+  it('compare hero toggles data-mode + aria-pressed + label on click (task #12)', async () => {
+    const { wrapper } = mountPage();
+    await flushPromises();
+
+    const compare = wrapper.find('section.compare');
+    expect(compare.exists()).toBe(true);
+    // Default = "shot": user's photo on top, toggle aria-pressed=false.
+    expect(compare.attributes('data-mode')).toBe('shot');
+
+    const toggle = wrapper.find('[data-testid="sd-compare-toggle"]');
+    expect(toggle.exists()).toBe(true);
+    expect(toggle.attributes('aria-pressed')).toBe('false');
+    expect(toggle.text()).toContain('가이드 보기');
+
+    await toggle.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('section.compare').attributes('data-mode')).toBe('guide');
+    const toggleAfter = wrapper.find('[data-testid="sd-compare-toggle"]');
+    expect(toggleAfter.attributes('aria-pressed')).toBe('true');
+    expect(toggleAfter.text()).toContain('원본으로');
+
+    // Tap again → returns to shot.
+    await toggleAfter.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('section.compare').attributes('data-mode')).toBe('shot');
+  });
+
+  it('compare toggle is hidden when sceneImageUrl is null (no guide image to flip to)', async () => {
+    const noScene = { ...fixture, sceneImageUrl: null };
+    mockApi.get.mockResolvedValueOnce({ data: noScene });
+    const { wrapper } = mountWithStubs(ShotDetailPage, {
+      props: { id: '77' },
+      initialState: {
+        shotDetail: { shot: noScene, loading: false, error: null },
+        auth: { user: { id: 1, nickname: 'me', handle: 'me', avatarUrl: null } },
+      },
+      stubs: { CommentSheet: COMMENT_SHEET_STUB },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('section.compare').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="sd-compare-toggle"]').exists()).toBe(false);
+  });
+
   it('back button calls router.back()', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
