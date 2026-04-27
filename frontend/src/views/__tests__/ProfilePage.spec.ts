@@ -331,7 +331,7 @@ describe('ProfilePage.vue', () => {
     const { wrapper } = mountProfile({
       savedState: {
         collections: [
-          { id: 5, name: '버킷리스트', coverImageUrls: null, count: 0, gradient: null },
+          { id: 5, name: '버킷리스트', coverImageUrls: [], count: 0, gradient: null },
         ],
         items: [],
         savedPlaceIds: [],
