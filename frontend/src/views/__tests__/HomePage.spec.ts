@@ -223,6 +223,35 @@ describe('HomePage.vue', () => {
     expect(cards[1].find('.work-initial').text()).toBe('이');
   });
 
+  it('home-segmented is hidden on work tab (selectedWorkId !== null)', async () => {
+    const { wrapper } = mountHomePage({ selectedWorkId: 1 });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="home-segmented"]').exists()).toBe(false);
+  });
+
+  it('home-segmented is visible on 모두 tab (selectedWorkId === null)', async () => {
+    const { wrapper } = mountHomePage({ selectedWorkId: null });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="home-segmented"]').exists()).toBe(true);
+  });
+
+  it('work tab with stored POPULAR_WORKS scope renders place grid, not works-grid', async () => {
+    // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태로 작품 탭에 들어온
+    // 케이스 — works-grid 가 새어 나와선 안 되고 place grid 가 떠야 한다.
+    const { wrapper } = mountHomePage({
+      selectedWorkId: 1,
+      scope: 'POPULAR_WORKS',
+      popularWorks: [
+        { id: 1, title: '도깨비', posterUrl: null, placeCount: 12 },
+      ],
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="works-grid"]').exists()).toBe(false);
+    expect(wrapper.findAll('.home-grid:not(.works-grid) .photo-card').length)
+      .toBeGreaterThan(0);
+  });
+
   it('tapping a work card navigates to that work detail page (/work/:id)', async () => {
     const { wrapper } = mountHomePage({
       popularWorks: [
