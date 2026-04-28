@@ -226,6 +226,35 @@ describe('map store', () => {
     expect(store.selected).toBeNull();
   });
 
+  it('initial userLocation is null (권한 요청 전 / 거부 시 me 점 미표시)', () => {
+    const store = useMapStore();
+    expect(store.userLocation).toBeNull();
+  });
+
+  it('setUserLocation updates userLocation and is independent of center', async () => {
+    mockApi.get.mockResolvedValue({ data: fixture });
+    const store = useMapStore();
+
+    // GPS 좌표 시드 (서울 시청 인근).
+    store.setUserLocation({ lat: 37.5665, lng: 126.978 });
+    expect(store.userLocation).toEqual({ lat: 37.5665, lng: 126.978 });
+
+    // viewport 가 다른 곳(부산)으로 이동해도 userLocation 은 그대로.
+    await store.setCenter(35.18, 129.07);
+    expect(store.center).toEqual({ lat: 35.18, lng: 129.07 });
+    expect(store.userLocation).toEqual({ lat: 37.5665, lng: 126.978 });
+
+    // 마커 선택으로 center 가 또 옮겨가도 userLocation 은 그대로.
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    await store.selectMarker(13);
+    expect(store.center).toEqual({ lat: 37.5347, lng: 126.9947 });
+    expect(store.userLocation).toEqual({ lat: 37.5665, lng: 126.978 });
+
+    // null 로 리셋도 가능.
+    store.setUserLocation(null);
+    expect(store.userLocation).toBeNull();
+  });
+
   it('selectMarker flips hasBeenViewed=true and switches to DETAIL_ZOOM centered on the picked place', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useMapStore();

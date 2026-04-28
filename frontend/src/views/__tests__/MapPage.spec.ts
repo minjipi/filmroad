@@ -5,6 +5,16 @@ vi.mock('@/services/api', () => ({
   default: { get: vi.fn().mockResolvedValue({ data: null }) },
 }));
 
+// MapPage 가 마운트 시 GPS prime 을 시도한다. jsdom 의 navigator.geolocation
+// 은 callback 을 호출하지 않아 useGeolocation 의 5초 timeout 까지 매달리고
+// pending setTimeout 으로 leak 경고를 낼 수 있다 — 즉시 unavailable 로
+// settle 하는 fake 으로 대체. peekPermission 은 onboarding 컴포저블이
+// 아니므로 사용하지 않지만 형식상 같이 stub.
+vi.mock('@/composables/useGeolocation', () => ({
+  requestLocation: vi.fn().mockResolvedValue({ ok: false, reason: 'unavailable' }),
+  peekPermission: vi.fn().mockResolvedValue('unknown'),
+}));
+
 const { pushSpy, backSpy, routeRef } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
@@ -78,10 +88,12 @@ const fixture: MapResponse = {
 
 const KakaoMapStub = {
   name: 'KakaoMap',
-  props: ['center', 'zoom', 'markers', 'selectedId', 'visitedIds'],
+  props: ['center', 'zoom', 'markers', 'selectedId', 'visitedIds', 'userLocation'],
   emits: ['markerClick', 'clusterClick', 'mapClick', 'centerChange', 'boundsChange', 'zoomChange'],
+  // userLocation 은 객체이므로 직접 attr 로 못 박는다 — JSON 으로 직렬화해
+  // 테스트에서 정확한 값(null / {lat,lng})을 비교할 수 있게 한다.
   template:
-    '<div class="kakao-map-stub" :data-markers="markers?.length ?? 0" :data-selected="selectedId ?? \'\'" :data-visited="(visitedIds ?? []).join(\',\')" @click="$emit(\'markerClick\', markers?.[1]?.id)"></div>',
+    '<div class="kakao-map-stub" :data-markers="markers?.length ?? 0" :data-selected="selectedId ?? \'\'" :data-visited="(visitedIds ?? []).join(\',\')" :data-user-location="JSON.stringify(userLocation ?? null)" @click="$emit(\'markerClick\', markers?.[1]?.id)"></div>',
 };
 
 type SheetMode = 'closed' | 'peek' | 'full';
@@ -104,9 +116,11 @@ function mountMapPage(opts: {
   sheetMode?: SheetMode;
   kakao?: KakaoSeed;
   tourNearby?: TourNearbySeed;
+  userLocation?: { lat: number; lng: number } | null;
 } = {}) {
   const firstEntry = opts.firstEntry ?? false;
   const sheetMode: SheetMode = opts.sheetMode ?? 'peek';
+  const userLocation = opts.userLocation ?? null;
   const initialState: Record<string, unknown> = {
     map: firstEntry
       ? {
@@ -119,6 +133,7 @@ function mountMapPage(opts: {
           q: '',
           center: { ...KOREA_CENTER },
           zoom: COUNTRY_ZOOM,
+          userLocation,
           hasBeenViewed: false,
           sheetMode,
           visitedIds: [10],
@@ -133,6 +148,7 @@ function mountMapPage(opts: {
           q: '',
           center: { lat: 37.8928, lng: 128.8347 },
           zoom: DETAIL_ZOOM,
+          userLocation,
           hasBeenViewed: true,
           sheetMode,
           visitedIds: [10],
@@ -176,6 +192,45 @@ describe('MapPage.vue', () => {
     const el = wrapper.find('.kakao-map-stub');
     expect(el.attributes('data-selected')).toBe(String(fixture.selected!.id));
     expect(el.attributes('data-visited')).toBe('10');
+  });
+
+  it('userLocation 시드 없으면 KakaoMap 에 null 로 전달 — me 점 미표시', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+    const el = wrapper.find('.kakao-map-stub');
+    expect(el.attributes('data-user-location')).toBe('null');
+  });
+
+  it('userLocation 이 store 에 시드되어 있으면 KakaoMap 에 그 좌표로 전달', async () => {
+    const { wrapper } = mountMapPage({
+      userLocation: { lat: 37.55, lng: 126.92 },
+    });
+    await flushPromises();
+    const el = wrapper.find('.kakao-map-stub');
+    expect(el.attributes('data-user-location')).toBe(
+      JSON.stringify({ lat: 37.55, lng: 126.92 }),
+    );
+  });
+
+  it('마커 선택으로 viewport center 가 바뀌어도 userLocation 은 따라가지 않는다', async () => {
+    // 핵심 회귀 — 이전엔 me 점이 props.center 를 따라가서 마커 클릭 시
+    // "내 위치" 가 그 마커로 점프했다. 이제 center 와 userLocation 은
+    // 별개 채널이라, store.selectMarker 가 center 를 옮겨도 userLocation 은
+    // 시드값 그대로 유지된다.
+    const seeded = { lat: 37.55, lng: 126.92 };
+    const { wrapper, store } = mountMapPage({ userLocation: seeded });
+    await flushPromises();
+
+    // 마커 클릭 → selectMarker(13) 가 center 를 단밤 포차 좌표로 옮김.
+    await wrapper.find('.kakao-map-stub').trigger('click');
+    await flushPromises();
+
+    // viewport 는 단밤 포차로 이동.
+    expect(store.center).toEqual({ lat: 37.5347, lng: 126.9947 });
+    // 하지만 me 점(userLocation) 은 그대로 유지.
+    expect(store.userLocation).toEqual(seeded);
+    const el = wrapper.find('.kakao-map-stub');
+    expect(el.attributes('data-user-location')).toBe(JSON.stringify(seeded));
   });
 
   it('renders the selected place detail sheet with formatted stats', async () => {
