@@ -105,17 +105,6 @@
             <button class="round-btn" type="button" aria-label="back" @click="onBack">
               <ion-icon :icon="chevronBack" class="ic-22" />
             </button>
-            <div class="hero-top-right">
-              <button
-                class="round-btn"
-                type="button"
-                aria-label="share"
-                data-testid="pd-share"
-                @click="onShare"
-              >
-                <ion-icon :icon="shareSocialOutline" class="ic-20" />
-              </button>
-            </div>
           </div>
           <div class="hero-caption">
             <div class="hero-chips">
@@ -1057,7 +1046,6 @@ ion-content.pd-content {
   display: flex; justify-content: space-between; align-items: center;
   z-index: 5;
 }
-.hero-top-right { display: flex; gap: 8px; }
 .round-btn {
   width: 40px; height: 40px;
   border-radius: 50%;
