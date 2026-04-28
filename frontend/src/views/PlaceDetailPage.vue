@@ -115,9 +115,6 @@
               >
                 <ion-icon :icon="shareSocialOutline" class="ic-20" />
               </button>
-              <button class="round-btn" type="button" aria-label="more">
-                <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
-              </button>
             </div>
           </div>
           <div class="hero-caption">
@@ -367,7 +364,6 @@ import {
   chevronBack,
   chevronForward,
   shareSocialOutline,
-  ellipsisHorizontal,
   locationOutline,
   navigateOutline,
   star,
