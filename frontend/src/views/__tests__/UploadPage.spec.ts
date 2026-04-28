@@ -434,7 +434,7 @@ describe('UploadPage.vue', () => {
     }
   });
 
-  it('"홈으로 돌아가기" in stage B resets the upload store and replaces to /home (task #8)', async () => {
+  it('"이 성지 인증샷 보기" in stage B resets the store and replaces to /gallery/:placeId', async () => {
     vi.useFakeTimers();
     try {
       const { wrapper } = mountUpload();
@@ -456,7 +456,14 @@ describe('UploadPage.vue', () => {
         images: [{ id: 99, imageUrl: 'https://cdn/p/99.jpg', imageOrderIndex: 0 }],
         totalScore: 70,
       };
-      vi.spyOn(store, 'submit').mockResolvedValue(fakeRes);
+      // 실 submit 은 응답을 받아 store.lastResult 에 저장하는데, mockResolvedValue
+      // 만 쓰면 그 부수효과가 빠진다. onGoHome 이 lastResult.placeId 를 사용해
+      // gallery 로 분기하므로 여기서 직접 lastResult 를 시드해 실 흐름과 동일한
+      // 상태를 맞춘다.
+      vi.spyOn(store, 'submit').mockImplementation(async () => {
+        store.lastResult = fakeRes;
+        return fakeRes;
+      });
 
       await wrapper.find('button.post').trigger('click');
       await flushPromises();
@@ -468,7 +475,8 @@ describe('UploadPage.vue', () => {
       await flushPromises();
 
       expect(resetSpy).toHaveBeenCalledTimes(1);
-      expect(replaceSpy).toHaveBeenCalledWith('/home');
+      // 사용자가 방금 인증한 성지(placeId=10)의 갤러리로 이동.
+      expect(replaceSpy).toHaveBeenCalledWith('/gallery/10');
     } finally {
       vi.useRealTimers();
     }

@@ -427,7 +427,7 @@
                 data-testid="upload-go-home"
                 @click="onGoHome"
               >
-                홈으로 돌아가기
+                이 성지 인증샷 보기
               </button>
             </div>
           </template>
@@ -816,9 +816,14 @@ function onBoast(): void {
 }
 
 async function onGoHome(): Promise<void> {
+  // 인증샷 업로드 직후엔 사용자가 방금 다녀온 성지의 갤러리(=다른 사람들의
+  // 인증샷 + 자기 사진이 같이 보이는 화면)로 이동하는 게 흐름상 자연스럽다.
+  // lastResult.placeId 가 있으면 거기로, 없는 비정상 경로(에러 직후 등)는
+  // /home 으로 폴백해 사용자를 어디로도 못 보내는 막다른 길은 만들지 않는다.
+  const placeId = uploadStore.lastResult?.placeId;
   uploadStore.reset();
   stage.value = 'compose';
-  await router.replace('/home');
+  await router.replace(placeId != null ? `/gallery/${placeId}` : '/home');
 }
 
 onMounted(async () => {
