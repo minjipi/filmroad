@@ -15,6 +15,7 @@ function makePhoto(id: number) {
     id,
     imageUrl: `https://cdn/p/${id}.jpg`,
     caption: `photo-${id}`,
+    authorUserId: 7,
     authorNickname: '김미루',
     authorHandle: 'miru',
     authorAvatarUrl: 'https://img/ava.jpg',
