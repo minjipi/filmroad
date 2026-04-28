@@ -25,15 +25,18 @@ vi.mock('@ionic/vue', async () => {
 });
 
 import GalleryPage from '@/views/GalleryPage.vue';
-import { useGalleryStore } from '@/stores/gallery';
+import { useGalleryStore, type GalleryPhoto } from '@/stores/gallery';
 import { useSavedStore } from '@/stores/saved';
 import { mountWithStubs } from './__helpers__/mount';
 
-function makePhoto(id: number) {
+function makePhoto(id: number): GalleryPhoto {
+  // GalleryPhoto.authorUserId 는 anonymous 시드 케이스 대비 number | null 이라
+  // 명시적 어노테이션이 있어야 anonymous 테스트의 spread 가 타입 통과한다.
   return {
     id,
     imageUrl: `https://cdn/p/${id}.jpg`,
     caption: `photo-${id}`,
+    authorUserId: 7,
     authorNickname: '김미루',
     authorHandle: 'miru',
     authorAvatarUrl: 'https://img/ava.jpg',
@@ -64,10 +67,17 @@ const galleryState = {
   error: null as string | null,
 };
 
-function mountGallery() {
+function mountGallery(
+  overrides: { photos?: typeof galleryState.photos } = {},
+) {
   return mountWithStubs(GalleryPage, {
     props: { placeId: 10 },
-    initialState: { gallery: { ...galleryState } },
+    initialState: {
+      gallery: {
+        ...galleryState,
+        photos: overrides.photos ?? galleryState.photos,
+      },
+    },
     stubs: {
       CommentSheet: {
         props: ['photoId', 'open'],
@@ -137,6 +147,38 @@ describe('GalleryPage.vue', () => {
     expect(posts.length).toBe(galleryState.photos.length);
     // .grid-view is not rendered in FEED mode.
     expect(wrapper.find('.grid-view').exists()).toBe(false);
+  });
+
+  it('post-head ava + handle-block click → /user/:authorUserId', async () => {
+    const { wrapper } = mountGallery();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const post = wrapper.findAll('.gal-feed .post')[0];
+    await post.find('.ava').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/user/7');
+
+    pushSpy.mockClear();
+    await post.find('.handle-block').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith('/user/7');
+  });
+
+  it('anonymous photo (authorUserId=null) → ava/handle-block click is a no-op', async () => {
+    // anonymous 시드 사진처럼 user 가 없는 케이스는 라우팅 자체를 disable.
+    // (.clickable 클래스도 안 붙어 cursor 도 default.)
+    const anonPhotos = [{ ...galleryState.photos[0], authorUserId: null }];
+    const { wrapper } = mountGallery({ photos: anonPhotos });
+    await flushPromises();
+    pushSpy.mockClear();
+
+    const post = wrapper.findAll('.gal-feed .post')[0];
+    expect(post.find('.ava').classes()).not.toContain('clickable');
+    expect(post.find('.handle-block').classes()).not.toContain('clickable');
+    await post.find('.ava').trigger('click');
+    await flushPromises();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it('bookmark on a photo row opens the collection picker with the gallery place id (task #29)', async () => {
