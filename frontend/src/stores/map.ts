@@ -92,6 +92,10 @@ interface State {
   q: string;
   center: { lat: number; lng: number };
   zoom: number;
+  // GPS-derived 사용자 현재 위치. center(=지도 viewport) 와 분리 — 마커
+  // 클릭/검색/딥링크로 center 가 바뀌어도 me 점은 따라가지 않게 한다.
+  // 권한 거부·실패·미요청 상태에선 null → 내 위치 점을 표시하지 않음.
+  userLocation: { lat: number; lng: number } | null;
   // First-entry (country view) vs re-entry (restore last viewed) switch — flips
   // true the moment the user picks a marker or opens a PlaceDetail that mirrors
   // itself back into this store via markLastViewed.
@@ -166,6 +170,7 @@ export const useMapStore = defineStore('map', {
     q: '',
     center: { ...KOREA_CENTER },
     zoom: COUNTRY_ZOOM,
+    userLocation: null,
     hasBeenViewed: false,
     sheetMode: 'peek',
     visitedIds: [10],
@@ -338,6 +343,12 @@ export const useMapStore = defineStore('map', {
     async setCenter(lat: number, lng: number): Promise<void> {
       this.center = { lat, lng };
       await this.fetchMap();
+    },
+    // GPS 기반 사용자 위치 갱신. null 을 넘기면 권한 거부/실패 상태로 되돌림
+    // → 지도의 me overlay 가 사라진다. center 와 별개로 동작 — viewport 가
+    // 다른 곳으로 이동해도 이 값은 그대로 유지된다.
+    setUserLocation(loc: { lat: number; lng: number } | null): void {
+      this.userLocation = loc;
     },
     setZoom(z: number): void {
       this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(z)));

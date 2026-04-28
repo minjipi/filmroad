@@ -38,6 +38,12 @@ const props = defineProps<{
    * coordinate). Empty/undefined → no fit; `center`/`zoom` props win.
    */
   fitTo?: LatLng[];
+  /**
+   * GPS-derived 사용자 현재 위치. 있으면 파란 "내 위치" 점을 그 좌표에
+   * 그림. null/undefined 이면 그리지 않음. `center`(지도 viewport 중심)와
+   * 분리 — 마커 클릭/검색으로 viewport 가 바뀌어도 이 점은 따라가지 않는다.
+   */
+  userLocation?: LatLng | null;
 }>();
 
 // task #27: 단일 마커일 때 setBounds 가 zoom level 1 까지 들어가버리는
@@ -177,18 +183,23 @@ function renderOverlays(): void {
     overlays.push(overlay);
   });
 
-  // "You are here" dot — always rendered on top.
-  const mePos = new k.maps.LatLng(props.center.lat, props.center.lng);
-  const me = new k.maps.CustomOverlay({
-    position: mePos,
-    content: buildMeContent(),
-    yAnchor: 0.5,
-    xAnchor: 0.5,
-    zIndex: 1,
-  });
-  const setMap = (me as unknown as { setMap: (v: unknown) => void }).setMap;
-  setMap.call(me, mapInstance);
-  meOverlay = me;
+  // "You are here" dot — GPS 좌표(props.userLocation)에만 그린다. 이전에는
+  // props.center 를 따라갔는데 그러면 마커 선택/검색으로 viewport 가 옮겨질
+  // 때마다 me 점도 따라가서 "내 위치"가 의미를 잃었다. userLocation 이 없으면
+  // (권한 거부/미요청) 점 자체를 그리지 않는다.
+  if (props.userLocation) {
+    const mePos = new k.maps.LatLng(props.userLocation.lat, props.userLocation.lng);
+    const me = new k.maps.CustomOverlay({
+      position: mePos,
+      content: buildMeContent(),
+      yAnchor: 0.5,
+      xAnchor: 0.5,
+      zIndex: 1,
+    });
+    const setMap = (me as unknown as { setMap: (v: unknown) => void }).setMap;
+    setMap.call(me, mapInstance);
+    meOverlay = me;
+  }
 }
 
 function emitBounds(): void {
@@ -307,6 +318,9 @@ function renderRoute(): void {
 
 watch(renderables, () => renderOverlays(), { deep: true });
 watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
+// userLocation 이 비동기로 채워질 수 있으므로 (권한 프롬프트 후 응답) 변화
+// 시 overlays 를 다시 그려 me 점을 갱신/제거한다. deep 으로 좌표 값 추적.
+watch(() => props.userLocation, () => renderOverlays(), { deep: true });
 watch(() => props.routePath, () => renderRoute(), { deep: true });
 // task #27: fitTo 가 비동기로 바뀌는 경우(부모에서 markers fetch 후 채움) 도
 // 자동 fit. deep 으로 좌표 값까지 추적.
@@ -366,7 +380,6 @@ onBeforeUnmount(() => {
 
 <style>
 .kakao-map .pin {
-  transform: translate(-50%, -100%);
   cursor: pointer;
   z-index: 2;
 }

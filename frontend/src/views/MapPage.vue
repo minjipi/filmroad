@@ -7,6 +7,7 @@
         :markers="visibleMarkers"
         :selected-id="selected?.id ?? null"
         :visited-ids="visitedIds"
+        :user-location="userLocation"
         @marker-click="onSelect"
         @cluster-click="onClusterClick"
         @bounds-change="onBoundsChange"
@@ -392,7 +393,8 @@ import { formatRelativeTime } from '@/utils/formatRelativeTime';
 import { buildPlaceShareData } from '@/utils/share';
 
 const mapStore = useMapStore();
-const { selected, error, filter, center, zoom, workId, sheetMode } = storeToRefs(mapStore);
+const { selected, error, filter, center, zoom, workId, sheetMode, userLocation } =
+  storeToRefs(mapStore);
 const { showError, showInfo } = useToast();
 const route = useRoute();
 const router = useRouter();
@@ -626,10 +628,30 @@ async function onLocateMe(): Promise<void> {
       await showError(locationFailMessage(result.reason));
       return;
     }
+    // viewport 와 me 점을 동시에 갱신. setUserLocation 은 center 와 분리된
+    // 채널이라 이후 마커 선택/검색으로 viewport 가 옮겨져도 me 점은 여기서 잡은
+    // 좌표에 그대로 머문다.
+    mapStore.setUserLocation({ lat: result.coords.lat, lng: result.coords.lng });
     mapStore.setZoom(DETAIL_ZOOM);
     await mapStore.setCenter(result.coords.lat, result.coords.lng);
   } finally {
     locating.value = false;
+  }
+}
+
+// 마운트 시 한 번 GPS 를 prompt-less / 거부 friendly 하게 시도해 store 에
+// 저장. 성공 → me 점 표시. 거부/타임아웃/사용 불가 → null 유지 → 점 미표시.
+// 토스트는 띄우지 않는다(사용자가 명시적으로 누른 onLocateMe 와 달리,
+// 마운트 시 자동 시도이므로 실패 메시지는 시끄럽다). jsdom 등 navigator.
+// geolocation 부재 환경은 requestLocation() 내부 가드가 unavailable 로 처리.
+async function primeUserLocation(): Promise<void> {
+  try {
+    const result = await requestLocation();
+    if (result.ok) {
+      mapStore.setUserLocation({ lat: result.coords.lat, lng: result.coords.lng });
+    }
+  } catch {
+    // 어떤 이유로든 실패하면 me 점 없이 진행 — 마운트 흐름 자체는 막지 않는다.
   }
 }
 
@@ -786,6 +808,11 @@ watch(
 );
 
 onMounted(async () => {
+  // 마커 / viewport 와 무관한 GPS prime — 결과는 store.userLocation 으로
+  // 흘러 KakaoMap 의 me 점에만 반영. await 하지 않아 마운트 흐름과 병렬로
+  // 수행 (권한 프롬프트가 떠도 지도 fetch 는 그대로 진행).
+  void primeUserLocation();
+
   const qLat = pickQueryNumber(route.query.lat);
   const qLng = pickQueryNumber(route.query.lng);
   const qSelected = pickQueryNumber(route.query.selectedId);
