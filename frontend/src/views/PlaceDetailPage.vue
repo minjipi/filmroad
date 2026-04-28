@@ -58,13 +58,6 @@
               />
             </div>
           </div>
-          <span
-            v-if="place.coverImageUrls.length > 1"
-            class="hero-counter"
-            data-testid="pd-hero-counter"
-          >
-            {{ realHeroSlide + 1 }} / {{ place.coverImageUrls.length }}
-          </span>
           <button
             v-if="place.coverImageUrls.length > 1"
             type="button"
@@ -1011,22 +1004,6 @@ ion-content.pd-content {
 .hero-nav.prev { left: 12px; }
 .hero-nav.next { right: 12px; }
 
-/* 우상단 페이지 카운터 ("1 / 3") — 한 장만 있을 때는 숨겨 단일 이미지 화면이
-   이전과 동일하게 보이도록 한다. ShotDetail 의 carousel-count 와 동일 톤. */
-.hero-counter {
-  position: absolute;
-  top: calc(72px + env(safe-area-inset-top));
-  right: 14px;
-  z-index: 6;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 12px;
-  pointer-events: none;
-  letter-spacing: -0.01em;
-}
 .hero-grad {
   position: absolute; inset: 0;
   background: linear-gradient(
