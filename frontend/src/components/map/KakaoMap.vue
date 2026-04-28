@@ -380,7 +380,6 @@ onBeforeUnmount(() => {
 
 <style>
 .kakao-map .pin {
-  transform: translate(-50%, -100%);
   cursor: pointer;
   z-index: 2;
 }
