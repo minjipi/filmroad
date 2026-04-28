@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 
-export type GallerySort = 'RECENT' | 'POPULAR' | 'FRIENDS' | 'SCENE_COMPARE';
+export type GallerySort = 'RECENT' | 'POPULAR' | 'SCENE_COMPARE';
 export type GalleryViewMode = 'FEED' | 'GRID';
 
 export interface GalleryPlaceHeader {

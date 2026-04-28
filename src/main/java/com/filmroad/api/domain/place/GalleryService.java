@@ -63,10 +63,11 @@ public class GalleryService {
     private String normalizeSort(String sort) {
         if (sort == null || sort.isBlank()) return "RECENT";
         String upper = sort.trim().toUpperCase();
-        // FRIENDS와 SCENE_COMPARE는 현재 데이터 모델로 구분 불가 → RECENT fallback.
+        // SCENE_COMPARE 는 현재 데이터 모델로 구분 불가 → RECENT fallback.
+        // (FRIENDS 키는 프런트에서 제거돼 더이상 들어오지 않음.)
         return switch (upper) {
             case "POPULAR" -> "POPULAR";
-            case "RECENT", "FRIENDS", "SCENE_COMPARE" -> "RECENT";
+            case "RECENT", "SCENE_COMPARE" -> "RECENT";
             default -> "RECENT";
         };
     }

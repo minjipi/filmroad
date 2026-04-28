@@ -104,8 +104,9 @@ describe('GalleryPage.vue', () => {
     const setSortSpy = vi.spyOn(store, 'setSort').mockResolvedValue();
 
     const chips = wrapper.findAll('.filter-row .chips .ch');
-    // 4 chips: 전체/인기순/친구만/장면 비교.
-    expect(chips.length).toBe(4);
+    // 3 chips: 전체/인기순/장면 비교. ('친구만' 은 백엔드에서 친구 데이터 모델이
+    // 없어 그냥 RECENT 로 폴백되던 dead 옵션이라 제거됨.)
+    expect(chips.length).toBe(3);
     // RECENT is active by default.
     expect(chips[0].classes()).toContain('on');
 

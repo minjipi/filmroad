@@ -200,7 +200,6 @@ const placeIdNum = computed(() => Number(props.placeId));
 const sortOptions: Array<{ key: GallerySort; label: string }> = [
   { key: 'RECENT', label: '전체' },
   { key: 'POPULAR', label: '인기순' },
-  { key: 'FRIENDS', label: '친구만' },
   { key: 'SCENE_COMPARE', label: '장면 비교' },
 ];
 
