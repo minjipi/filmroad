@@ -282,8 +282,8 @@
             >
               <div class="thumb">
                 <img
-                  v-if="p.coverImageUrls.length > 0"
-                  :src="p.coverImageUrls[0]"
+                  v-if="p.sceneImageUrl"
+                  :src="p.sceneImageUrl"
                   :alt="p.name"
                 />
               </div>
@@ -497,6 +497,8 @@ import { useHomeStore, type PlaceSummary } from '@/stores/home';
 import { useUiStore } from '@/stores/ui';
 import { useToast } from '@/composables/useToast';
 import { useOnline } from '@/composables/useOnline';
+import { requestLocation } from '@/composables/useGeolocation';
+import api from '@/services/api';
 import { buildBoastShareData } from '@/utils/share';
 import ScoreRevealOverlay from '@/components/upload/ScoreRevealOverlay.vue';
 import LevelUpOverlay from '@/components/upload/LevelUpOverlay.vue';
@@ -584,12 +586,17 @@ const canShare = computed(
 const canAddMore = computed(() => photos.value.length < MAX_PHOTOS_PER_POST);
 
 // ---------- Place picker ----------
+// 인증샷은 그 곳에 가서 찍어야 하므로 picker 는 거리순 정렬을 우선한다.
+// 별도의 nearby fetch 결과를 `pickerNearby` 에 보관해 home tab 의 sort(NEAR/
+// TRENDING) 와 분리. 위치 권한 거부 / 실패 시 homeStore.places 로 폴백.
 const pickerOpen = ref(false);
 const pickerQuery = ref('');
+const pickerNearby = ref<PlaceSummary[] | null>(null);
 
 const pickerResults = computed<PlaceSummary[]>(() => {
   const q = pickerQuery.value.trim().toLowerCase();
-  const source = homeStore.places;
+  // nearby 가 잡혀 있으면 그걸 우선 — 백엔드가 이미 거리순 정렬해서 내려줌.
+  const source = pickerNearby.value ?? homeStore.places;
   if (!q) return source;
   return source.filter((p) => {
     return (
@@ -603,8 +610,21 @@ const pickerResults = computed<PlaceSummary[]>(() => {
 async function onOpenPicker(): Promise<void> {
   pickerQuery.value = '';
   pickerOpen.value = true;
-  // Lazy fetch — if the home tab hasn't been visited yet this session, fetch
-  // once so the picker has something to show.
+  // 거리순 nearby 시도 — 권한 받아 좌표 잡으면 NEAR scope 로 직접 호출.
+  // 실패/거부 시 homeStore fallback.
+  const geo = await requestLocation();
+  if (geo.ok) {
+    try {
+      const { data } = await api.get<{ places: PlaceSummary[] }>('/api/home', {
+        params: { scope: 'NEAR', lat: geo.coords.lat, lng: geo.coords.lng, radiusKm: 100 },
+      });
+      pickerNearby.value = data.places ?? [];
+      return;
+    } catch {
+      // 네트워크 실패 — 아래 home fallback 으로 흐른다.
+    }
+  }
+  pickerNearby.value = null;
   if (homeStore.places.length === 0 && !homeStore.loading) {
     await homeStore.fetchHome();
   }
