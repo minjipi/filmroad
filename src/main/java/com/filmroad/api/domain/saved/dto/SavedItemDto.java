@@ -12,8 +12,8 @@ public class SavedItemDto {
     private String name;
     private String regionLabel;
     private List<String> coverImageUrls;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private Double distanceKm;
     private int likeCount;
     private boolean visited;

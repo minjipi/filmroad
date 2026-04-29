@@ -19,8 +19,8 @@ public class MyPhotoDto {
     private Long placeId;
     private String placeName;
     private String regionLabel;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private PhotoVisibility visibility;
     private Date createdAt;
 
@@ -32,8 +32,8 @@ public class MyPhotoDto {
                 .placeId(photo.getPlace().getId())
                 .placeName(photo.getPlace().getName())
                 .regionLabel(photo.getPlace().getRegionLabel())
-                .workId(photo.getPlace().getWork() == null ? null : photo.getPlace().getWork().getId())
-                .workTitle(photo.getPlace().getWork() == null ? null : photo.getPlace().getWork().getTitle())
+                .contentId(photo.getPlace().getContent() == null ? null : photo.getPlace().getContent().getId())
+                .contentTitle(photo.getPlace().getContent() == null ? null : photo.getPlace().getContent().getTitle())
                 .visibility(photo.getVisibility())
                 .createdAt(photo.getCreatedAt())
                 .build();

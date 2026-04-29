@@ -24,12 +24,12 @@ vi.mock('@ionic/vue', async () => {
   return { ...actual, toastController: { create: toastCreateSpy } };
 });
 
-import WorkDetailPage from '@/views/WorkDetailPage.vue';
-import { useWorkDetailStore } from '@/stores/workDetail';
+import ContentDetailPage from '@/views/ContentDetailPage.vue';
+import { useContentDetailStore } from '@/stores/contentDetail';
 import { mountWithStubs } from './__helpers__/mount';
 
-const workDetailState = {
-  work: {
+const contentDetailState = {
+  content: {
     id: 1,
     title: '도깨비',
     subtitle: '쓸쓸하고 찬란하神',
@@ -58,7 +58,7 @@ const workDetailState = {
         {
           id: 1000,
           imageUrl: 'https://img/scene-10.jpg',
-          workEpisode: '1회',
+          contentEpisode: '1회',
           sceneTimestamp: '00:24:10',
           sceneDescription: '도깨비 등장 장면',
           orderIndex: 0,
@@ -77,7 +77,7 @@ const workDetailState = {
         {
           id: 1001,
           imageUrl: 'https://img/scene-11.jpg',
-          workEpisode: '5회',
+          contentEpisode: '5회',
           sceneTimestamp: null,
           sceneDescription: '눈 오는 장면',
           orderIndex: 0,
@@ -94,9 +94,9 @@ const workDetailState = {
 };
 
 function mountWorkDetail() {
-  return mountWithStubs(WorkDetailPage, {
+  return mountWithStubs(ContentDetailPage, {
     props: { id: 1 },
-    initialState: { workDetail: { ...workDetailState } },
+    initialState: { contentDetail: { ...contentDetailState } },
   });
 }
 
@@ -112,19 +112,19 @@ const KakaoMapStub = {
     '<div class="kakao-map-stub" :data-fit-count="fitTo?.length ?? 0" :data-fit-json="JSON.stringify(fitTo ?? [])"></div>',
 };
 
-function mountWorkDetailWithCoords(spots: Array<typeof workDetailState.spots[number] & { latitude: number; longitude: number }>) {
+function mountContentDetailWithCoords(spots: Array<typeof contentDetailState.spots[number] & { latitude: number; longitude: number }>) {
   const stateWithCoords = {
-    ...workDetailState,
+    ...contentDetailState,
     spots: spots.map((s) => ({ ...s })),
   };
-  return mountWithStubs(WorkDetailPage, {
+  return mountWithStubs(ContentDetailPage, {
     props: { id: 1 },
-    initialState: { workDetail: stateWithCoords },
+    initialState: { contentDetail: stateWithCoords },
     stubs: { KakaoMap: KakaoMapStub },
   });
 }
 
-describe('WorkDetailPage.vue', () => {
+describe('ContentDetailPage.vue', () => {
   beforeEach(() => {
     pushSpy.mockClear();
     replaceSpy.mockClear();
@@ -160,7 +160,7 @@ describe('WorkDetailPage.vue', () => {
   it('renders four chips and clicking one calls setChip on the store', async () => {
     const { wrapper } = mountWorkDetail();
     await flushPromises();
-    const store = useWorkDetailStore();
+    const store = useContentDetailStore();
     const setChipSpy = vi.spyOn(store, 'setChip');
 
     const chips = wrapper.findAll('.card-sheet .chips .chip-i');
@@ -178,7 +178,7 @@ describe('WorkDetailPage.vue', () => {
     await flushPromises();
 
     const spots = wrapper.findAll('.spots .spot');
-    expect(spots.length).toBe(workDetailState.spots.length);
+    expect(spots.length).toBe(contentDetailState.spots.length);
     // First spot is visited → .done.
     expect(spots[0].classes()).toContain('done');
     expect(spots[1].classes()).not.toContain('done');
@@ -244,10 +244,10 @@ describe('WorkDetailPage.vue', () => {
   // viewport 가 자동 조정되도록 함. unit-level 에선 prop 전달 회귀 보장.
   it('지도 탭 → KakaoMap 의 fit-to prop 이 모든 성지 lat/lng 로 채워짐 (task #27)', async () => {
     const spotsWithCoords = [
-      { ...workDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
-      { ...workDetailState.spots[1], latitude: 37.5658, longitude: 126.9751 },
+      { ...contentDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
+      { ...contentDetailState.spots[1], latitude: 37.5658, longitude: 126.9751 },
     ];
-    const { wrapper } = mountWorkDetailWithCoords(spotsWithCoords);
+    const { wrapper } = mountContentDetailWithCoords(spotsWithCoords);
     await flushPromises();
 
     // 진입 직후엔 list 모드 — 지도 stub 없음.
@@ -269,9 +269,9 @@ describe('WorkDetailPage.vue', () => {
 
   it('단일 성지일 때도 fit-to 전달 — KakaoMap 이 single-marker zoom 로 처리 (task #27)', async () => {
     const spotsWithCoords = [
-      { ...workDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
+      { ...contentDetailState.spots[0], latitude: 37.8928, longitude: 128.8347 },
     ];
-    const { wrapper } = mountWorkDetailWithCoords(spotsWithCoords);
+    const { wrapper } = mountContentDetailWithCoords(spotsWithCoords);
     await flushPromises();
     await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
     await flushPromises();
@@ -281,7 +281,7 @@ describe('WorkDetailPage.vue', () => {
   });
 
   it('좌표 없는 성지만 있으면 KakaoMap 자체가 미렌더 — 빈 안내 노출 (task #27)', async () => {
-    // 좌표 없는 fixture (기본 workDetailState) — mapMarkers.length === 0.
+    // 좌표 없는 fixture (기본 contentDetailState) — mapMarkers.length === 0.
     const { wrapper } = mountWorkDetail();
     await flushPromises();
     await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
@@ -291,12 +291,12 @@ describe('WorkDetailPage.vue', () => {
     expect(wrapper.find('[data-testid="spots-map"] .empty-note').exists()).toBe(true);
   });
 
-  // task #25: 페이지 언마운트 시 store reset — 다른 workId 진입 시 이전
+  // task #25: 페이지 언마운트 시 store reset — 다른 contentId 진입 시 이전
   // work / spots / progress 가 잠시 잔류하지 않게.
-  it('unmount → workStore.reset() called (task #25 stale-data guard)', async () => {
+  it('unmount → contentStore.reset() called (task #25 stale-data guard)', async () => {
     const { wrapper } = mountWorkDetail();
     await flushPromises();
-    const store = useWorkDetailStore();
+    const store = useContentDetailStore();
     const resetSpy = vi.spyOn(store, 'reset');
 
     wrapper.unmount();

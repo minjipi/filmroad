@@ -37,11 +37,11 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.code", is(20000)))
                 .andExpect(jsonPath("$.results.place.id", is(10)))
-                .andExpect(jsonPath("$.results.place.workId", is(1)))
+                .andExpect(jsonPath("$.results.place.contentId", is(1)))
                 // 회차/타임스탬프는 평면 필드에서 빠지고 scenes[0] 안으로 이동.
                 // place 10 은 시드에서 2개 씬을 받음(order=0/1) — 0번이 시즌1 1회 장면.
                 .andExpect(jsonPath("$.results.place.scenes", hasSize(greaterThanOrEqualTo(1))))
-                .andExpect(jsonPath("$.results.place.scenes[0].workEpisode", notNullValue()))
+                .andExpect(jsonPath("$.results.place.scenes[0].contentEpisode", notNullValue()))
                 .andExpect(jsonPath("$.results.place.scenes[0].sceneTimestamp", notNullValue()))
                 .andExpect(jsonPath("$.results.place.scenes[0].imageUrl", notNullValue()))
                 .andExpect(jsonPath("$.results.place.scenes[0].orderIndex", is(0)))
@@ -52,7 +52,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.results.photos", hasSize(lessThanOrEqualTo(6))))
                 .andExpect(jsonPath("$.results.related", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.related[*].id", everyItem(not(is(10)))))
-                .andExpect(jsonPath("$.results.related[*].workId", everyItem(is(1))));
+                .andExpect(jsonPath("$.results.related[*].contentId", everyItem(is(1))));
     }
 
     @Test

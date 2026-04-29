@@ -7,10 +7,10 @@ export type GalleryViewMode = 'FEED' | 'GRID';
 export interface GalleryPlaceHeader {
   placeId: number;
   name: string;
-  workTitle: string;
-  workEpisode: string | null;
+  contentTitle: string;
+  contentEpisode: string | null;
   totalPhotoCount: number;
-  workId: number | null;
+  contentId: number | null;
 }
 
 export interface GalleryPhoto {

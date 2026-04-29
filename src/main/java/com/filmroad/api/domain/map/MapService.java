@@ -39,12 +39,12 @@ public class MapService {
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public MapResponse getMap(Double lat, Double lng, Long workId, String q, Long selectedId,
+    public MapResponse getMap(Double lat, Double lng, Long contentId, String q, Long selectedId,
                               Double swLat, Double swLng, Double neLat, Double neLng) {
         String normalizedQ = (q == null || q.isBlank()) ? null : q.trim();
         Bounds bounds = Bounds.ofNullable(swLat, swLng, neLat, neLng);
 
-        List<Place> places = fetchPlaces(workId, normalizedQ, bounds);
+        List<Place> places = fetchPlaces(contentId, normalizedQ, bounds);
 
         List<MapMarkerDto> markers = places.stream()
                 .map(p -> MapMarkerDto.of(p, distanceKm(lat, lng, p)))
@@ -58,17 +58,17 @@ public class MapService {
                 .build();
     }
 
-    private List<Place> fetchPlaces(Long workId, String q, Bounds bounds) {
+    private List<Place> fetchPlaces(Long contentId, String q, Bounds bounds) {
         if (bounds.active()) {
             // bbox 경로: trendingScore 정렬 없이 id ASC, 넉넉한 limit 으로 viewport 내 장소 전수 반환.
             return placeRepository.findInBoundsForMap(
-                            workId, q, bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng())
+                            contentId, q, bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng())
                     .stream()
                     .limit(boundedMarkerLimit)
                     .toList();
         }
         // 전국 경로: 인기 장소 상위 N개만.
-        return placeRepository.searchForMap(workId, q).stream()
+        return placeRepository.searchForMap(contentId, q).stream()
                 .limit(nationwideMarkerLimit)
                 .toList();
     }

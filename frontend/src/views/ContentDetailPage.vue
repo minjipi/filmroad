@@ -2,7 +2,7 @@
   <ion-page>
     <ion-content :fullscreen="true" class="wd-content">
       <div class="hero-bg">
-        <img v-if="work" :src="work.posterUrl" :alt="work.title" />
+        <img v-if="content" :src="content.posterUrl" :alt="content.title" />
       </div>
 
       <header class="top">
@@ -14,16 +14,16 @@
         </button>
       </header>
 
-      <div v-if="work" class="head">
-        <div class="poster"><img :src="work.posterUrl" :alt="work.title" /></div>
+      <div v-if="content" class="head">
+        <div class="poster"><img :src="content.posterUrl" :alt="content.title" /></div>
         <div class="head-info">
           <span class="kind">{{ kindLabel }}</span>
-          <h1>{{ work.subtitle ?? '' }}<br v-if="work.subtitle" />{{ work.title }}</h1>
+          <h1>{{ content.subtitle ?? '' }}<br v-if="content.subtitle" />{{ content.title }}</h1>
           <div class="meta">
             <ion-icon :icon="star" class="ic-16 star-ic" />
-            <b>{{ work.ratingAverage != null ? work.ratingAverage.toFixed(1) : '—' }}</b>
+            <b>{{ content.ratingAverage != null ? content.ratingAverage.toFixed(1) : '—' }}</b>
             <span v-if="episodeLabel"> · {{ episodeLabel }}</span>
-            <span v-if="work.network"> · {{ work.network }}</span>
+            <span v-if="content.network"> · {{ content.network }}</span>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@
                 <div class="t">{{ s.name }}</div>
                 <div class="s2">
                   <ion-icon :icon="locationOutline" class="ic-16" />
-                  {{ s.regionShort }}<template v-if="s.scenes[0]?.workEpisode"> · {{ s.scenes[0].workEpisode }}</template><template v-if="s.scenes[0]?.sceneTimestamp"> · {{ s.scenes[0].sceneTimestamp }}</template>
+                  {{ s.regionShort }}<template v-if="s.scenes[0]?.contentEpisode"> · {{ s.scenes[0].contentEpisode }}</template><template v-if="s.scenes[0]?.sceneTimestamp"> · {{ s.scenes[0].sceneTimestamp }}</template>
                 </div>
                 <div
                   v-if="s.visited && s.visitedAt"
@@ -159,7 +159,7 @@ import {
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useWorkDetailStore, type WorkDetailChip, type WorkDetailSpot } from '@/stores/workDetail';
+import { useContentDetailStore, type ContentDetailChip, type ContentDetailSpot } from '@/stores/contentDetail';
 import FrEmptyState from '@/components/ui/FrEmptyState.vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import type { MapMarker } from '@/stores/map';
@@ -168,13 +168,13 @@ import { useToast } from '@/composables/useToast';
 const props = defineProps<{ id: string | number }>();
 
 const router = useRouter();
-const workStore = useWorkDetailStore();
-const { work, progress, spots, activeChip, error } = storeToRefs(workStore);
+const contentStore = useContentDetailStore();
+const { content, progress, spots, activeChip, error } = storeToRefs(contentStore);
 const { showError, showInfo } = useToast();
 
-const workIdNum = computed(() => Number(props.id));
+const contentIdNum = computed(() => Number(props.id));
 
-const chipList: Array<{ key: WorkDetailChip; label: string }> = [
+const chipList: Array<{ key: ContentDetailChip; label: string }> = [
   { key: 'SPOTS', label: '성지 목록' },
   { key: 'INFO', label: '정보' },
   { key: 'CAST', label: '출연진' },
@@ -183,7 +183,7 @@ const chipList: Array<{ key: WorkDetailChip; label: string }> = [
 
 const spotsView = ref<'list' | 'map'>('list');
 
-function hasCoords(s: WorkDetailSpot): boolean {
+function hasCoords(s: ContentDetailSpot): boolean {
   return typeof s.latitude === 'number' && typeof s.longitude === 'number';
 }
 
@@ -193,8 +193,8 @@ const mapMarkers = computed<MapMarker[]>(() =>
     name: s.name,
     latitude: s.latitude as number,
     longitude: s.longitude as number,
-    workId: workIdNum.value,
-    workTitle: work.value?.title ?? '',
+    contentId: contentIdNum.value,
+    contentTitle: content.value?.title ?? '',
     regionLabel: s.regionShort,
     distanceKm: null,
   })),
@@ -220,14 +220,14 @@ const visitedPlaceIds = computed<number[]>(() =>
 );
 
 const kindLabel = computed(() => {
-  const w = work.value;
+  const w = content.value;
   if (!w) return '';
   if (w.yearStart) return `${w.kind} · ${w.yearStart}`;
   return w.kind;
 });
 
 const episodeLabel = computed(() => {
-  const n = work.value?.episodeCount;
+  const n = content.value?.episodeCount;
   if (n == null) return '';
   return `${n}부작`;
 });
@@ -268,8 +268,8 @@ async function onOpenRoute(): Promise<void> {
   await showInfo('루트 짜기는 곧 공개됩니다');
 }
 
-async function onSelectChip(c: WorkDetailChip): Promise<void> {
-  workStore.setChip(c);
+async function onSelectChip(c: ContentDetailChip): Promise<void> {
+  contentStore.setChip(c);
   if (c !== 'SPOTS') await showInfo(chipPlaceholderMessage.value);
 }
 
@@ -278,15 +278,15 @@ async function onOpenSpot(id: number): Promise<void> {
 }
 
 async function load(): Promise<void> {
-  await workStore.fetch(workIdNum.value);
+  await contentStore.fetch(contentIdNum.value);
   if (error.value) await showError(error.value);
 }
 
 onMounted(load);
-// task #25: stale-data 가드 — 다른 workId 진입 시 이전 work / spots /
+// task #25: stale-data 가드 — 다른 contentId 진입 시 이전 work / spots /
 // progress 가 잠시 잔류하지 않도록 store 초기화.
-onUnmounted(() => workStore.reset());
-watch(workIdNum, (next, prev) => {
+onUnmounted(() => contentStore.reset());
+watch(contentIdNum, (next, prev) => {
   if (next !== prev) void load();
 });
 </script>

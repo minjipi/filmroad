@@ -22,17 +22,17 @@ export type Visibility = 'PUBLIC' | 'PRIVATE';
 
 export interface CaptureTarget {
   placeId: number;
-  workId: number;
-  workTitle: string;
-  workEpisode: string | null;
+  contentId: number;
+  contentTitle: string;
+  contentEpisode: string | null;
   placeName: string;
   sceneImageUrl: string | null;
 }
 
 export interface StampProgress {
   placeName: string;
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   collectedCount: number;
   totalCount: number;
   percent: number;
@@ -76,9 +76,9 @@ export interface PhotoResponse {
   id: number;
   imageUrl: string;
   placeId: number;
-  workId: number;
-  workTitle: string;
-  workEpisode: string | null;
+  contentId: number;
+  contentTitle: string;
+  contentEpisode: string | null;
   caption: string | null;
   tags: string[];
   visibility: Visibility;

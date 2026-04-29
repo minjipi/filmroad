@@ -8,7 +8,7 @@ import { useToast } from '@/composables/useToast';
 // RECENT = time-sorted feed (task #33, the new default). POPULAR keeps the
 // engagement-ranked view; FOLLOWING scopes to accounts the user follows;
 // NEARBY orders by distance when coordinates are available; BY_WORK filters
-// to a single work id (paired with `workId`).
+// to a single work id (paired with `contentId`).
 export type FeedTab = 'RECENT' | 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_WORK';
 
 export interface FeedAuthor {
@@ -27,10 +27,10 @@ export interface FeedPlace {
   regionLabel: string;
 }
 
-export interface FeedWork {
+export interface FeedContent {
   id: number;
   title: string;
-  workEpisode: string | null;
+  contentEpisode: string | null;
   sceneTimestamp: string | null;
 }
 
@@ -43,7 +43,7 @@ export interface FeedPost {
   dramaSceneImageUrl: string | null;
   author: FeedAuthor;
   place: FeedPlace;
-  work: FeedWork;
+  content: FeedContent;
   likeCount: number;
   commentCount: number;
   liked: boolean;
@@ -57,7 +57,7 @@ export interface FeedUser {
   nickname: string;
   avatarUrl: string | null;
   verified: boolean;
-  workTitle: string | null;
+  contentTitle: string | null;
   stampCountForWork: number;
   following: boolean;
 }
@@ -84,7 +84,7 @@ interface State {
   posts: FeedPost[];
   recommendedUsers: FeedUser[];
   tab: FeedTab;
-  workId: number | null;
+  contentId: number | null;
   cursor: string | null;
   hasMore: boolean;
   loading: boolean;
@@ -118,7 +118,7 @@ export const useFeedStore = defineStore('feed', {
     // Default tab is RECENT (task #33) — most users want the newest posts
     // first when landing on /feed. POPULAR is still available as a tab.
     tab: 'RECENT',
-    workId: null,
+    contentId: null,
     cursor: null,
     hasMore: false,
     loading: false,
@@ -132,7 +132,7 @@ export const useFeedStore = defineStore('feed', {
       this.cursor = null;
       try {
         const params: Record<string, string | number> = { tab: this.tab, limit: DEFAULT_LIMIT };
-        if (this.workId !== null) params.workId = this.workId;
+        if (this.contentId !== null) params.contentId = this.contentId;
         // NEARBY reuses cached coords (populated by setTab). Explicit opts
         // still win so tests and the map-aware caller can force values.
         const lat = this.resolveLat(opts);
@@ -157,7 +157,7 @@ export const useFeedStore = defineStore('feed', {
       this.loading = true;
       try {
         const params: Record<string, string | number> = { tab: this.tab, limit: DEFAULT_LIMIT };
-        if (this.workId !== null) params.workId = this.workId;
+        if (this.contentId !== null) params.contentId = this.contentId;
         if (this.cursor) params.cursor = this.cursor;
         // Same coord-reuse as fetch() so scroll pagination returns spatially
         // consistent results (task #37).
@@ -188,10 +188,10 @@ export const useFeedStore = defineStore('feed', {
       if (this.tab === 'NEARBY' && this.nearbyCoords) return this.nearbyCoords.lng;
       return undefined;
     },
-    async fetchRecommended(workId?: number): Promise<void> {
+    async fetchRecommended(contentId?: number): Promise<void> {
       try {
         const params: Record<string, string | number> = { limit: 4 };
-        if (typeof workId === 'number') params.workId = workId;
+        if (typeof contentId === 'number') params.contentId = contentId;
         const { data } = await api.get<FeedUser[]>('/api/feed/recommended-users', { params });
         this.recommendedUsers = data;
       } catch (e) {

@@ -24,10 +24,10 @@ const fixture: HomeResponse = {
     tag: '주말 추천',
     title: "오늘은 '도깨비'의\n주문진을 걸어볼까요?",
     subtitle: '내 위치에서 차로 12분 · 2곳의 성지',
-    workId: 1,
+    contentId: 1,
     primaryPlaceId: 10,
   },
-  works: [
+  contents: [
     { id: 1, title: '도깨비' },
     { id: 2, title: '이태원 클라쓰' },
   ],
@@ -37,8 +37,8 @@ const fixture: HomeResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/1.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       liked: false,
       likeCount: 3200,
     },
@@ -47,8 +47,8 @@ const fixture: HomeResponse = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/2.jpg'],
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       liked: false,
       likeCount: 640,
     },
@@ -62,14 +62,14 @@ describe('home store', () => {
     mockApi.post.mockReset();
   });
 
-  it('fetchHome happy path populates hero/works/places and clears loading/error', async () => {
+  it('fetchHome happy path populates hero/contents/places and clears loading/error', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
 
     const store = useHomeStore();
     await store.fetchHome();
 
     expect(store.hero).toEqual(fixture.hero);
-    expect(store.works).toEqual(fixture.works);
+    expect(store.contents).toEqual(fixture.contents);
     expect(store.places).toEqual(fixture.places);
     expect(store.loading).toBe(false);
     expect(store.error).toBeNull();
@@ -90,16 +90,16 @@ describe('home store', () => {
     expect(store.scope).toBe('TRENDING');
   });
 
-  it('setWork(id) triggers a refetch with workId in the query params', async () => {
+  it('setContent(id) triggers a refetch with contentId in the query params', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
 
     const store = useHomeStore();
-    await store.setWork(1);
+    await store.setContent(1);
 
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ workId: 1, scope: 'TRENDING' });
-    expect(store.selectedWorkId).toBe(1);
+    expect(opts?.params).toMatchObject({ contentId: 1, scope: 'TRENDING' });
+    expect(store.selectedContentId).toBe(1);
   });
 
   it('fetchHome forwards lat/lng/radiusKm to /api/home when provided', async () => {
@@ -159,11 +159,11 @@ describe('home store', () => {
     expect(store.scope).toBe('TRENDING');
   });
 
-  it('fetchHome hydrates popularWorks from the response payload (task #24)', async () => {
+  it('fetchHome hydrates popularContents from the response payload (task #24)', async () => {
     mockApi.get.mockResolvedValueOnce({
       data: {
         ...fixture,
-        popularWorks: [
+        popularContents: [
           { id: 1, title: '도깨비', posterUrl: 'https://img/p1.jpg', placeCount: 12 },
           { id: 2, title: '이태원 클라쓰', posterUrl: null, placeCount: 6 },
         ],
@@ -173,17 +173,17 @@ describe('home store', () => {
     const store = useHomeStore();
     await store.fetchHome();
 
-    expect(store.popularWorks).toHaveLength(2);
-    expect(store.popularWorks[0]).toMatchObject({ id: 1, title: '도깨비', placeCount: 12 });
-    expect(store.popularWorks[1].posterUrl).toBeNull();
+    expect(store.popularContents).toHaveLength(2);
+    expect(store.popularContents[0]).toMatchObject({ id: 1, title: '도깨비', placeCount: 12 });
+    expect(store.popularContents[1].posterUrl).toBeNull();
   });
 
-  it('popularWorks falls back to an empty array when the server omits the field (older API)', async () => {
+  it('popularContents falls back to an empty array when the server omits the field (older API)', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useHomeStore();
     await store.fetchHome();
 
-    expect(store.popularWorks).toEqual([]);
+    expect(store.popularContents).toEqual([]);
   });
 
   it("setScope('POPULAR_WORKS') is a view-only toggle — no /api/home refetch", async () => {
@@ -214,7 +214,7 @@ describe('home store', () => {
     expect(opts?.params).toMatchObject({ scope: 'TRENDING' });
   });
 
-  it('setWork(id) on POPULAR_WORKS state still sends scope=TRENDING (segmented is 모두-only)', async () => {
+  it('setContent(id) on POPULAR_WORKS state still sends scope=TRENDING (segmented is 모두-only)', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
     const store = useHomeStore();
     // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태.
@@ -223,29 +223,29 @@ describe('home store', () => {
 
     // 작품 탭 클릭 — 서버에는 TRENDING 으로 호출되고, state.scope 는 보존.
     mockApi.get.mockClear();
-    await store.setWork(1);
+    await store.setContent(1);
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ workId: 1, scope: 'TRENDING' });
+    expect(opts?.params).toMatchObject({ contentId: 1, scope: 'TRENDING' });
     expect(store.scope).toBe('POPULAR_WORKS');
   });
 
-  it('setWork(null) returning to 모두 with preserved POPULAR_WORKS scope refetches with that scope', async () => {
+  it('setContent(null) returning to 모두 with preserved POPULAR_WORKS scope refetches with that scope', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
     const store = useHomeStore();
     await store.setScope('POPULAR_WORKS'); // POPULAR_WORKS 는 view-only 라 fetch X
-    await store.setWork(1);                // 작품 탭 진입 — TRENDING 호출
+    await store.setContent(1);                // 작품 탭 진입 — TRENDING 호출
     mockApi.get.mockClear();
 
-    // 모두 복귀 — selectedWorkId 가 null 로 가니 보존된 POPULAR_WORKS 가 다시 effective.
-    // setWork 가 무조건 fetchHome 을 부르고, 작품 ID 가 빠진 상태에서 state.scope=POPULAR_WORKS
+    // 모두 복귀 — selectedContentId 가 null 로 가니 보존된 POPULAR_WORKS 가 다시 effective.
+    // setContent 가 무조건 fetchHome 을 부르고, 작품 ID 가 빠진 상태에서 state.scope=POPULAR_WORKS
     // 가 그대로 params 에 실려야 한다.
-    await store.setWork(null);
+    await store.setContent(null);
     expect(store.scope).toBe('POPULAR_WORKS');
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
     expect(opts?.params).toMatchObject({ scope: 'POPULAR_WORKS' });
-    expect(opts?.params).not.toHaveProperty('workId');
+    expect(opts?.params).not.toHaveProperty('contentId');
   });
 
   it('toggleLike(placeId) posts to /api/places/:id/like and updates liked/likeCount from response', async () => {

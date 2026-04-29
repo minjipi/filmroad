@@ -10,6 +10,6 @@ public class HeroDto {
     private String tag;
     private String title;
     private String subtitle;
-    private Long workId;
+    private Long contentId;
     private Long primaryPlaceId;
 }

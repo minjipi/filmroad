@@ -127,7 +127,7 @@ export function useDraggableSheet(opts: UseDraggableSheetOptions): DraggableShee
     const vv = (window as unknown as { visualViewport?: VisualViewport }).visualViewport;
     vv?.addEventListener('resize', recomputeFull);
 
-    // Scope-based cleanup works when the composable is called inside setup()
+    // Scope-based cleanup contents when the composable is called inside setup()
     // or an explicit effectScope(). Direct invocation in unit tests is fine —
     // we just skip registering the disposer to avoid a Vue dev warning.
     if (getCurrentScope()) {

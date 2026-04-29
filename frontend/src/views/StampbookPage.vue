@@ -48,9 +48,9 @@
         <div v-if="showWorksSection" class="drama-list">
           <div
             v-for="w in visibleWorks"
-            :key="w.workId"
+            :key="w.contentId"
             class="drama-card"
-            @click="onOpenWork(w.workId)"
+            @click="onOpenWork(w.contentId)"
           >
             <div v-if="w.completed" class="completed-badge">
               <ion-icon :icon="trophyOutline" class="ic-16" />완주
@@ -148,7 +148,7 @@ function onBack(): void {
 }
 
 async function onOpenWork(id: number): Promise<void> {
-  await router.push(`/work/${id}`);
+  await router.push(`/content/${id}`);
 }
 
 async function onShare(): Promise<void> {

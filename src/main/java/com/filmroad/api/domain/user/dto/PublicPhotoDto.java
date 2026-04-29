@@ -12,18 +12,18 @@ import lombok.Getter;
 public class PublicPhotoDto {
     private Long id;
     private String imageUrl;
-    private String workTitle;
+    private String contentTitle;
     private String placeName;
 
     public static PublicPhotoDto from(PlacePhoto photo) {
-        String work = photo.getPlace() != null && photo.getPlace().getWork() != null
-                ? photo.getPlace().getWork().getTitle()
+        String work = photo.getPlace() != null && photo.getPlace().getContent() != null
+                ? photo.getPlace().getContent().getTitle()
                 : null;
         String place = photo.getPlace() != null ? photo.getPlace().getName() : null;
         return PublicPhotoDto.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getPrimaryImageUrl())
-                .workTitle(work)
+                .contentTitle(work)
                 .placeName(place)
                 .build();
     }

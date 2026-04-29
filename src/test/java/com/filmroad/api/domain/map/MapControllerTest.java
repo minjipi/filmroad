@@ -36,12 +36,12 @@ class MapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/map/places?workId=1 filters markers to work 1 only")
+    @DisplayName("GET /api/map/places?contentId=1 filters markers to work 1 only")
     void getPlaces_byWorkId_filtersMarkers() throws Exception {
-        mockMvc.perform(get("/api/map/places").param("workId", "1"))
+        mockMvc.perform(get("/api/map/places").param("contentId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.markers", not(empty())))
-                .andExpect(jsonPath("$.results.markers[*].workId", everyItem(is(1))));
+                .andExpect(jsonPath("$.results.markers[*].contentId", everyItem(is(1))));
     }
 
     @Test
@@ -50,7 +50,7 @@ class MapControllerTest {
         mockMvc.perform(get("/api/map/places").param("q", "이태원"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.markers", not(empty())))
-                .andExpect(jsonPath("$.results.markers[*].workTitle",
+                .andExpect(jsonPath("$.results.markers[*].contentTitle",
                         everyItem(anyOf(containsString("이태원"), containsString("도깨비")))));
     }
 
@@ -63,7 +63,7 @@ class MapControllerTest {
                         .param("selectedId", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.selected.id", is(10)))
-                .andExpect(jsonPath("$.results.selected.workId", is(1)))
+                .andExpect(jsonPath("$.results.selected.contentId", is(1)))
                 .andExpect(jsonPath("$.results.selected.photoCount", greaterThan(0)))
                 .andExpect(jsonPath("$.results.selected.rating", greaterThan(0.0)))
                 .andExpect(jsonPath("$.results.selected.distanceKm", lessThan(5.0)));

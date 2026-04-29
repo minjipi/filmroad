@@ -104,12 +104,12 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     /**
      * 유저 본인 업로드 사진 목록 (ProfilePage 인증샷 grid 용). visibility 무관 — 본인은 전부 볼 수 있음.
      * `cursor` 보다 id 가 작은 것부터 — cursor 기반 페이지네이션 (null 이면 첫 페이지).
-     * Place + Work JOIN FETCH 로 ProfilePage 에 필요한 workTitle/placeName 을 같이 로드.
+     * Place + Content JOIN FETCH 로 ProfilePage 에 필요한 contentTitle/placeName 을 같이 로드.
      */
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl
-            JOIN FETCH pl.work w
+            JOIN FETCH pl.content w
             WHERE p.user.id = :userId
               AND (:cursor IS NULL OR p.id < :cursor)
             ORDER BY p.id DESC
@@ -125,7 +125,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl
-            JOIN FETCH pl.work w
+            JOIN FETCH pl.content w
             WHERE p.user.id = :ownerId
               AND (
                 p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
@@ -150,9 +150,9 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl
-            JOIN FETCH pl.work w
+            JOIN FETCH pl.content w
             LEFT JOIN FETCH p.user u
-            WHERE (:workId IS NULL OR w.id = :workId)
+            WHERE (:contentId IS NULL OR w.id = :contentId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND (
                 p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
@@ -163,7 +163,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
               )
             ORDER BY p.likeCount DESC, p.id DESC
             """)
-    List<PlacePhoto> findFeedPopular(@Param("workId") Long workId,
+    List<PlacePhoto> findFeedPopular(@Param("contentId") Long contentId,
                                      @Param("cursor") Long cursor,
                                      @Param("viewerId") Long viewerId,
                                      Pageable pageable);
@@ -171,9 +171,9 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl
-            JOIN FETCH pl.work w
+            JOIN FETCH pl.content w
             LEFT JOIN FETCH p.user u
-            WHERE (:workId IS NULL OR w.id = :workId)
+            WHERE (:contentId IS NULL OR w.id = :contentId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND (
                 p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
@@ -184,7 +184,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
               )
             ORDER BY p.id DESC
             """)
-    List<PlacePhoto> findFeedRecent(@Param("workId") Long workId,
+    List<PlacePhoto> findFeedRecent(@Param("contentId") Long contentId,
                                     @Param("cursor") Long cursor,
                                     @Param("viewerId") Long viewerId,
                                     Pageable pageable);
@@ -196,16 +196,16 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     @Query("""
             SELECT p FROM PlacePhoto p
             JOIN FETCH p.place pl
-            JOIN FETCH pl.work w
+            JOIN FETCH pl.content w
             LEFT JOIN FETCH p.user u
             WHERE p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :followerId)
-              AND (:workId IS NULL OR w.id = :workId)
+              AND (:contentId IS NULL OR w.id = :contentId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND p.visibility <> com.filmroad.api.domain.place.PhotoVisibility.PRIVATE
             ORDER BY p.id DESC
             """)
     List<PlacePhoto> findFeedByFollowedUsers(@Param("followerId") Long followerId,
-                                             @Param("workId") Long workId,
+                                             @Param("contentId") Long contentId,
                                              @Param("cursor") Long cursor,
                                              Pageable pageable);
 }

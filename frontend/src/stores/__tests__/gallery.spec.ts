@@ -33,9 +33,9 @@ const page0Fixture: GalleryResponse = {
   place: {
     placeId: 10,
     name: '주문진 영진해변 방파제',
-    workId: 1,
-    workTitle: '도깨비',
-    workEpisode: '1회',
+    contentId: 1,
+    contentTitle: '도깨비',
+    contentEpisode: '1회',
     totalPhotoCount: 6,
   },
   photos: pagePhotos,

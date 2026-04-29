@@ -32,9 +32,9 @@ const mockApi = api as unknown as { post: ReturnType<typeof vi.fn> };
 
 const target: CaptureTarget = {
   placeId: 10,
-  workId: 1,
-  workTitle: '도깨비',
-  workEpisode: '1회',
+  contentId: 1,
+  contentTitle: '도깨비',
+  contentEpisode: '1회',
   placeName: '주문진 영진해변 방파제',
   sceneImageUrl: 'https://img/scene.jpg',
 };
@@ -46,9 +46,9 @@ const fakeResponse: PhotoResponse = {
   id: 99,
   imageUrl: 'https://cdn/p/99.jpg',
   placeId: 10,
-  workId: 1,
-  workTitle: '도깨비',
-  workEpisode: '1회',
+  contentId: 1,
+  contentTitle: '도깨비',
+  contentEpisode: '1회',
   caption: 'hello',
   tags: ['도깨비', '강릉'],
   visibility: 'PUBLIC',
@@ -111,7 +111,7 @@ describe('upload store', () => {
     expect(store.photos).toEqual([JPEG_DATA_URL]);
     expect(store.caption).toBe('hello');
 
-    // Swapping the target works the same way.
+    // Swapping the target contents the same way.
     const other = { ...target, placeId: 99, placeName: '다른 장소' };
     store.setTargetPlace(other);
     expect(store.targetPlace).toEqual(other);
@@ -236,8 +236,8 @@ describe('upload store', () => {
       ...fakeResponse,
       stamp: {
         placeName: '주문진 영진해변 방파제',
-        workId: 1,
-        workTitle: '도깨비',
+        contentId: 1,
+        contentTitle: '도깨비',
         collectedCount: 3,
         totalCount: 10,
         percent: 30,

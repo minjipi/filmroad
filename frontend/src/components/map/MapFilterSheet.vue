@@ -29,15 +29,15 @@
 
       <div class="mfs-body no-scrollbar">
         <!-- 작품 — 다중 선택 chip. 빈 선택 = 전체. -->
-        <section class="mfs-group" data-testid="mfs-group-works">
+        <section class="mfs-group" data-testid="mfs-group-contents">
           <h3>작품</h3>
           <div class="mfs-chips">
             <button
               v-for="w in availableWorks"
               :key="w.id"
               type="button"
-              :class="['mfs-chip', draft.workIds.includes(w.id) ? 'on' : '']"
-              data-testid="mfs-work-chip"
+              :class="['mfs-chip', draft.contentIds.includes(w.id) ? 'on' : '']"
+              data-testid="mfs-content-chip"
               @click="toggleWork(w.id)"
             >{{ w.title }}</button>
             <p v-if="availableWorks.length === 0" class="mfs-empty">
@@ -173,9 +173,9 @@ const VISIT_OPTIONS: VisitOption[] = [
 ];
 
 function toggleWork(id: number): void {
-  const i = draft.workIds.indexOf(id);
-  if (i === -1) draft.workIds.push(id);
-  else draft.workIds.splice(i, 1);
+  const i = draft.contentIds.indexOf(id);
+  if (i === -1) draft.contentIds.push(id);
+  else draft.contentIds.splice(i, 1);
 }
 
 function toggleRegion(r: string): void {
@@ -194,9 +194,9 @@ const matchCount = computed(() => {
   } else if (filter.value === 'SAVED') {
     pool = pool.filter((m) => savedStore.isSaved(m.id));
   }
-  if (draft.workIds.length > 0) {
-    const ids = new Set(draft.workIds);
-    pool = pool.filter((m) => ids.has(m.workId));
+  if (draft.contentIds.length > 0) {
+    const ids = new Set(draft.contentIds);
+    pool = pool.filter((m) => ids.has(m.contentId));
   }
   if (draft.regions.length > 0) {
     const regions = new Set(draft.regions);
@@ -215,7 +215,7 @@ const matchCount = computed(() => {
 
 function onReset(): void {
   // 초기화는 draft 만 — 실제 store 반영은 적용 누를 때.
-  draft.workIds = [];
+  draft.contentIds = [];
   draft.regions = [];
   draft.maxDistanceKm = null;
   draft.visitStatus = 'ALL';
@@ -226,7 +226,7 @@ function onApply(): void {
   // 버튼 자체도 disabled 지만, 키보드 이벤트 등 우회 시 가드.
   if (matchCount.value === 0) return;
   mapStore.setSheetFilters({
-    workIds: [...draft.workIds],
+    contentIds: [...draft.contentIds],
     regions: [...draft.regions],
     maxDistanceKm: draft.maxDistanceKm,
     visitStatus: draft.visitStatus,

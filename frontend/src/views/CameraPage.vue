@@ -38,7 +38,7 @@
           <span class="dot"><ion-icon :icon="locationOutline" class="ic-16" /></span>
           <div>
             <div class="t">{{ targetPlace.placeName }}</div>
-            <div class="s">{{ targetPlace.workTitle }}<span v-if="targetPlace.workEpisode"> · {{ targetPlace.workEpisode }}</span></div>
+            <div class="s">{{ targetPlace.contentTitle }}<span v-if="targetPlace.contentEpisode"> · {{ targetPlace.contentEpisode }}</span></div>
           </div>
         </div>
         <button class="r-btn" type="button" aria-label="flash" @click="onToggleFlash">

@@ -7,8 +7,8 @@ import lombok.Getter;
 @Builder
 public class StampRewardDto {
     private String placeName;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private long collectedCount;
     private long totalCount;
     private int percent;

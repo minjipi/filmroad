@@ -14,8 +14,8 @@ public class PlaceSummaryDto {
     private String name;
     private String regionLabel;
     private List<String> coverImageUrls;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private boolean liked;
 
     public static PlaceSummaryDto from(Place place, boolean liked) {
@@ -24,8 +24,8 @@ public class PlaceSummaryDto {
                 .name(place.getName())
                 .regionLabel(place.getRegionLabel())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
-                .workId(place.getWork().getId())
-                .workTitle(place.getWork().getTitle())
+                .contentId(place.getContent().getId())
+                .contentTitle(place.getContent().getTitle())
                 .liked(liked)
                 .build();
     }

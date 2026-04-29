@@ -43,7 +43,7 @@ class FeedControllerTest {
                 .andExpect(jsonPath("$.results.posts", not(empty())))
                 .andExpect(jsonPath("$.results.posts[0].author", notNullValue()))
                 .andExpect(jsonPath("$.results.posts[0].place.id", notNullValue()))
-                .andExpect(jsonPath("$.results.posts[0].work.id", notNullValue()))
+                .andExpect(jsonPath("$.results.posts[0].content.id", notNullValue()))
                 // 시드에서 가장 큰 photo id 는 175 (place 17, order 5). RECENT 기본이면 첫 번째로 나와야 함.
                 .andExpect(jsonPath("$.results.posts[0].id", is(175)))
                 .andExpect(jsonPath("$.results.hasMore", anyOf(is(true), is(false))));
@@ -68,14 +68,14 @@ class FeedControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/feed?tab=BY_WORK&workId=1 returns posts all tagged to work 1")
+    @DisplayName("GET /api/feed?tab=BY_WORK&contentId=1 returns posts all tagged to work 1")
     void getFeed_byWork_filtersToSingleWork() throws Exception {
         mockMvc.perform(get("/api/feed")
                         .param("tab", "BY_WORK")
-                        .param("workId", "1"))
+                        .param("contentId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.posts", not(empty())))
-                .andExpect(jsonPath("$.results.posts[*].work.id", everyItem(is(1))));
+                .andExpect(jsonPath("$.results.posts[*].content.id", everyItem(is(1))));
     }
 
     @Test
@@ -97,10 +97,10 @@ class FeedControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/feed/recommended-users?workId=1&limit=4 returns at most 4 users")
+    @DisplayName("GET /api/feed/recommended-users?contentId=1&limit=4 returns at most 4 users")
     void getRecommendedUsers_respectsLimit() throws Exception {
         mockMvc.perform(get("/api/feed/recommended-users")
-                        .param("workId", "1")
+                        .param("contentId", "1")
                         .param("limit", "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))

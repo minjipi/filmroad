@@ -19,9 +19,9 @@ public class PhotoUploadResponse {
     /** 대표 이미지 — `images.get(0).getImageUrl()`. images 비어 있으면 null. */
     private String imageUrl;
     private Long placeId;
-    private Long workId;
-    private String workTitle;
-    private String workEpisode;
+    private Long contentId;
+    private String contentTitle;
+    private String contentEpisode;
     private String caption;
     private List<String> tags;
     private PhotoVisibility visibility;
@@ -48,9 +48,9 @@ public class PhotoUploadResponse {
                 .id(post.getId())
                 .imageUrl(post.getPrimaryImageUrl())
                 .placeId(post.getPlace().getId())
-                .workId(post.getPlace().getWork().getId())
-                .workTitle(post.getPlace().getWork().getTitle())
-                .workEpisode(post.getPlace().getPrimaryWorkEpisode())
+                .contentId(post.getPlace().getContent().getId())
+                .contentTitle(post.getPlace().getContent().getTitle())
+                .contentEpisode(post.getPlace().getPrimaryWorkEpisode())
                 .caption(post.getCaption())
                 .tags(parseTags(post.getTagsCsv()))
                 .visibility(post.getVisibility())

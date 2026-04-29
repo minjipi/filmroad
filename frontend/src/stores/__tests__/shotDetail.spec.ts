@@ -24,7 +24,7 @@ const fixture: ShotDetail = {
     {
       id: 200,
       imageUrl: 'https://cdn/scene/77.jpg',
-      workEpisode: '1회',
+      contentEpisode: '1회',
       sceneTimestamp: '00:15:24',
       sceneDescription: null,
       orderIndex: 0,
@@ -54,7 +54,7 @@ const fixture: ShotDetail = {
     latitude: 37.89,
     longitude: 128.83,
   },
-  work: {
+  content: {
     id: 1,
     title: '도깨비',
     network: 'tvN',
@@ -179,7 +179,7 @@ describe('shotDetail store', () => {
         following: false,
       },
       place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
-      work: { id: 1, title: '도깨비', workEpisode: '2회', sceneTimestamp: '00:25:01' },
+      content: { id: 1, title: '도깨비', contentEpisode: '2회', sceneTimestamp: '00:25:01' },
       likeCount: 100,
       commentCount: 12,
       liked: false,
@@ -294,7 +294,7 @@ describe('shotDetail store', () => {
         following: false,
       },
       place: { id: 11, name: '강릉 안목해변', regionLabel: '강원 강릉시' },
-      work: { id: 1, title: '도깨비', workEpisode: null, sceneTimestamp: null },
+      content: { id: 1, title: '도깨비', contentEpisode: null, sceneTimestamp: null },
       likeCount: 100,
       commentCount: 0,
       liked: false,

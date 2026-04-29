@@ -16,11 +16,11 @@ export interface UserProfileStats {
 export interface UserProfilePhoto {
   id: number;
   imageUrl: string;
-  workTitle: string | null;
+  contentTitle: string | null;
   placeName: string;
 }
 
-export interface UserProfileCollectedWork {
+export interface UserProfileCollectedContent {
   id: number;
   title: string;
   posterUrl: string | null;
@@ -45,7 +45,7 @@ export interface UserProfile {
   /** Whether the current viewer is already following this user. */
   following: boolean;
   topPhotos: UserProfilePhoto[];
-  recentCollectedWorks: UserProfileCollectedWork[];
+  recentCollectedWorks: UserProfileCollectedContent[];
 }
 
 interface State {

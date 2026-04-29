@@ -12,7 +12,7 @@ import { useUiStore } from '@/stores/ui';
 export interface PlaceScene {
   id: number;
   imageUrl: string;
-  workEpisode: string | null;
+  contentEpisode: string | null;
   sceneTimestamp: string | null;
   sceneDescription: string | null;
   orderIndex: number;
@@ -26,8 +26,8 @@ export interface PlaceDetailPlace {
   longitude: number;
   // image_order_index ASC 로 정렬된 cover 이미지 배열. 빈 배열은 cover 가 없는 상태.
   coverImageUrls: string[];
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   /**
    * 작품 씬 목록 — `orderIndex` ASC. 0번이 대표(primary). 회차/타임스탬프/설명/
    * 이미지 URL 4종은 모두 이 안에 들어간다 (place 평면 필드에서 제거됨).
@@ -56,7 +56,7 @@ export interface RelatedPlace {
   name: string;
   coverImageUrls: string[];
   sceneImageUrl: string | null;
-  workEpisode: string | null;
+  contentEpisode: string | null;
   regionShort: string;
 }
 

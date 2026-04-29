@@ -1,12 +1,12 @@
-package com.filmroad.api.domain.work.dto;
+package com.filmroad.api.domain.content.dto;
 
-import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.content.Content;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-public class WorkDetailDto {
+public class ContentDetailDto {
     private Long id;
     private String title;
     private String subtitle;
@@ -19,8 +19,8 @@ public class WorkDetailDto {
     private String network;
     private double ratingAverage;
 
-    public static WorkDetailDto from(Work work) {
-        return WorkDetailDto.builder()
+    public static ContentDetailDto from(Content work) {
+        return ContentDetailDto.builder()
                 .id(work.getId())
                 .title(work.getTitle())
                 .subtitle(work.getSubtitle())

@@ -31,9 +31,9 @@ import { mountWithStubs } from './__helpers__/mount';
 
 const target: CaptureTarget = {
   placeId: 10,
-  workId: 1,
-  workTitle: '도깨비',
-  workEpisode: '1회',
+  contentId: 1,
+  contentTitle: '도깨비',
+  contentEpisode: '1회',
   placeName: '주문진 영진해변 방파제',
   sceneImageUrl: 'https://img/scene.jpg',
 };
@@ -78,8 +78,8 @@ function mountUpload(overrides: Partial<{
     name: string;
     regionLabel: string;
     coverImageUrls: string[];
-    workId: number;
-    workTitle: string;
+    contentId: number;
+    contentTitle: string;
     liked: boolean;
     likeCount: number;
   }>;
@@ -101,11 +101,11 @@ function mountUpload(overrides: Partial<{
       },
       home: {
         hero: null,
-        works: [],
+        contents: [],
         places: overrides.homePlaces ?? [],
         loading: false,
         error: null,
-        selectedWorkId: null,
+        selectedContentId: null,
         scope: 'NEAR',
       },
     },
@@ -214,8 +214,8 @@ describe('UploadPage.vue', () => {
         name: '단밤 포차',
         regionLabel: '서울 용산구',
         coverImageUrls: ['https://img/13.jpg'],
-        workId: 2,
-        workTitle: '이태원 클라쓰',
+        contentId: 2,
+        contentTitle: '이태원 클라쓰',
         liked: false,
         likeCount: 0,
       },
@@ -243,9 +243,9 @@ describe('UploadPage.vue', () => {
 
     expect(setSpy).toHaveBeenCalledWith({
       placeId: 13,
-      workId: 2,
-      workTitle: '이태원 클라쓰',
-      workEpisode: null,
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
+      contentEpisode: null,
       placeName: '단밤 포차',
       sceneImageUrl: null,
     });
@@ -264,9 +264,9 @@ describe('UploadPage.vue', () => {
         id: 99,
         imageUrl: 'https://cdn/p/99.jpg',
         placeId: 10,
-        workId: 1,
-        workTitle: '도깨비',
-        workEpisode: '1회',
+        contentId: 1,
+        contentTitle: '도깨비',
+        contentEpisode: '1회',
         caption: null,
         tags: [],
         visibility: 'PUBLIC',
@@ -277,8 +277,8 @@ describe('UploadPage.vue', () => {
         gpsScore: 86,
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 12,
           totalCount: 24,
           percent: 50,
@@ -326,9 +326,9 @@ describe('UploadPage.vue', () => {
         id: 99,
         imageUrl: 'https://cdn/p/99.jpg',
         placeId: 10,
-        workId: 1,
-        workTitle: '도깨비',
-        workEpisode: '1회',
+        contentId: 1,
+        contentTitle: '도깨비',
+        contentEpisode: '1회',
         caption: null,
         tags: [],
         visibility: 'PUBLIC',
@@ -339,8 +339,8 @@ describe('UploadPage.vue', () => {
         gpsScore: 86,
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 12,
           totalCount: 24,
           percent: 50,
@@ -406,9 +406,9 @@ describe('UploadPage.vue', () => {
         id: 77,
         imageUrl: 'https://cdn/p/77.jpg',
         placeId: 10,
-        workId: 1,
-        workTitle: '도깨비',
-        workEpisode: '1회',
+        contentId: 1,
+        contentTitle: '도깨비',
+        contentEpisode: '1회',
         caption: null,
         tags: [],
         visibility: 'PUBLIC',
@@ -446,9 +446,9 @@ describe('UploadPage.vue', () => {
         id: 99,
         imageUrl: 'https://cdn/p/99.jpg',
         placeId: 10,
-        workId: 1,
-        workTitle: '도깨비',
-        workEpisode: '1회',
+        contentId: 1,
+        contentTitle: '도깨비',
+        contentEpisode: '1회',
         caption: null,
         tags: [],
         visibility: 'PUBLIC',
@@ -499,9 +499,9 @@ describe('UploadPage.vue', () => {
       id: 77,
       imageUrl: 'https://cdn/p/77.jpg',
       placeId: 10,
-      workId: 1,
-      workTitle: '도깨비',
-      workEpisode: '1회',
+      contentId: 1,
+      contentTitle: '도깨비',
+      contentEpisode: '1회',
       caption: null,
       tags: [],
       visibility: 'PUBLIC',
@@ -614,9 +614,9 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       id: 99,
       imageUrl: 'https://cdn/p/99.jpg',
       placeId: 10,
-      workId: 1,
-      workTitle: '도깨비',
-      workEpisode: '1회',
+      contentId: 1,
+      contentTitle: '도깨비',
+      contentEpisode: '1회',
       caption: null,
       tags: [],
       visibility: 'PUBLIC',
@@ -629,14 +629,14 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
     };
   }
 
-  it('U5: stamp-card 노출 + workTitle/collectedCount/totalCount/percent 텍스트 매핑', async () => {
+  it('U5: stamp-card 노출 + contentTitle/collectedCount/totalCount/percent 텍스트 매핑', async () => {
     vi.useFakeTimers();
     try {
       const wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 12,
           totalCount: 24,
           percent: 50,
@@ -691,8 +691,8 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       let wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 12,
           totalCount: 24,
           percent: 50,
@@ -705,8 +705,8 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 24,
           totalCount: 24,
           percent: 100,
@@ -725,7 +725,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       let wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: '응답 우선 이름',
-          workId: 1, workTitle: '도깨비',
+          contentId: 1, contentTitle: '도깨비',
           collectedCount: 1, totalCount: 24, percent: 4,
         },
       }));
@@ -752,7 +752,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       const wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: malicious,
-          workId: 1, workTitle: '도깨비',
+          contentId: 1, contentTitle: '도깨비',
           collectedCount: 1, totalCount: 24, percent: 4,
         },
       }));
@@ -774,8 +774,8 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       const wrapper = await reachAuthenticatedStage(baseResponse({
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           collectedCount: 1,
           totalCount: 8,
           percent: 12,
@@ -825,7 +825,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
       const fakeRes: PhotoResponse = baseResponse({
         stamp: {
           placeName: '주문진 영진해변 방파제',
-          workId: 1, workTitle: '도깨비',
+          contentId: 1, contentTitle: '도깨비',
           collectedCount: 12, totalCount: 24, percent: 50,
         },
         reward: {

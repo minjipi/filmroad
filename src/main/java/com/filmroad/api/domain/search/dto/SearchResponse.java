@@ -12,6 +12,6 @@ import java.util.List;
 @Builder
 public class SearchResponse {
     private String query;
-    private List<WorkSummaryDto> works;
+    private List<ContentSummaryDto> contents;
     private List<PlaceSummaryDto> places;
 }

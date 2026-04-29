@@ -13,7 +13,7 @@ import com.filmroad.api.domain.place.dto.PhotoDetailAuthorDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailCommentDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailPlaceDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailResponse;
-import com.filmroad.api.domain.place.dto.PhotoDetailWorkDto;
+import com.filmroad.api.domain.place.dto.PhotoDetailContentDto;
 import com.filmroad.api.domain.saved.SavedPlaceRepository;
 import com.filmroad.api.domain.user.User;
 import lombok.RequiredArgsConstructor;
@@ -100,7 +100,7 @@ public class PhotoDetailService {
                 .capturedLongitude(photo.getCapturedLongitude())
                 .author(author)
                 .place(PhotoDetailPlaceDto.from(place))
-                .work(place == null ? null : PhotoDetailWorkDto.of(place.getWork(), place))
+                .content(place == null ? null : PhotoDetailContentDto.of(place.getContent(), place))
                 .topComments(commentPreview.stream()
                         .map(PhotoDetailCommentDto::from)
                         .toList())

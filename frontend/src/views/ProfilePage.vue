@@ -46,7 +46,7 @@
         </nav>
 
         <!-- 인증샷 — backend `/api/users/me/photos` 실데이터 (task #35).
-             빈 상태 placeholder + 각 cell 의 작품 chip 을 workTitle 로. -->
+             빈 상태 placeholder + 각 cell 의 작품 chip 을 contentTitle 로. -->
         <div
           v-if="localTab === 'photos'"
           class="tab-photos-wrap"
@@ -61,7 +61,7 @@
               @click="onOpenShot(photo.id)"
             >
               <img :src="photo.imageUrl" :alt="photo.placeName" />
-              <span v-if="photo.workTitle" class="tag">{{ photo.workTitle }}</span>
+              <span v-if="photo.contentTitle" class="tag">{{ photo.contentTitle }}</span>
             </div>
           </div>
           <p
@@ -90,12 +90,12 @@
             <h3>수집 중인 작품</h3>
           </div>
 
-          <div class="drama-list" data-testid="stampbook-works-list">
+          <div class="drama-list" data-testid="stampbook-contents-list">
             <div
               v-for="w in stampbookWorks"
-              :key="w.workId"
+              :key="w.contentId"
               class="drama-card"
-              data-testid="stampbook-work-card"
+              data-testid="stampbook-content-card"
               @click="onOpenStampbook"
             >
               <div v-if="w.completed" class="completed-badge">
@@ -311,7 +311,7 @@ const savedStore = useSavedStore();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
 const { user, stats, miniMapPins, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
-const { works: stampbookWorks } = storeToRefs(stampbookStore);
+const { contents: stampbookWorks } = storeToRefs(stampbookStore);
 const { collections: savedCollections, items: savedItems } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 

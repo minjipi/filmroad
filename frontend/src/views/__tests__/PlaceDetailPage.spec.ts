@@ -41,13 +41,13 @@ const fixture: PlaceDetailResponse = {
     latitude: 37.8928,
     longitude: 128.8347,
     coverImageUrls: ['https://img/1.jpg'],
-    workId: 1,
-    workTitle: '도깨비',
+    contentId: 1,
+    contentTitle: '도깨비',
     scenes: [
       {
         id: 100,
         imageUrl: 'https://img/scene-1.jpg',
-        workEpisode: '1회',
+        contentEpisode: '1회',
         sceneTimestamp: '00:24:10',
         sceneDescription: '도깨비와 은탁이 처음 만난 곳',
         orderIndex: 0,
@@ -74,7 +74,7 @@ const fixture: PlaceDetailResponse = {
       name: '주문진 방파제 등대',
       coverImageUrls: ['https://img/r1.jpg'],
       sceneImageUrl: 'https://img/r1-scene.jpg',
-      workEpisode: '1회',
+      contentEpisode: '1회',
       regionShort: '강릉시',
     },
     {
@@ -82,7 +82,7 @@ const fixture: PlaceDetailResponse = {
       name: '안목해변',
       coverImageUrls: ['https://img/r2.jpg'],
       sceneImageUrl: 'https://img/r2-scene.jpg',
-      workEpisode: '3회',
+      contentEpisode: '3회',
       regionShort: '강릉시',
     },
   ],
@@ -119,7 +119,7 @@ function mountPlaceDetailPage(
     ? overrides.sceneUrls.map((imageUrl, i) => ({
         id: 1000 + i,
         imageUrl,
-        workEpisode: null,
+        contentEpisode: null,
         sceneTimestamp: null,
         sceneDescription: null,
         orderIndex: i,
@@ -147,7 +147,7 @@ function mountPlaceDetailPage(
         loading: false,
         error: null,
         filter: 'SPOTS',
-        workId: null,
+        contentId: null,
         q: '',
         center: { lat: 37.5, lng: 127.0 },
         visitedIds: [],
@@ -197,8 +197,8 @@ describe('PlaceDetailPage.vue', () => {
     expect(hero.find('.loc').text()).toContain(fixture.place.regionLabel);
 
     const chipText = hero.find('.hero-chips').text();
-    expect(chipText).toContain(fixture.place.workTitle);
-    // workEpisode + sceneTimestamp combine into the second chip.
+    expect(chipText).toContain(fixture.place.contentTitle);
+    // contentEpisode + sceneTimestamp combine into the second chip.
     expect(chipText).toContain('1회');
     expect(chipText).toContain('00:24:10');
   });

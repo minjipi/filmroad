@@ -184,7 +184,7 @@ class SavedControllerTest {
                 .andExpect(jsonPath("$.results.id", is(2)))
                 .andExpect(jsonPath("$.results.name", is("도깨비 컴플리트")))
                 .andExpect(jsonPath("$.results.kind", is("WORK")))
-                .andExpect(jsonPath("$.results.workTitle", is("도깨비")))
+                .andExpect(jsonPath("$.results.contentTitle", is("도깨비")))
                 .andExpect(jsonPath("$.results.privacy", is("PRIVATE")))
                 .andExpect(jsonPath("$.results.owner.id", is(1)))
                 .andExpect(jsonPath("$.results.owner.isMe", is(true)))
@@ -198,9 +198,9 @@ class SavedControllerTest {
                 .andExpect(jsonPath("$.results.visitedPlacesList", hasSize(1)))
                 .andExpect(jsonPath("$.results.visitedPlacesList[0].id", is(14)))
                 .andExpect(jsonPath("$.results.visitedPlacesList[0].orderIndex", is(1)))
-                .andExpect(jsonPath("$.results.visitedPlacesList[0].workId", is(1)))
-                .andExpect(jsonPath("$.results.visitedPlacesList[0].workEpisode",
-                        is("5회 00:31:02")))   // 시드 workEpisode='5회', sceneTimestamp='00:31:02'
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].contentId", is(1)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].contentEpisode",
+                        is("5회 00:31:02")))   // 시드 contentEpisode='5회', sceneTimestamp='00:31:02'
                 .andExpect(jsonPath("$.results.visitedPlacesList[0].visited", is(true)))
                 .andExpect(jsonPath("$.results.visitedPlacesList[0].certified", is(true)));
     }

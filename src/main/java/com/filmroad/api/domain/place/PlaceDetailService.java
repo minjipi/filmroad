@@ -46,7 +46,7 @@ public class PlaceDetailService {
                 .toList();
 
         List<RelatedPlaceDto> related = placeRepository
-                .findByWorkIdAndIdNotOrderByTrendingScoreDescIdAsc(place.getWork().getId(), place.getId())
+                .findByWorkIdAndIdNotOrderByTrendingScoreDescIdAsc(place.getContent().getId(), place.getId())
                 .stream()
                 .limit(RELATED_LIMIT)
                 .map(RelatedPlaceDto::from)

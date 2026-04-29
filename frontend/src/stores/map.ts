@@ -9,8 +9,8 @@ export interface MapMarker {
   name: string;
   latitude: number;
   longitude: number;
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   regionLabel: string;
   distanceKm: number | null;
 }
@@ -21,9 +21,9 @@ export interface PlaceDetail {
   regionLabel: string;
   latitude: number;
   longitude: number;
-  workId: number;
-  workTitle: string;
-  workEpisode: string | null;
+  contentId: number;
+  contentTitle: string;
+  contentEpisode: string | null;
   coverImageUrls: string[];
   sceneImageUrl: string | null;
   photoCount: number;
@@ -47,7 +47,7 @@ export type MapFilter = 'SPOTS' | 'VISITED' | 'SAVED';
 // 다음 PR 로 미룸.
 export type VisitStatus = 'ALL' | 'VISITED' | 'UNVISITED';
 export interface MapSheetFilters {
-  workIds: number[];        // 다중 선택 (빈 배열 = 전체)
+  contentIds: number[];        // 다중 선택 (빈 배열 = 전체)
   regions: string[];        // 다중 선택 (빈 배열 = 전국). regionLabel 의
                             // 첫 토큰 ("강원 강릉시 주문진읍" → "강원") 매칭.
   maxDistanceKm: number | null; // null = 전체. distanceKm 가 채워진 marker 만 비교.
@@ -55,7 +55,7 @@ export interface MapSheetFilters {
 }
 
 export const DEFAULT_SHEET_FILTERS: MapSheetFilters = Object.freeze({
-  workIds: [],
+  contentIds: [],
   regions: [],
   maxDistanceKm: null,
   visitStatus: 'ALL',
@@ -89,7 +89,7 @@ interface State {
   loading: boolean;
   error: string | null;
   filter: MapFilter;
-  workId: number | null;
+  contentId: number | null;
   q: string;
   center: { lat: number; lng: number };
   zoom: number;
@@ -167,7 +167,7 @@ export const useMapStore = defineStore('map', {
     loading: false,
     error: null,
     filter: 'SPOTS',
-    workId: null,
+    contentId: null,
     q: '',
     center: { ...KOREA_CENTER },
     zoom: COUNTRY_ZOOM,
@@ -192,9 +192,9 @@ export const useMapStore = defineStore('map', {
       }
       // Pass 2 — 시트의 fine-grained 필터를 stacked AND 로 적용.
       const sf = state.sheetFilters;
-      if (sf.workIds.length > 0) {
-        const ids = new Set(sf.workIds);
-        pool = pool.filter((m) => ids.has(m.workId));
+      if (sf.contentIds.length > 0) {
+        const ids = new Set(sf.contentIds);
+        pool = pool.filter((m) => ids.has(m.contentId));
       }
       if (sf.regions.length > 0) {
         const regions = new Set(sf.regions);
@@ -219,18 +219,18 @@ export const useMapStore = defineStore('map', {
     activeSheetFilterCount(state): number {
       const sf = state.sheetFilters;
       let n = 0;
-      if (sf.workIds.length > 0) n += 1;
+      if (sf.contentIds.length > 0) n += 1;
       if (sf.regions.length > 0) n += 1;
       if (sf.maxDistanceKm !== null) n += 1;
       if (sf.visitStatus !== 'ALL') n += 1;
       return n;
     },
     // 시트의 작품 picker 가 보여줄 후보 — 현재 markers 에 등장한 distinct
-    // (workId, workTitle). 동적 list 라 server round-trip 없이 가능.
+    // (contentId, contentTitle). 동적 list 라 server round-trip 없이 가능.
     availableWorks(state): { id: number; title: string }[] {
       const seen = new Map<number, string>();
       for (const m of state.markers) {
-        if (!seen.has(m.workId)) seen.set(m.workId, m.workTitle);
+        if (!seen.has(m.contentId)) seen.set(m.contentId, m.contentTitle);
       }
       return Array.from(seen, ([id, title]) => ({ id, title }));
     },
@@ -262,7 +262,7 @@ export const useMapStore = defineStore('map', {
           params.neLat = opts.neLat;
           params.neLng = opts.neLng;
         }
-        if (this.workId !== null) params.workId = this.workId;
+        if (this.contentId !== null) params.contentId = this.contentId;
         if (this.q.trim()) params.q = this.q.trim();
         if (this.selected) params.selectedId = this.selected.id;
         const { data } = await api.get<MapResponse>('/api/map/places', { params });
@@ -294,9 +294,9 @@ export const useMapStore = defineStore('map', {
           regionLabel: hit.regionLabel,
           latitude: hit.latitude,
           longitude: hit.longitude,
-          workId: hit.workId,
-          workTitle: hit.workTitle,
-          workEpisode: prev?.workEpisode ?? null,
+          contentId: hit.contentId,
+          contentTitle: hit.contentTitle,
+          contentEpisode: prev?.contentEpisode ?? null,
           coverImageUrls: prev?.coverImageUrls ?? [],
           sceneImageUrl: prev?.sceneImageUrl ?? null,
           photoCount: prev?.photoCount ?? 0,
@@ -331,9 +331,9 @@ export const useMapStore = defineStore('map', {
       this.sheetFilters = { ...DEFAULT_SHEET_FILTERS };
       this.reconcileSelected();
     },
-    async setWork(id: number | null): Promise<void> {
-      if (this.workId === id) return;
-      this.workId = id;
+    async setContent(id: number | null): Promise<void> {
+      if (this.contentId === id) return;
+      this.contentId = id;
       await this.fetchMap();
       this.reconcileSelected();
     },
@@ -393,9 +393,9 @@ export const useMapStore = defineStore('map', {
         regionLabel: next.regionLabel,
         latitude: next.latitude,
         longitude: next.longitude,
-        workId: next.workId,
-        workTitle: next.workTitle,
-        workEpisode: null,
+        contentId: next.contentId,
+        contentTitle: next.contentTitle,
+        contentEpisode: null,
         coverImageUrls: [],
         sceneImageUrl: null,
         photoCount: 0,

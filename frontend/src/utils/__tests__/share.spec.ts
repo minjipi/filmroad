@@ -49,9 +49,9 @@ describe('buildBoastShareData', () => {
     id: 99,
     imageUrl: 'https://cdn/p/99.jpg',
     placeId: 10,
-    workId: 1,
-    workTitle: '도깨비',
-    workEpisode: '1회',
+    contentId: 1,
+    contentTitle: '도깨비',
+    contentEpisode: '1회',
     caption: null,
     tags: [],
     visibility: 'PUBLIC',
@@ -63,7 +63,7 @@ describe('buildBoastShareData', () => {
     const withStamp = buildBoastShareData(
       {
         ...baseResult,
-        stamp: { placeName: '주문진 영진해변 방파제', workId: 1, workTitle: '도깨비', collectedCount: 1, totalCount: 8, percent: 12 },
+        stamp: { placeName: '주문진 영진해변 방파제', contentId: 1, contentTitle: '도깨비', collectedCount: 1, totalCount: 8, percent: 12 },
       },
       'fallback name',
     );
@@ -88,7 +88,7 @@ describe('buildPlaceShareData', () => {
       id: 12,
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
-      workTitle: '이태원 클라쓰',
+      contentTitle: '이태원 클라쓰',
       coverImageUrls: ['https://img/p12-1.jpg', 'https://img/p12-2.jpg'],
     });
     expect(data.title).toBe('단밤 포차');
@@ -102,7 +102,7 @@ describe('buildPlaceShareData', () => {
       id: 13,
       name: 'X',
       regionLabel: 'Y',
-      workTitle: 'Z',
+      contentTitle: 'Z',
       coverImageUrls: [],
     });
     expect(data.imageUrl).toBe('');

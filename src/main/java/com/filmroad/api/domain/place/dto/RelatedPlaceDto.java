@@ -14,9 +14,9 @@ public class RelatedPlaceDto {
     private String name;
     private List<String> coverImageUrls;
     private String sceneImageUrl;
-    private String workEpisode;
+    private String contentEpisode;
     private String regionShort;
-    private Long workId;
+    private Long contentId;
 
     public static RelatedPlaceDto from(Place place) {
         return RelatedPlaceDto.builder()
@@ -24,9 +24,9 @@ public class RelatedPlaceDto {
                 .name(place.getName())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .sceneImageUrl(place.getPrimarySceneImageUrl())
-                .workEpisode(place.getPrimaryWorkEpisode())
+                .contentEpisode(place.getPrimaryWorkEpisode())
                 .regionShort(shortenRegion(place.getRegionLabel()))
-                .workId(place.getWork().getId())
+                .contentId(place.getContent().getId())
                 .build();
     }
 

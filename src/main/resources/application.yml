@@ -21,4 +21,4 @@ korea-tourism:
     base-url: https://apis.data.go.kr
     timeout-ms: 3000
     num-of-rows: 10
-    radius-meters: 200000
+    radius-meters: 5000

@@ -8,8 +8,8 @@ export interface StampbookHero {
   completedWorksCount: number;
 }
 
-export interface StampbookWork {
-  workId: number;
+export interface StampbookContent {
+  contentId: number;
   title: string;
   posterUrl: string;
   year: number | null;
@@ -34,7 +34,7 @@ export interface StampbookBadge {
 
 export interface StampbookResponse {
   hero: StampbookHero;
-  works: StampbookWork[];
+  contents: StampbookContent[];
   recentBadges: StampbookBadge[];
 }
 
@@ -42,7 +42,7 @@ export type StampbookFilter = 'WORKS' | 'BADGES' | 'COMPLETED' | 'IN_PROGRESS';
 
 interface State {
   hero: StampbookHero | null;
-  works: StampbookWork[];
+  contents: StampbookContent[];
   recentBadges: StampbookBadge[];
   filter: StampbookFilter;
   loading: boolean;
@@ -52,17 +52,17 @@ interface State {
 export const useStampbookStore = defineStore('stampbook', {
   state: (): State => ({
     hero: null,
-    works: [],
+    contents: [],
     recentBadges: [],
     filter: 'WORKS',
     loading: false,
     error: null,
   }),
   getters: {
-    visibleWorks(state): StampbookWork[] {
-      if (state.filter === 'COMPLETED') return state.works.filter((w) => w.completed);
-      if (state.filter === 'IN_PROGRESS') return state.works.filter((w) => !w.completed);
-      return state.works;
+    visibleWorks(state): StampbookContent[] {
+      if (state.filter === 'COMPLETED') return state.contents.filter((w) => w.completed);
+      if (state.filter === 'IN_PROGRESS') return state.contents.filter((w) => !w.completed);
+      return state.contents;
     },
   },
   actions: {
@@ -72,7 +72,7 @@ export const useStampbookStore = defineStore('stampbook', {
       try {
         const { data } = await api.get<StampbookResponse>('/api/stampbook');
         this.hero = data.hero;
-        this.works = data.works;
+        this.contents = data.contents;
         this.recentBadges = data.recentBadges;
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to load stampbook';

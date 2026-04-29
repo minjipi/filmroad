@@ -71,11 +71,11 @@
                   <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
                 </button>
                 <div class="scene-meta">
-                  <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
-                  <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
-                  <template v-if="shot.work.sceneTimestamp">
+                  <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.content.title }}
+                  <template v-if="shot.content.episode"> · {{ shot.content.episode }}</template>
+                  <template v-if="shot.content.sceneTimestamp">
                     <span class="sep" />
-                    <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
+                    <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.content.sceneTimestamp }}
                   </template>
                 </div>
                 <button
@@ -140,11 +140,11 @@
             <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
           </button>
           <div class="scene-meta">
-            <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.work.title }}
-            <template v-if="shot.work.episode"> · {{ shot.work.episode }}</template>
-            <template v-if="shot.work.sceneTimestamp">
+            <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.content.title }}
+            <template v-if="shot.content.episode"> · {{ shot.content.episode }}</template>
+            <template v-if="shot.content.sceneTimestamp">
               <span class="sep" />
-              <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.work.sceneTimestamp }}
+              <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.content.sceneTimestamp }}
             </template>
           </div>
           <button
@@ -376,11 +376,11 @@
                 <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
               </button>
               <div class="scene-meta">
-                <ion-icon :icon="filmOutline" class="ic-16" />{{ s.work.title }}
-                <template v-if="s.work.workEpisode"> · {{ s.work.workEpisode }}</template>
-                <template v-if="s.work.sceneTimestamp">
+                <ion-icon :icon="filmOutline" class="ic-16" />{{ s.content.title }}
+                <template v-if="s.content.contentEpisode"> · {{ s.content.contentEpisode }}</template>
+                <template v-if="s.content.sceneTimestamp">
                   <span class="sep" />
-                  <ion-icon :icon="timeOutline" class="ic-16" />{{ s.work.sceneTimestamp }}
+                  <ion-icon :icon="timeOutline" class="ic-16" />{{ s.content.sceneTimestamp }}
                 </template>
               </div>
               <button
@@ -824,7 +824,7 @@ function onShare(): void {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   uiStore.openShareSheet({
     title: `${s.author.nickname}의 인증샷`,
-    description: `${s.work.title} · ${s.place.name}`,
+    description: `${s.content.title} · ${s.place.name}`,
     imageUrl: s.imageUrl,
     url: `${origin}/shot/${s.id}`,
   });

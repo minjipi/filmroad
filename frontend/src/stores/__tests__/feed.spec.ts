@@ -60,7 +60,7 @@ function makePost(id: number, sceneCompare = false): FeedPost {
       following: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시' },
-    work: { id: 1, title: '도깨비', workEpisode: '1회', sceneTimestamp: '00:24:10' },
+    content: { id: 1, title: '도깨비', contentEpisode: '1회', sceneTimestamp: '00:24:10' },
     likeCount: 100 + id,
     commentCount: 3,
     liked: false,
@@ -76,7 +76,7 @@ function makeUser(id: number): FeedUser {
     nickname: `추천${id}`,
     avatarUrl: `https://img/r${id}.jpg`,
     verified: false,
-    workTitle: '도깨비',
+    contentTitle: '도깨비',
     stampCountForWork: id,
     following: false,
   };
@@ -204,7 +204,7 @@ describe('feed store', () => {
     expect(store.recommendedUsers).toEqual(recos);
     const [url, opts] = mockApi.get.mock.calls[0];
     expect(url).toBe('/api/feed/recommended-users');
-    expect(opts?.params).toMatchObject({ limit: 4, workId: 7 });
+    expect(opts?.params).toMatchObject({ limit: 4, contentId: 7 });
   });
 
   it('toggleLikePost posts to /api/photos/:id/like and updates liked/likeCount for the matching post', async () => {

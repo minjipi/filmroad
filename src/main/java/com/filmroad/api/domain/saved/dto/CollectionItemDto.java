@@ -7,7 +7,7 @@ import java.util.Date;
 
 /**
  * 컬렉션 상세(#30)의 place item — `upcomingPlaces` / `visitedPlacesList` 양쪽에서 같은 shape.
- * `orderIndex` 는 route 순서(1-based). `workEpisode` 는 "1회 00:15:24" 처럼 ep + timestamp 합성.
+ * `orderIndex` 는 route 순서(1-based). `contentEpisode` 는 "1회 00:15:24" 처럼 ep + timestamp 합성.
  */
 @Getter
 @Builder
@@ -20,9 +20,9 @@ public class CollectionItemDto {
     private Double latitude;
     private Double longitude;
 
-    private Long workId;
-    private String workTitle;
-    private String workEpisode;       // 예: "1회 00:15:24" — episode 라벨 + scene timestamp 결합
+    private Long contentId;
+    private String contentTitle;
+    private String contentEpisode;       // 예: "1회 00:15:24" — episode 라벨 + scene timestamp 결합
 
     private int likeCount;
     private int photoCount;

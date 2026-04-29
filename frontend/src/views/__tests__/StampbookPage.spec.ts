@@ -35,9 +35,9 @@ const stampbookState = {
     badgesCount: 8,
     completedWorksCount: 1,
   },
-  works: [
+  contents: [
     {
-      workId: 1,
+      contentId: 1,
       title: '도깨비',
       posterUrl: 'https://img/w1.jpg',
       year: 2016,
@@ -48,7 +48,7 @@ const stampbookState = {
       gradient: 'linear-gradient(135deg,#14BCED,#7c3aed)',
     },
     {
-      workId: 2,
+      contentId: 2,
       title: '이태원 클라쓰',
       posterUrl: 'https://img/w2.jpg',
       year: 2020,
@@ -59,7 +59,7 @@ const stampbookState = {
       gradient: 'linear-gradient(135deg,#f5a524,#ef4444)',
     },
     {
-      workId: 3,
+      contentId: 3,
       title: '더 글로리',
       posterUrl: 'https://img/w3.jpg',
       year: 2022,
@@ -113,7 +113,7 @@ describe('StampbookPage.vue', () => {
     toastCreateSpy.mockClear();
   });
 
-  it('hero section renders works/places/badges counts from the store', async () => {
+  it('hero section renders contents/places/badges counts from the store', async () => {
     const { wrapper } = mountStampbook();
     await flushPromises();
 
@@ -147,7 +147,7 @@ describe('StampbookPage.vue', () => {
     await flushPromises();
 
     const cards = wrapper.findAll('.drama-card');
-    expect(cards.length).toBe(stampbookState.works.length);
+    expect(cards.length).toBe(stampbookState.contents.length);
     // The only completed work renders the .completed-badge overlay.
     const completedBadges = wrapper.findAll('.completed-badge');
     expect(completedBadges.length).toBe(1);

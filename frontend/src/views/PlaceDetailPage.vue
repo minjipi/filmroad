@@ -111,8 +111,8 @@
           </div>
           <div class="hero-caption">
             <div class="hero-chips">
-              <span class="work-chip" @click.stop="onOpenWork">
-                <FrChip variant="primary">{{ place.workTitle }}</FrChip>
+              <span class="content-chip" @click.stop="onOpenWork">
+                <FrChip variant="primary">{{ place.contentTitle }}</FrChip>
               </span>
               <FrChip v-if="episodeLabel" variant="ghost">{{ episodeLabel }}</FrChip>
             </div>
@@ -224,7 +224,7 @@
                 </div>
                 <div class="t">{{ r.name }}</div>
                 <div class="s">
-                  <template v-if="r.workEpisode">{{ r.workEpisode }} · </template>{{ r.regionShort }}
+                  <template v-if="r.contentEpisode">{{ r.contentEpisode }} · </template>{{ r.regionShort }}
                 </div>
               </div>
             </div>
@@ -565,7 +565,7 @@ function onHeroPointerDown(e: PointerEvent): void {
   try {
     (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
   } catch {
-    /* unsupported in this environment — drag still works inside the bounds */
+    /* unsupported in this environment — drag still contents inside the bounds */
   }
   // mousedown 이 일어나는 그 frame 에 native image-drag 가 시작될 수 있어
   // 즉시 차단한다. <img draggable="false"> 와 .hero-img { pointer-events: none }
@@ -680,7 +680,7 @@ const currentSceneDescription = computed(
 const episodeLabel = computed(() => {
   const s = currentScene.value;
   if (!s) return '';
-  const ep = s.workEpisode ?? '';
+  const ep = s.contentEpisode ?? '';
   const ts = s.sceneTimestamp ?? '';
   if (ep && ts) return `${ep} · ${ts}`;
   return ep || ts;
@@ -732,7 +732,7 @@ function onShare(): void {
   if (!p) return;
   uiStore.openShareSheet({
     title: p.name,
-    description: `${p.workTitle} · ${p.regionLabel}`,
+    description: `${p.contentTitle} · ${p.regionLabel}`,
     // 첫 번째 cover 이미지를 공유 미리보기로 — 없으면 빈 문자열로 두고 share sheet 측에서 fallback.
     imageUrl: p.coverImageUrls[0] ?? '',
     url: typeof window !== 'undefined' ? window.location.href : `/place/${p.id}`,
@@ -810,9 +810,9 @@ async function onCapture(): Promise<void> {
   const primary = p.scenes[0] ?? null;
   uploadStore.beginCapture({
     placeId: p.id,
-    workId: p.workId,
-    workTitle: p.workTitle,
-    workEpisode: primary?.workEpisode ?? null,
+    contentId: p.contentId,
+    contentTitle: p.contentTitle,
+    contentEpisode: primary?.contentEpisode ?? null,
     placeName: p.name,
     sceneImageUrl: primary?.imageUrl ?? null,
   });
@@ -826,7 +826,7 @@ async function onOpenGallery(): Promise<void> {
 
 async function onOpenWork(): Promise<void> {
   if (!place.value) return;
-  await router.push(`/work/${place.value.workId}`);
+  await router.push(`/content/${place.value.contentId}`);
 }
 
 async function onOpenRelated(id: number): Promise<void> {
@@ -854,10 +854,10 @@ async function load(id: number): Promise<void> {
       regionLabel: p.regionLabel,
       latitude: p.latitude,
       longitude: p.longitude,
-      workId: p.workId,
-      workTitle: p.workTitle,
-      // 지도 시트는 평면 workEpisode 사양 — primary 씬(0번)을 폴백으로 사용.
-      workEpisode: p.scenes[0]?.workEpisode ?? null,
+      contentId: p.contentId,
+      contentTitle: p.contentTitle,
+      // 지도 시트는 평면 contentEpisode 사양 — primary 씬(0번)을 폴백으로 사용.
+      contentEpisode: p.scenes[0]?.contentEpisode ?? null,
       coverImageUrls: p.coverImageUrls,
       sceneImageUrl: p.scenes[0]?.imageUrl ?? null,
       photoCount: p.photoCount,
@@ -1068,7 +1068,7 @@ ion-content.pd-content {
   z-index: 4;
 }
 .hero-chips { display: flex; gap: 6px; }
-.work-chip { cursor: pointer; }
+.content-chip { cursor: pointer; }
 .hero-caption h1 {
   font-size: 26px; font-weight: 800;
   letter-spacing: -0.03em;

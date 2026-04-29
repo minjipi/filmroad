@@ -43,7 +43,7 @@
                   <ion-icon v-if="p.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div class="loc">
-                  <span class="drama">{{ p.work.title }}</span>·{{ p.place.name }}
+                  <span class="drama">{{ p.content.title }}</span>·{{ p.place.name }}
                 </div>
               </div>
               <button
@@ -67,8 +67,8 @@
                 <div class="compare-lbl-bot">내 인증샷</div>
                 <div class="drama-badge">
                   <ion-icon :icon="filmOutline" class="ic-16" />
-                  <template v-if="p.work.workEpisode">{{ p.work.workEpisode }}</template>
-                  <template v-if="p.work.sceneTimestamp"> {{ p.work.sceneTimestamp }}</template>
+                  <template v-if="p.content.contentEpisode">{{ p.content.contentEpisode }}</template>
+                  <template v-if="p.content.sceneTimestamp"> {{ p.content.sceneTimestamp }}</template>
                 </div>
               </div>
               <div v-else class="single-img">
@@ -277,7 +277,7 @@ function onShare(p: FeedPost): void {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   uiStore.openShareSheet({
     title: `${p.author.nickname}의 인증샷`,
-    description: `${p.work.title} · ${p.place.name}`,
+    description: `${p.content.title} · ${p.place.name}`,
     imageUrl: p.imageUrl,
     url: `${origin}/shot/${p.id}`,
   });
@@ -312,7 +312,7 @@ async function onFollowAuthor(p: FeedPost): Promise<void> {
 
 function recoProgressText(u: FeedUser): string {
   if (u.stampCountForWork <= 0) return '';
-  if (u.workTitle) return `${u.workTitle} ${u.stampCountForWork}곳 수집`;
+  if (u.contentTitle) return `${u.contentTitle} ${u.stampCountForWork}곳 수집`;
   return `${u.stampCountForWork}곳 수집`;
 }
 

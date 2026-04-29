@@ -20,9 +20,9 @@ const fixture: StampbookResponse = {
     badgesCount: 8,
     completedWorksCount: 1,
   },
-  works: [
+  contents: [
     {
-      workId: 1,
+      contentId: 1,
       title: '도깨비',
       posterUrl: 'https://img/w1.jpg',
       year: 2016,
@@ -33,7 +33,7 @@ const fixture: StampbookResponse = {
       gradient: 'linear-gradient(135deg,#14BCED,#7c3aed)',
     },
     {
-      workId: 2,
+      contentId: 2,
       title: '이태원 클라쓰',
       posterUrl: 'https://img/w2.jpg',
       year: 2020,
@@ -44,7 +44,7 @@ const fixture: StampbookResponse = {
       gradient: 'linear-gradient(135deg,#f5a524,#ef4444)',
     },
     {
-      workId: 3,
+      contentId: 3,
       title: '더 글로리',
       posterUrl: 'https://img/w3.jpg',
       year: 2022,
@@ -87,14 +87,14 @@ describe('stampbook store', () => {
     mockApi.get.mockReset();
   });
 
-  it('fetch happy path populates hero/works/recentBadges and calls GET /api/stampbook', async () => {
+  it('fetch happy path populates hero/contents/recentBadges and calls GET /api/stampbook', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
 
     const store = useStampbookStore();
     await store.fetch();
 
     expect(store.hero).toEqual(fixture.hero);
-    expect(store.works).toEqual(fixture.works);
+    expect(store.contents).toEqual(fixture.contents);
     expect(store.recentBadges).toEqual(fixture.recentBadges);
     expect(store.loading).toBe(false);
     expect(store.error).toBeNull();
@@ -124,22 +124,22 @@ describe('stampbook store', () => {
     expect(store.filter).toBe('IN_PROGRESS');
   });
 
-  it('visibleWorks getter filters works by COMPLETED / IN_PROGRESS', async () => {
+  it('visibleWorks getter filters contents by COMPLETED / IN_PROGRESS', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useStampbookStore();
     await store.fetch();
 
     // Default WORKS shows everything.
-    expect(store.visibleWorks.map((w) => w.workId)).toEqual([1, 2, 3]);
+    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 2, 3]);
 
     store.setFilter('COMPLETED');
-    expect(store.visibleWorks.map((w) => w.workId)).toEqual([2]);
+    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([2]);
 
     store.setFilter('IN_PROGRESS');
-    expect(store.visibleWorks.map((w) => w.workId)).toEqual([1, 3]);
+    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 3]);
 
-    // BADGES does not filter works — it's a section toggle at the view layer.
+    // BADGES does not filter contents — it's a section toggle at the view layer.
     store.setFilter('BADGES');
-    expect(store.visibleWorks.map((w) => w.workId)).toEqual([1, 2, 3]);
+    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 2, 3]);
   });
 });

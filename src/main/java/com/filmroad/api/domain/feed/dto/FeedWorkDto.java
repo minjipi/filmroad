@@ -5,9 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
-public class FeedWorkDto {
+public class FeedContentDto {
     private Long id;
     private String title;
-    private String workEpisode;
+    private String contentEpisode;
     private String sceneTimestamp;
 }

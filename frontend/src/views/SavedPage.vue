@@ -123,7 +123,7 @@
               <div class="saved-info">
                 <div>
                   <div class="chips">
-                    <FrChip variant="soft">{{ i.workTitle }}</FrChip>
+                    <FrChip variant="soft">{{ i.contentTitle }}</FrChip>
                     <span v-if="i.visited" class="visited-flag" data-testid="visited-flag">
                       <ion-icon :icon="checkmark" class="ic-16" />방문함
                     </span>
@@ -261,9 +261,9 @@ async function onActionTap(item: SavedItem): Promise<void> {
   // 한 뒤 /camera 로 이동해 scene 오버레이까지 함께 로드.
   uploadStore.beginCapture({
     placeId: item.placeId,
-    workId: item.workId,
-    workTitle: item.workTitle,
-    workEpisode: null,
+    contentId: item.contentId,
+    contentTitle: item.contentTitle,
+    contentEpisode: null,
     placeName: item.name,
     sceneImageUrl: null,
   });

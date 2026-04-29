@@ -68,7 +68,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.photos[0].id", is(171)))
                 .andExpect(jsonPath("$.results.photos[0].placeId", is(17)))
                 .andExpect(jsonPath("$.results.photos[0].regionLabel", notNullValue()))
-                .andExpect(jsonPath("$.results.photos[0].workTitle", notNullValue()))
+                .andExpect(jsonPath("$.results.photos[0].contentTitle", notNullValue()))
                 .andExpect(jsonPath("$.results.photos[0].visibility", is("PUBLIC")))
                 .andExpect(jsonPath("$.results.nextCursor").value(nullValue()))
                 // 다른 user 사진 (101=user2, 110=user2) 미포함 확인.

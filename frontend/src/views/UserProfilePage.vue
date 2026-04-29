@@ -128,7 +128,7 @@
         </section>
 
         <!-- Highlights — 17-design "스탬프 북" horizontal row of
-             collected works. Backend gives collectedCount + totalCount. -->
+             collected contents. Backend gives collectedCount + totalCount. -->
         <section
           v-if="user.recentCollectedWorks.length > 0"
           class="highlights"
@@ -168,7 +168,7 @@
           </div>
         </nav>
 
-        <!-- PHOTOS grid — backend `topPhotos` payload. Work-title overlay
+        <!-- PHOTOS grid — backend `topPhotos` payload. Content-title overlay
              only; no per-photo like/compare flag in this payload. -->
         <div v-if="activeTab === 'photos'" class="grid" data-testid="up-grid">
           <div
@@ -179,7 +179,7 @@
             @click="onOpenShot(p.id)"
           >
             <img :src="p.imageUrl" :alt="p.placeName" />
-            <span v-if="p.workTitle" class="ov">{{ p.workTitle }}</span>
+            <span v-if="p.contentTitle" class="ov">{{ p.contentTitle }}</span>
           </div>
           <p
             v-if="user.topPhotos.length === 0"
@@ -273,8 +273,8 @@ async function onEditProfile(): Promise<void> {
   await router.push('/profile/edit');
 }
 
-async function onOpenWork(workId: number): Promise<void> {
-  await router.push(`/work/${workId}`);
+async function onOpenWork(contentId: number): Promise<void> {
+  await router.push(`/content/${contentId}`);
 }
 
 async function onOpenShot(photoId: number): Promise<void> {
@@ -513,7 +513,7 @@ ion-content.up-content {
   cursor: not-allowed;
 }
 
-/* ---------- Highlights (collected works) ---------- */
+/* ---------- Highlights (collected contents) ---------- */
 .highlights {
   padding: 16px 20px 6px;
 }

@@ -55,8 +55,8 @@ const fixture: UserProfile = {
   isMe: false,
   following: false,
   topPhotos: [
-    { id: 1, imageUrl: 'https://cdn/p/1.jpg', workTitle: '도깨비', placeName: '주문진' },
-    { id: 2, imageUrl: 'https://cdn/p/2.jpg', workTitle: '갯마을차차차', placeName: '청하' },
+    { id: 1, imageUrl: 'https://cdn/p/1.jpg', contentTitle: '도깨비', placeName: '주문진' },
+    { id: 2, imageUrl: 'https://cdn/p/2.jpg', contentTitle: '갯마을차차차', placeName: '청하' },
   ],
   recentCollectedWorks: [
     { id: 1, title: '도깨비', posterUrl: 'https://img/w1.jpg', collectedCount: 24, totalCount: 24 },
@@ -120,7 +120,7 @@ describe('UserProfilePage.vue (task #42)', () => {
     expect(head.find('.up-bio').text()).toContain('성지 순례');
   });
 
-  it('stats row shows the four counts from backend (photos/followers/following/works)', async () => {
+  it('stats row shows the four counts from backend (photos/followers/following/contents)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
@@ -184,13 +184,13 @@ describe('UserProfilePage.vue (task #42)', () => {
     expect(hls[1].find('.c').text()).toBe('18/26');
   });
 
-  it('tapping a highlight routes to /work/:id', async () => {
+  it('tapping a highlight routes to /content/:id', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
     pushSpy.mockClear();
 
     await wrapper.findAll('[data-testid="up-highlight"]')[0].trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith('/work/1');
+    expect(pushSpy).toHaveBeenCalledWith('/content/1');
   });
 
   it('photo grid renders one cell per topPhotos; tap routes to /shot/:id', async () => {

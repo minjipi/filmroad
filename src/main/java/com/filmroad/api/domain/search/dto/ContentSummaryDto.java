@@ -1,7 +1,7 @@
 package com.filmroad.api.domain.search.dto;
 
-import com.filmroad.api.domain.work.Work;
-import com.filmroad.api.domain.work.WorkType;
+import com.filmroad.api.domain.content.Content;
+import com.filmroad.api.domain.content.ContentType;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -10,15 +10,15 @@ import lombok.Getter;
  */
 @Getter
 @Builder
-public class WorkSummaryDto {
+public class ContentSummaryDto {
     private Long id;
     private String title;
-    private WorkType type;
+    private ContentType type;
     private String posterUrl;
     private int placeCount;
 
-    public static WorkSummaryDto of(Work work, int placeCount) {
-        return WorkSummaryDto.builder()
+    public static ContentSummaryDto of(Content work, int placeCount) {
+        return ContentSummaryDto.builder()
                 .id(work.getId())
                 .title(work.getTitle())
                 .type(work.getType())
