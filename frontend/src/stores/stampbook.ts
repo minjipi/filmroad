@@ -2,10 +2,10 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 
 export interface StampbookHero {
-  worksCollectingCount: number;
+  contentsCollectingCount: number;
   placesCollectedCount: number;
   badgesCount: number;
-  completedWorksCount: number;
+  completedContentsCount: number;
 }
 
 export interface StampbookContent {

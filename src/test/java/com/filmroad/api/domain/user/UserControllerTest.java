@@ -125,7 +125,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/users/2 (auth) — 타 유저 공개 프로필: flat 필드 + stats + topPhotos + recentCollectedWorks + following=true")
+    @DisplayName("GET /api/users/2 (auth) — 타 유저 공개 프로필: flat 필드 + stats + topPhotos + recentCollectedContents + following=true")
     void getPublicProfile_otherUser_returnsProfile() throws Exception {
         // 시드 user=2 (이서준). user=1 은 data.sql 의 user_follow 에서 user=2 를 팔로우 중.
         mockMvc.perform(get("/api/users/2").cookie(demoAccessCookie()))
@@ -143,7 +143,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.following", is(true)))
                 .andExpect(jsonPath("$.results.isMe", is(false)))
                 .andExpect(jsonPath("$.results.topPhotos", notNullValue()))
-                .andExpect(jsonPath("$.results.recentCollectedWorks", notNullValue()));
+                .andExpect(jsonPath("$.results.recentCollectedContents", notNullValue()));
     }
 
     @Test
@@ -178,15 +178,15 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/users/1 — recentCollectedWorks 엔트리에 collectedCount/totalCount 진행률 포함")
-    void getPublicProfile_recentCollectedWorks_hasProgress() throws Exception {
+    @DisplayName("GET /api/users/1 — recentCollectedContents 엔트리에 collectedCount/totalCount 진행률 포함")
+    void getPublicProfile_recentCollectedContents_hasProgress() throws Exception {
         // 시드 user=1 의 stamp 는 작품별 2건씩 → collectedCount=2, totalCount=2 (각 작품 place 2개).
         mockMvc.perform(get("/api/users/1").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results.recentCollectedWorks", not(empty())))
-                .andExpect(jsonPath("$.results.recentCollectedWorks[0].id", notNullValue()))
-                .andExpect(jsonPath("$.results.recentCollectedWorks[0].title", notNullValue()))
-                .andExpect(jsonPath("$.results.recentCollectedWorks[0].collectedCount", greaterThanOrEqualTo(1)))
-                .andExpect(jsonPath("$.results.recentCollectedWorks[0].totalCount", greaterThanOrEqualTo(1)));
+                .andExpect(jsonPath("$.results.recentCollectedContents", not(empty())))
+                .andExpect(jsonPath("$.results.recentCollectedContents[0].id", notNullValue()))
+                .andExpect(jsonPath("$.results.recentCollectedContents[0].title", notNullValue()))
+                .andExpect(jsonPath("$.results.recentCollectedContents[0].collectedCount", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.results.recentCollectedContents[0].totalCount", greaterThanOrEqualTo(1)));
     }
 }

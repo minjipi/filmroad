@@ -6,8 +6,8 @@ import lombok.Getter;
 @Getter
 @Builder
 public class StampbookHeroDto {
-    private long worksCollectingCount;
+    private long contentsCollectingCount;
     private long placesCollectedCount;
     private long badgesCount;
-    private long completedWorksCount;
+    private long completedContentsCount;
 }

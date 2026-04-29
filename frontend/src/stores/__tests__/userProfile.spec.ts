@@ -38,7 +38,7 @@ const fixture: UserProfile = {
     { id: 1, imageUrl: 'https://cdn/p/1.jpg', contentTitle: '도깨비', placeName: '주문진' },
     { id: 2, imageUrl: 'https://cdn/p/2.jpg', contentTitle: '갯마을차차차', placeName: '청하' },
   ],
-  recentCollectedWorks: [
+  recentCollectedContents: [
     { id: 1, title: '도깨비', posterUrl: 'https://img/w1.jpg', collectedCount: 24, totalCount: 24 },
     { id: 2, title: '갯마을차차차', posterUrl: 'https://img/w2.jpg', collectedCount: 18, totalCount: 26 },
   ],

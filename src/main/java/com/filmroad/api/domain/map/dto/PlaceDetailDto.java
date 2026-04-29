@@ -39,7 +39,7 @@ public class PlaceDetailDto {
                 .longitude(place.getLongitude())
                 .contentId(place.getContent().getId())
                 .contentTitle(place.getContent().getTitle())
-                .contentEpisode(place.getPrimaryWorkEpisode())
+                .contentEpisode(place.getPrimaryContentEpisode())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .sceneImageUrl(place.getPrimarySceneImageUrl())
                 .photoCount(place.getPhotoCount())

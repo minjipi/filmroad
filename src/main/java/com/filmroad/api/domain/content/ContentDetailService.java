@@ -37,7 +37,7 @@ public class ContentDetailService {
     @Transactional(readOnly = true)
     public ContentDetailResponse getContent(Long contentId) {
         Content work = contentRepository.findById(contentId)
-                .orElseThrow(() -> BaseException.of(BaseResponseStatus.WORK_NOT_FOUND));
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.CONTENT_NOT_FOUND));
 
         Long userId = currentUser.currentUserId();
         List<Place> places = placeRepository.findByWorkIdOrderByIdAsc(contentId);
@@ -85,7 +85,7 @@ public class ContentDetailService {
         if (collected >= total) return null;
         return badgeRepository.findAllByOrderByOrderIndexAsc().stream()
                 .filter(b -> b.getConditionType() == BadgeConditionType.WORK_COMPLETE)
-                .filter(b -> contentId.equals(b.getConditionWorkId()))
+                .filter(b -> contentId.equals(b.getConditionContentId()))
                 .findFirst()
                 .map((Badge b) -> (total - collected) + "곳 더 모으면 " + b.getName() + " 뱃지")
                 .orElse(null);

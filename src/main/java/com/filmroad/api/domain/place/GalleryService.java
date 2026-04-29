@@ -46,7 +46,7 @@ public class GalleryService {
                 .placeId(place.getId())
                 .name(place.getName())
                 .contentTitle(place.getContent().getTitle())
-                .contentEpisode(place.getPrimaryWorkEpisode())
+                .contentEpisode(place.getPrimaryContentEpisode())
                 .totalPhotoCount(placePhotoRepository.countByPlaceId(placeId))
                 .build();
 

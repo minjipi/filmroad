@@ -14,7 +14,7 @@
       <div class="sb-scroll no-scrollbar">
         <section v-if="hero" class="hero">
           <div class="label">COLLECTION</div>
-          <h2>{{ hero.worksCollectingCount }}개 작품 · {{ hero.placesCollectedCount }} 성지<br />수집 중</h2>
+          <h2>{{ hero.contentsCollectingCount }}개 작품 · {{ hero.placesCollectedCount }} 성지<br />수집 중</h2>
           <div class="meter">
             <div class="d">
               <ion-icon :icon="ribbonOutline" class="ic-16 m-primary" />
@@ -26,7 +26,7 @@
             </div>
             <div class="d">
               <ion-icon :icon="filmOutline" class="ic-16 m-violet" />
-              <b>{{ hero.completedWorksCount }}</b><span class="muted">완주</span>
+              <b>{{ hero.completedContentsCount }}</b><span class="muted">완주</span>
             </div>
           </div>
         </section>

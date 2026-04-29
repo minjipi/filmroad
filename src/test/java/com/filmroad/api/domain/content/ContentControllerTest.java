@@ -24,7 +24,7 @@ class ContentControllerTest {
 
     @Test
     @DisplayName("GET /api/contents/1 returns 도깨비 detail with progress and spots")
-    void getWork_existing_returnsDetail() throws Exception {
+    void getContent_existing_returnsDetail() throws Exception {
         mockMvc.perform(get("/api/contents/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -39,7 +39,7 @@ class ContentControllerTest {
 
     @Test
     @DisplayName("GET /api/contents/99999 returns 404 WORK_NOT_FOUND")
-    void getWork_unknown_returnsNotFound() throws Exception {
+    void getContent_unknown_returnsNotFound() throws Exception {
         mockMvc.perform(get("/api/contents/99999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success", is(false)))

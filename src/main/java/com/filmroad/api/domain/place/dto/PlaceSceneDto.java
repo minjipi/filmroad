@@ -23,7 +23,7 @@ public class PlaceSceneDto {
         return PlaceSceneDto.builder()
                 .id(scene.getId())
                 .imageUrl(scene.getImageUrl())
-                .contentEpisode(scene.getWorkEpisode())
+                .contentEpisode(scene.getContentEpisode())
                 .sceneTimestamp(scene.getSceneTimestamp())
                 .sceneDescription(scene.getSceneDescription())
                 .orderIndex(scene.getImageOrderIndex())

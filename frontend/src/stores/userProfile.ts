@@ -45,7 +45,7 @@ export interface UserProfile {
   /** Whether the current viewer is already following this user. */
   following: boolean;
   topPhotos: UserProfilePhoto[];
-  recentCollectedWorks: UserProfileCollectedContent[];
+  recentCollectedContents: UserProfileCollectedContent[];
 }
 
 interface State {

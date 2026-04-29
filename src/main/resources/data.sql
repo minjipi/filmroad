@@ -368,7 +368,7 @@ UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 3;
 UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 4;
 UPDATE users SET followers_count = 0, following_count = 1 WHERE id = 5;
 
-INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_work_id, CREATE_DATE, UPDATE_DATE) VALUES
+INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_content_id, CREATE_DATE, UPDATE_DATE) VALUES
   (1, 'COASTAL_RUNNER', '바다 러너', '바다 성지 5곳 이상 방문', 'waves', 'sky-violet', 1, 'COASTAL_COUNT', 5, NULL, NOW(), NOW()),
   (2, 'STREAK_7', '연속 7일', '7일 연속 성지 방문', 'flame', 'amber-coral', 2, 'STREAK', 7, NULL, NOW(), NOW()),
   (3, 'EARLY_BIRD', '얼리버드', '이른 아침 방문 1회', 'sunrise', 'mint-sky', 3, 'EARLY_BIRD', 1, NULL, NOW(), NOW()),

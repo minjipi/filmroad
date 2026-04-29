@@ -29,7 +29,7 @@
           </div>
         </div>
         <div v-if="detail" class="coll-info" data-testid="cd-hero-info">
-          <span v-if="detail.kind === 'WORK'" class="coll-tag">
+          <span v-if="detail.kind === 'CONTENT'" class="coll-tag">
             <ion-icon :icon="filmOutline" class="ic-16" />작품 기반 컬렉션
           </span>
           <span v-else class="coll-tag custom">

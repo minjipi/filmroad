@@ -24,7 +24,7 @@ public class RelatedPlaceDto {
                 .name(place.getName())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .sceneImageUrl(place.getPrimarySceneImageUrl())
-                .contentEpisode(place.getPrimaryWorkEpisode())
+                .contentEpisode(place.getPrimaryContentEpisode())
                 .regionShort(shortenRegion(place.getRegionLabel()))
                 .contentId(place.getContent().getId())
                 .build();

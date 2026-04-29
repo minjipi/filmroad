@@ -40,7 +40,7 @@ class StampbookControllerTest {
         mockMvc.perform(get("/api/stampbook").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.results.hero.worksCollectingCount", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.results.hero.contentsCollectingCount", greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.results.hero.placesCollectedCount", greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.results.contents", not(empty())))
                 .andExpect(jsonPath("$.results.contents[?(@.collectedCount > @.totalCount)]", hasSize(0)));

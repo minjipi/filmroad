@@ -135,8 +135,8 @@ public class Place extends BaseEntity {
     }
 
     /** 대표(0번) contentEpisode — 요약 DTO 평면 필드 폴백용. 씬이 없으면 null. */
-    public String getPrimaryWorkEpisode() {
-        return sceneImages == null || sceneImages.isEmpty() ? null : sceneImages.get(0).getWorkEpisode();
+    public String getPrimaryContentEpisode() {
+        return sceneImages == null || sceneImages.isEmpty() ? null : sceneImages.get(0).getContentEpisode();
     }
 
     /** 대표(0번) sceneTimestamp — 요약 DTO 평면 필드 폴백용. 씬이 없으면 null. */

@@ -9,7 +9,7 @@ import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
-import com.filmroad.api.domain.user.dto.CollectedWorkDto;
+import com.filmroad.api.domain.user.dto.CollectedContentDto;
 import com.filmroad.api.domain.user.dto.MiniMapPinDto;
 import com.filmroad.api.domain.user.dto.MyPhotoDto;
 import com.filmroad.api.domain.user.dto.MyPhotosResponse;
@@ -20,7 +20,7 @@ import com.filmroad.api.domain.user.dto.PublicUserProfileResponse;
 import com.filmroad.api.domain.user.dto.PublicUserStatsDto;
 import com.filmroad.api.domain.user.dto.UpdateProfileRequest;
 import com.filmroad.api.domain.user.dto.UserMeDto;
-import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.content.Content;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -39,7 +39,7 @@ public class UserService {
     // ProfilePage 인증샷 grid 기본값 / 상한. 60 까지로 제한해 infinite scroll 페이지당 부담을 제한.
     private static final int MY_PHOTOS_DEFAULT_LIMIT = 30;
     private static final int MY_PHOTOS_MAX_LIMIT = 60;
-    // 공개 프로필(17-user-profile.html) grid / collected-works preview 수량.
+    // 공개 프로필(17-user-profile.html) grid / collected-contents preview 수량.
     private static final int PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT = 5;
     private static final int PUBLIC_PROFILE_PHOTO_LIMIT = 9;
 
@@ -113,7 +113,7 @@ public class UserService {
      * - stats.visitedCount: stamp 총수 / photoCount: user.totalPhotoCount /
      *   collectedWorksCount: stamp 로 방문한 distinct work 수.
      * - topPhotos: viewer 기준 visibility 필터(PUBLIC / 본인 / FOLLOWERS+follow) 적용한 최신 9개.
-     * - recentCollectedWorks: stamp 를 work 별 집계, collectedCount/totalCount 진행률 포함.
+     * - recentCollectedContents: stamp 를 work 별 집계, collectedCount/totalCount 진행률 포함.
      */
     @Transactional(readOnly = true)
     public PublicUserProfileResponse getPublicProfile(Long targetUserId) {
@@ -132,15 +132,15 @@ public class UserService {
                 .collectedWorksCount(collectedWorksCount)
                 .build();
 
-        List<CollectedWorkDto> recentCollectedWorks = stampRepository
+        List<CollectedContentDto> recentCollectedContents = stampRepository
                 .aggregateWorksByUserId(targetUserId,
                         PageRequest.of(0, PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT))
                 .stream()
                 .map(row -> {
-                    Work w = (Work) row[0];
+                    Content w = (Content) row[0];
                     long collected = ((Number) row[1]).longValue();
-                    long total = placeRepository.countByWorkId(w.getId());
-                    return CollectedWorkDto.builder()
+                    long total = placeRepository.countByContentId(w.getId());
+                    return CollectedContentDto.builder()
                             .id(w.getId())
                             .title(w.getTitle())
                             .posterUrl(w.getPosterUrl())
@@ -176,7 +176,7 @@ public class UserService {
                 .isMe(isMe)
                 .following(following)
                 .topPhotos(topPhotos)
-                .recentCollectedWorks(recentCollectedWorks)
+                .recentCollectedContents(recentCollectedContents)
                 .build();
     }
 

@@ -175,7 +175,7 @@ public class FeedService {
                 .content(FeedContentDto.builder()
                         .id(work.getId())
                         .title(work.getTitle())
-                        .contentEpisode(place.getPrimaryWorkEpisode())
+                        .contentEpisode(place.getPrimaryContentEpisode())
                         .sceneTimestamp(place.getPrimarySceneTimestamp())
                         .build())
                 .likeCount(photo.getLikeCount())

@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 public class StampbookService {
 
     private static final int LOCKED_BADGE_LIMIT = 3;
-    private static final String[] WORK_GRADIENTS = {"sky-violet", "amber-coral", "mint-sky", "indigo-violet", "ink-violet"};
+    private static final String[] CONTENT_GRADIENTS = {"sky-violet", "amber-coral", "mint-sky", "indigo-violet", "ink-violet"};
 
     private final StampRepository stampRepository;
     private final UserRepository userRepository;
@@ -46,19 +46,19 @@ public class StampbookService {
         List<Stamp> allStamps = stampRepository.findByUserIdOrderByAcquiredAtDesc(userId);
         long stampCount = allStamps.size();
 
-        Map<Long, List<Stamp>> stampsByWork = allStamps.stream()
+        Map<Long, List<Stamp>> stampsByContent = allStamps.stream()
                 .collect(Collectors.groupingBy(s -> s.getPlace().getContent().getId()));
 
         List<ContentProgressDto> contents = new ArrayList<>();
-        long completedWorksCount = 0;
-        for (Map.Entry<Long, List<Stamp>> entry : stampsByWork.entrySet()) {
+        long completedContentsCount = 0;
+        for (Map.Entry<Long, List<Stamp>> entry : stampsByContent.entrySet()) {
             Long contentId = entry.getKey();
             List<Stamp> stamps = entry.getValue();
             long collectedCount = stamps.size();
-            long totalCount = placeRepository.countByWorkId(contentId);
+            long totalCount = placeRepository.countByContentId(contentId);
             int percent = totalCount == 0 ? 0 : (int) Math.round(100.0 * collectedCount / totalCount);
             boolean completed = totalCount > 0 && collectedCount >= totalCount;
-            if (completed) completedWorksCount++;
+            if (completed) completedContentsCount++;
 
             Stamp sample = stamps.get(0);
             contents.add(ContentProgressDto.builder()
@@ -70,10 +70,10 @@ public class StampbookService {
                     .totalCount(totalCount)
                     .percent(percent)
                     .completed(completed)
-                    .gradient(WORK_GRADIENTS[(int) (contentId % WORK_GRADIENTS.length)])
+                    .gradient(CONTENT_GRADIENTS[(int) (contentId % CONTENT_GRADIENTS.length)])
                     .build());
         }
-        contents.sort((a, b) -> Long.compare(a.getWorkId(), b.getWorkId()));
+        contents.sort((a, b) -> Long.compare(a.getContentId(), b.getContentId()));
 
         List<UserBadge> acquiredUserBadges = userBadgeRepository.findByUserIdOrderByAcquiredAtDesc(userId);
         Set<Long> acquiredBadgeIds = acquiredUserBadges.stream()
@@ -95,10 +95,10 @@ public class StampbookService {
         }
 
         StampbookHeroDto hero = StampbookHeroDto.builder()
-                .worksCollectingCount(stampsByWork.size())
+                .contentsCollectingCount(stampsByContent.size())
                 .placesCollectedCount(stampCount)
                 .badgesCount(acquiredUserBadges.size())
-                .completedWorksCount(completedWorksCount)
+                .completedContentsCount(completedContentsCount)
                 .build();
 
         return StampbookResponse.builder()
@@ -117,14 +117,14 @@ public class StampbookService {
         int current = switch (b.getConditionType()) {
             case STAMP_COUNT -> (int) stampCount;
             case STREAK -> user == null ? 0 : user.getStreakDays();
-            case WORK_COMPLETE -> b.getConditionWorkId() == null
+            case WORK_COMPLETE -> b.getConditionContentId() == null
                     ? 0
-                    : (int) stampRepository.countByUserIdAndWorkId(userId, b.getConditionWorkId());
+                    : (int) stampRepository.countByUserIdAndWorkId(userId, b.getConditionContentId());
             default -> 0;
         };
         int threshold;
-        if (b.getConditionType() == BadgeConditionType.WORK_COMPLETE && b.getConditionWorkId() != null) {
-            threshold = (int) placeRepository.countByWorkId(b.getConditionWorkId());
+        if (b.getConditionType() == BadgeConditionType.WORK_COMPLETE && b.getConditionContentId() != null) {
+            threshold = (int) placeRepository.countByContentId(b.getConditionContentId());
         } else {
             threshold = b.getConditionThreshold() == null ? 0 : b.getConditionThreshold();
         }

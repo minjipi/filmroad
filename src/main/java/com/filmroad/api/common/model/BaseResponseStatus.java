@@ -63,7 +63,7 @@ public enum BaseResponseStatus {
     MENTORING_SESSION_CLOSED(false, 40023, "종료된 멘토링 세션입니다."),
     ROADMAP_NOT_FOUND(false, 40030, "로드맵을 찾을 수 없습니다."),
     PLACE_NOT_FOUND(false, 40050, "성지를 찾을 수 없습니다."),
-    WORK_NOT_FOUND(false, 40051, "작품을 찾을 수 없습니다."),
+    CONTENT_NOT_FOUND(false, 40051, "작품을 찾을 수 없습니다."),
     INVALID_FILE_TYPE(false, 40060, "지원하지 않는 파일 형식입니다."),
     UPLOAD_FAILED(false, 40061, "파일 업로드에 실패했습니다."),
     PHOTO_NOT_FOUND(false, 40070, "사진을 찾을 수 없습니다."),

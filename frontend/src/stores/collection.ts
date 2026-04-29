@@ -4,7 +4,7 @@ import api from '@/services/api';
 // Matches the server's CollectionDetail response. Optional fields are those
 // that only apply to work-based collections or paid features — CUSTOM
 // collections leave them null.
-export type CollectionKind = 'WORK' | 'CUSTOM';
+export type CollectionKind = 'CONTENT' | 'CUSTOM';
 export type CollectionPrivacy = 'PRIVATE' | 'PUBLIC';
 
 export interface CollectionOwner {

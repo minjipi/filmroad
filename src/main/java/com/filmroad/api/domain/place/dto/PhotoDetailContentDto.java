@@ -30,7 +30,7 @@ public class PhotoDetailContentDto {
                 .type(work.getType())
                 .posterUrl(work.getPosterUrl())
                 .network(work.getNetwork())
-                .episode(place == null ? null : place.getPrimaryWorkEpisode())
+                .episode(place == null ? null : place.getPrimaryContentEpisode())
                 .sceneTimestamp(place == null ? null : place.getPrimarySceneTimestamp())
                 .build();
     }

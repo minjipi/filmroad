@@ -38,5 +38,5 @@ public class PublicUserProfileResponse {
     /** 공개 인증샷 grid preview (PUBLIC / 본인 / FOLLOWERS+follow). */
     private List<PublicPhotoDto> topPhotos;
     /** 최근 수집한 작품과 진행률. */
-    private List<CollectedWorkDto> recentCollectedWorks;
+    private List<CollectedContentDto> recentCollectedContents;
 }

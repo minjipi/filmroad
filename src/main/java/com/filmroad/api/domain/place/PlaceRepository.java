@@ -60,7 +60,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     List<Place> findByWorkIdAndIdNotOrderByTrendingScoreDescIdAsc(
             @Param("contentId") Long contentId, @Param("excludeId") Long excludeId);
 
-    long countByWorkId(Long contentId);
+    long countByContentId(Long contentId);
 
     @Query("SELECT p FROM Place p JOIN FETCH p.content w WHERE w.id = :contentId ORDER BY p.id ASC")
     List<Place> findByWorkIdOrderByIdAsc(@Param("contentId") Long contentId);
@@ -81,5 +81,5 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      * 반환 형태: [[contentId, count], ...].
      */
     @Query("SELECT p.content.id, COUNT(p) FROM Place p WHERE p.content.id IN :contentIds GROUP BY p.content.id")
-    List<Object[]> countByWorkIdIn(@Param("contentIds") Collection<Long> contentIds);
+    List<Object[]> countByContentIdIn(@Param("contentIds") Collection<Long> contentIds);
 }

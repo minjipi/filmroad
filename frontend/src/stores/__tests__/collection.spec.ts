@@ -17,7 +17,7 @@ const fixture: CollectionDetail = {
   name: '도깨비 컴플리트',
   subtitle: '쓸쓸하고 찬란하神 도깨비의 모든 촬영지',
   coverImageUrl: 'https://img/c42.jpg',
-  kind: 'WORK',
+  kind: 'CONTENT',
   contentTitle: '도깨비',
   createdAt: '2025-09-02T10:00:00Z',
   totalPlaces: 24,

@@ -183,7 +183,7 @@ class SavedControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.id", is(2)))
                 .andExpect(jsonPath("$.results.name", is("도깨비 컴플리트")))
-                .andExpect(jsonPath("$.results.kind", is("WORK")))
+                .andExpect(jsonPath("$.results.kind", is("CONTENT")))
                 .andExpect(jsonPath("$.results.contentTitle", is("도깨비")))
                 .andExpect(jsonPath("$.results.privacy", is("PRIVATE")))
                 .andExpect(jsonPath("$.results.owner.id", is(1)))

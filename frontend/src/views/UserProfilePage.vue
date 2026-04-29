@@ -130,14 +130,14 @@
         <!-- Highlights — 17-design "스탬프 북" horizontal row of
              collected contents. Backend gives collectedCount + totalCount. -->
         <section
-          v-if="user.recentCollectedWorks.length > 0"
+          v-if="user.recentCollectedContents.length > 0"
           class="highlights"
           data-testid="up-highlights"
         >
           <div class="hl-label">스탬프 북</div>
           <div class="hl-row no-scrollbar">
             <div
-              v-for="w in user.recentCollectedWorks"
+              v-for="w in user.recentCollectedContents"
               :key="w.id"
               class="hl"
               data-testid="up-highlight"

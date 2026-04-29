@@ -67,7 +67,7 @@ public class SearchService {
         }
         List<Long> contentIds = contents.stream().map(Content::getId).toList();
         Map<Long, Integer> counts = new HashMap<>();
-        for (Object[] row : placeRepository.countByWorkIdIn(contentIds)) {
+        for (Object[] row : placeRepository.countByContentIdIn(contentIds)) {
             Long contentId = ((Number) row[0]).longValue();
             int count = ((Number) row[1]).intValue();
             counts.put(contentId, count);

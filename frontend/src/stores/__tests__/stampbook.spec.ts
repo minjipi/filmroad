@@ -15,10 +15,10 @@ const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
 
 const fixture: StampbookResponse = {
   hero: {
-    worksCollectingCount: 3,
+    contentsCollectingCount: 3,
     placesCollectedCount: 42,
     badgesCount: 8,
-    completedWorksCount: 1,
+    completedContentsCount: 1,
   },
   contents: [
     {

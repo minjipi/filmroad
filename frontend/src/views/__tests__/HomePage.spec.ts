@@ -161,13 +161,13 @@ describe('HomePage.vue', () => {
     const { wrapper, store } = mountHomePage();
     await flushPromises();
 
-    const setWorkSpy = vi.spyOn(store, 'setContent');
+    const setContentSpy = vi.spyOn(store, 'setContent');
 
     // The first .tab is "모두" (null); subsequent tabs map to contents by index.
     const tabs = wrapper.findAll('.tab');
     expect(tabs.length).toBe(fixture.contents.length + 1);
     await tabs[1].trigger('click'); // contents[0] => id 1
-    expect(setWorkSpy).toHaveBeenCalledWith(1);
+    expect(setContentSpy).toHaveBeenCalledWith(1);
   });
 
   it('shows an error toast when setContent fails', async () => {

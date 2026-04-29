@@ -78,6 +78,19 @@ public class LegacyPhotoSchemaMigration implements CommandLineRunner {
                 log.warn("ALTER place work_id → content_id failed: {}", e.getMessage());
             }
         }
+
+        boolean hasOldBadgeFk = columnExists("badge", "condition_work_id");
+        boolean hasNewBadgeFk = columnExists("badge", "condition_content_id");
+        if (hasOldBadgeFk && !hasNewBadgeFk) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE badge CHANGE COLUMN condition_work_id condition_content_id BIGINT"
+                ).executeUpdate();
+                log.info("renamed badge.condition_work_id → badge.condition_content_id");
+            } catch (Exception e) {
+                log.warn("ALTER badge condition_work_id → condition_content_id failed: {}", e.getMessage());
+            }
+        }
     }
 
     private boolean tableExists(String table) {
