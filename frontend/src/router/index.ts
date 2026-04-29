@@ -81,6 +81,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/profile/likes',
+    name: 'ProfileLikes',
+    component: () => import('../views/LikedPlacesPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/camera',
     name: 'Camera',
     component: () => import('../views/CameraPage.vue'),

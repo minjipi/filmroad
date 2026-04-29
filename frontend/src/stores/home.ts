@@ -151,6 +151,12 @@ export const useHomeStore = defineStore('home', {
         // 서버 진실로 덮어쓰기 — 동시 토글 등으로 optimistic 값과 다를 수 있다.
         place.liked = data.liked;
         place.likeCount = data.likeCount;
+        // ProfilePage → "좋아요한 장소" 그리드 일관성 — 좋아요 끄면 즉시 목록에서
+        // 제거 (다음 진입 시 fetch 가 어차피 새로 불러오긴 함).
+        if (!data.liked) {
+          const { useLikedPlacesStore } = await import('@/stores/likedPlaces');
+          useLikedPlacesStore().removeFromList(placeId);
+        }
       } catch (e) {
         // 롤백 + 한국어 에러. 호출부 (HomePage onToggleLike) 가 store.error 를
         // 토스트로 띄우므로 이 메시지가 사용자에게 그대로 보인다.

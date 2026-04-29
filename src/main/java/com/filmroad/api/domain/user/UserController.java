@@ -1,6 +1,7 @@
 package com.filmroad.api.domain.user;
 
 import com.filmroad.api.common.model.BaseResponse;
+import com.filmroad.api.domain.user.dto.MyLikedPlacesResponse;
 import com.filmroad.api.domain.user.dto.MyPhotosResponse;
 import com.filmroad.api.domain.user.dto.ProfileResponse;
 import com.filmroad.api.domain.user.dto.PublicUserProfileResponse;
@@ -43,6 +44,18 @@ public class UserController {
             @RequestParam(value = "limit", required = false) Integer limit
     ) {
         return BaseResponse.success(userService.getMyPhotos(cursor, limit));
+    }
+
+    /**
+     * 내가 좋아요한 장소 — 좋아요 시점의 역순 (PlaceLike id DESC). cursor 기반.
+     * ProfilePage 메뉴 → /profile/likes 그리드 데이터 소스. limit default 30, max 60.
+     */
+    @GetMapping("/me/liked-places")
+    public BaseResponse<MyLikedPlacesResponse> getMyLikedPlaces(
+            @RequestParam(value = "cursor", required = false) Long cursor,
+            @RequestParam(value = "limit", required = false) Integer limit
+    ) {
+        return BaseResponse.success(userService.getMyLikedPlaces(cursor, limit));
     }
 
     /**

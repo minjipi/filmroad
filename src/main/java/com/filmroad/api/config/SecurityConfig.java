@@ -70,7 +70,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/comments/*").authenticated()
                         // `/api/users/me` 와 `/me/photos` 는 auth. `/api/users/{id}` 는 permitAll (공개 프로필).
                         // 순서가 중요 — Spring Security 는 첫 매치 승자이므로 구체적인 `/me` 를 먼저 둔다.
-                        .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/me/photos").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/me/photos", "/api/users/me/liked-places").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users/*",
                                 "/api/users/*/followers",
                                 "/api/users/*/following").permitAll()

@@ -137,6 +137,42 @@ describe('placeDetail store', () => {
     expect(store.isLiked(10)).toBe(false);
   });
 
+  it('toggleLike unlike → likedPlacesStore.removeFromList(placeId) 호출 (ProfilePage 그리드 동기화)', async () => {
+    const { useLikedPlacesStore } = await import('@/stores/likedPlaces');
+    const liked = useLikedPlacesStore();
+    liked.items = [
+      { id: 10, name: '강릉 영진해변', regionLabel: '강원도 강릉시', coverImageUrls: [], contentId: null, contentTitle: null, likeCount: 1, likeId: 5 },
+      { id: 11, name: '다른 곳', regionLabel: '서울', coverImageUrls: [], contentId: null, contentTitle: null, likeCount: 1, likeId: 6 },
+    ];
+
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = usePlaceDetailStore();
+    await store.fetch(10);
+
+    // unlike 응답 → removeFromList(10) 효과
+    mockApi.post.mockResolvedValueOnce({ data: { liked: false, likeCount: 3200 } });
+    await store.toggleLike();
+
+    expect(liked.items.map((p) => p.id)).toEqual([11]);
+  });
+
+  it('toggleLike like (true) 응답 시 likedPlacesStore 는 변경 없음', async () => {
+    const { useLikedPlacesStore } = await import('@/stores/likedPlaces');
+    const liked = useLikedPlacesStore();
+    liked.items = [
+      { id: 11, name: 'x', regionLabel: 'y', coverImageUrls: [], contentId: null, contentTitle: null, likeCount: 1, likeId: 6 },
+    ];
+
+    mockApi.get.mockResolvedValueOnce({ data: fixture });
+    const store = usePlaceDetailStore();
+    await store.fetch(10);
+
+    mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 3201 } });
+    await store.toggleLike();
+
+    expect(liked.items.map((p) => p.id)).toEqual([11]);
+  });
+
   // Saved state moved to useSavedStore (task #19) — placeDetail store no
   // longer carries its own savedIds/toggleSaveLocal. See saved.spec.ts for
   // the unified coverage.
