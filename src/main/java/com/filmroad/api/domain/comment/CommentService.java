@@ -5,6 +5,7 @@ import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.domain.comment.dto.CommentDto;
 import com.filmroad.api.domain.comment.dto.CommentListResponse;
+import com.filmroad.api.domain.place.PhotoVisibilityGuard;
 import com.filmroad.api.domain.place.PlacePhoto;
 import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.user.User;
@@ -57,6 +58,7 @@ public class CommentService {
     private final PlacePhotoRepository placePhotoRepository;
     private final UserRepository userRepository;
     private final CurrentUser currentUser;
+    private final PhotoVisibilityGuard photoVisibilityGuard;
 
     @Value("${project.upload.path}")
     private String uploadPath;
@@ -74,7 +76,10 @@ public class CommentService {
         }
 
         PlacePhoto photo = placePhotoRepository.findById(photoId)
-                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND));
+        // PRIVATE / FOLLOWERS 사진에 비작성자 / 비팔로워가 직접 댓글 API 를 호출
+        // 하는 경로 차단. 권한 없음은 PHOTO_NOT_FOUND 로 통일 (enumeration 차단).
+        photoVisibilityGuard.assertViewable(photo, currentUser.currentUserId());
 
         // 답글: parent 존재해야 하고, 같은 photo 소속이어야 하며, parent 자체가
         // 답글이면 거부한다 (1단계 깊이만 허용 — Instagram / KakaoTalk 패턴).
@@ -186,6 +191,13 @@ public class CommentService {
 
     @Transactional(readOnly = true)
     public CommentListResponse listComments(Long photoId, Long cursor, int limit) {
+        // create 와 같은 visibility 가드 — 다른 사람의 PRIVATE / FOLLOWERS 사진의
+        // 댓글 목록을 ID 추측만으로 긁는 경로 차단. 사진 자체가 없으면 동일하게
+        // PHOTO_NOT_FOUND.
+        PlacePhoto photo = placePhotoRepository.findById(photoId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND));
+        photoVisibilityGuard.assertViewable(photo, currentUser.currentUserId());
+
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         long safeCursor = cursor == null ? 0L : cursor;
         int fetchSize = safeLimit + 1;
