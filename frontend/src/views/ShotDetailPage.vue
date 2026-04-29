@@ -371,7 +371,7 @@
                 type="button"
                 class="card-more"
                 aria-label="더보기"
-                @click="onAppendedCardMore"
+                @click="onAppendedCardMore(s)"
               >
                 <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
               </button>
@@ -933,11 +933,69 @@ async function performDelete(): Promise<void> {
   router.back();
 }
 
-// 추가 카드(appendedShots) 의 더보기는 작성자 컨텍스트가 primary 와 다른
-// 다른 사람 인증샷이라 수정/삭제 메뉴를 띄우면 안 됨. 추후 신고/숨기기
-// 같은 viewer-side 액션이 들어올 자리라 일단 placeholder 유지.
-async function onAppendedCardMore(): Promise<void> {
-  await showInfo('더보기 메뉴는 곧 공개됩니다');
+// 추가 카드의 작성자가 본인이면 primary 와 동일한 수정/삭제 ActionSheet 를
+// 띄운다. 수정은 별도 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서
+// primary 가 되어 기존 edit 모달 플로우 그대로 재사용. 본인 아니면 placeholder
+// 토스트 유지(추후 신고/숨기기 자리).
+async function onAppendedCardMore(post: {
+  id: number;
+  author: { userId: number };
+}): Promise<void> {
+  const myId = authStore.user?.id ?? null;
+  const isMe = myId != null && post.author.userId === myId;
+  if (!isMe) {
+    await showInfo('더보기 메뉴는 곧 공개됩니다');
+    return;
+  }
+  const sheet = await actionSheetController.create({
+    header: '인증샷',
+    buttons: [
+      {
+        text: '수정',
+        icon: createOutline,
+        handler: () => {
+          void router.push(`/shot/${post.id}`);
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDeleteAppended(post.id);
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+}
+
+async function confirmDeleteAppended(postId: number): Promise<void> {
+  const alert = await alertController.create({
+    header: '인증샷을 삭제할까요?',
+    message: '삭제한 인증샷은 다시 복구할 수 없어요.',
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      {
+        text: '삭제',
+        role: 'destructive',
+        handler: () => {
+          void performDeleteAppended(postId);
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+async function performDeleteAppended(postId: number): Promise<void> {
+  const ok = await shotStore.deleteAppendedShot(postId);
+  if (!ok) {
+    if (error.value) await showError(error.value);
+    return;
+  }
+  await showInfo('인증샷이 삭제됐어요');
 }
 
 async function onOpenAuthor(): Promise<void> {

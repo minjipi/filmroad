@@ -345,5 +345,21 @@ export const useShotDetailStore = defineStore('shotDetail', {
         return false;
       }
     },
+
+    /**
+     * appendedShots 의 본인 인증샷 hard delete. primary `deleteShot` 과 같은
+     * 엔드포인트지만 라우팅하지 않고 리스트에서만 splice — 사용자는 같은
+     * 페이지에 머무름.
+     */
+    async deleteAppendedShot(postId: number): Promise<boolean> {
+      try {
+        await api.delete(`/api/photos/${postId}`);
+        this.appendedShots = this.appendedShots.filter((p) => p.id !== postId);
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '삭제에 실패했어요';
+        return false;
+      }
+    },
   },
 });
