@@ -8,6 +8,7 @@ import com.filmroad.api.domain.comment.PostCommentRepository;
 import com.filmroad.api.domain.follow.UserFollowRepository;
 import com.filmroad.api.domain.like.PhotoLikeRepository;
 import com.filmroad.api.domain.place.dto.PhotoImageSummary;
+import com.filmroad.api.domain.place.dto.PlaceSceneDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailAuthorDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailCommentDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailPlaceDto;
@@ -81,7 +82,9 @@ public class PhotoDetailService {
         return PhotoDetailResponse.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getPrimaryImageUrl())
-                .sceneImageUrl(place == null ? null : place.getSceneImageUrl())
+                .scenes(place == null
+                        ? List.of()
+                        : place.getSceneImages().stream().map(PlaceSceneDto::from).toList())
                 .caption(photo.getCaption())
                 .tags(parseTags(photo.getTagsCsv()))
                 .visibility(photo.getVisibility())

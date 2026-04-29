@@ -78,6 +78,7 @@ const fixture: MapResponse = {
     workTitle: '도깨비',
     workEpisode: '1회',
     coverImageUrls: ['https://img/1.jpg'],
+    sceneImageUrl: 'https://img/scene-1.jpg',
     photoCount: 1204,
     likeCount: 3200,
     rating: 4.8,

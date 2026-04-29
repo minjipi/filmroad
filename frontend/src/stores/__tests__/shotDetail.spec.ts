@@ -18,7 +18,16 @@ const mockApi = api as unknown as {
 const fixture: ShotDetail = {
   id: 77,
   imageUrl: 'https://cdn/p/77.jpg',
-  sceneImageUrl: 'https://cdn/scene/77.jpg',
+  scenes: [
+    {
+      id: 200,
+      imageUrl: 'https://cdn/scene/77.jpg',
+      workEpisode: '1회',
+      sceneTimestamp: '00:15:24',
+      sceneDescription: null,
+      orderIndex: 0,
+    },
+  ],
   caption: '첫 방문',
   tags: ['도깨비', '주문진'],
   createdAt: '2026-04-20T10:00:00Z',

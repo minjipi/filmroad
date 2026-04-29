@@ -150,8 +150,8 @@
           <div class="sheet-preview">
             <div class="sheet-thumb">
               <img
-                v-if="selected.coverImageUrls.length > 0"
-                :src="selected.coverImageUrls[0]"
+                v-if="selected.sceneImageUrl"
+                :src="selected.sceneImageUrl"
                 :alt="selected.name"
               />
             </div>

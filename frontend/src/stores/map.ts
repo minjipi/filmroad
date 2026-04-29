@@ -25,6 +25,7 @@ export interface PlaceDetail {
   workTitle: string;
   workEpisode: string | null;
   coverImageUrls: string[];
+  sceneImageUrl: string | null;
   photoCount: number;
   likeCount: number;
   rating: number;
@@ -297,6 +298,7 @@ export const useMapStore = defineStore('map', {
           workTitle: hit.workTitle,
           workEpisode: prev?.workEpisode ?? null,
           coverImageUrls: prev?.coverImageUrls ?? [],
+          sceneImageUrl: prev?.sceneImageUrl ?? null,
           photoCount: prev?.photoCount ?? 0,
           likeCount: prev?.likeCount ?? 0,
           rating: prev?.rating ?? 0,
@@ -395,6 +397,7 @@ export const useMapStore = defineStore('map', {
         workTitle: next.workTitle,
         workEpisode: null,
         coverImageUrls: [],
+        sceneImageUrl: null,
         photoCount: 0,
         likeCount: 0,
         rating: 0,

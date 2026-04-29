@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import type { PlaceScene } from '@/stores/placeDetail';
 
 export type WorkDetailChip = 'SPOTS' | 'INFO' | 'CAST' | 'FANS';
 
@@ -29,9 +30,11 @@ export interface WorkDetailSpot {
   name: string;
   regionShort: string;
   coverImageUrls: string[];
-  workEpisode: string | null;
-  sceneTimestamp: string | null;
-  sceneDescription: string | null;
+  /**
+   * 작품 씬 목록 — `orderIndex` ASC. 0번이 대표. 회차/타임스탬프/설명/이미지 URL
+   * 4종 모두 이 안. 빈 배열 가능. spot card 노출 시 첫 씬을 사용한다.
+   */
+  scenes: PlaceScene[];
   visited: boolean;
   visitedAt: string | null;
   orderIndex: number;

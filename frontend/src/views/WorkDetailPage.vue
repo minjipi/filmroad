@@ -101,14 +101,10 @@
               :class="['spot', s.visited ? 'done' : '']"
               @click="onOpenSpot(s.placeId)"
             >
-              <span class="spot-num">
-                <ion-icon v-if="s.visited" :icon="checkmark" class="ic-16" />
-                <template v-else>{{ s.orderIndex }}</template>
-              </span>
               <div class="spot-thumb">
                 <img
-                  v-if="s.coverImageUrls.length > 0"
-                  :src="s.coverImageUrls[0]"
+                  v-if="s.scenes[0]?.imageUrl"
+                  :src="s.scenes[0].imageUrl"
                   :alt="s.name"
                 />
               </div>
@@ -116,7 +112,7 @@
                 <div class="t">{{ s.name }}</div>
                 <div class="s2">
                   <ion-icon :icon="locationOutline" class="ic-16" />
-                  {{ s.regionShort }}<template v-if="s.workEpisode"> · {{ s.workEpisode }}</template><template v-if="s.sceneTimestamp"> {{ s.sceneTimestamp }}</template>
+                  {{ s.regionShort }}<template v-if="s.scenes[0]?.workEpisode"> · {{ s.scenes[0].workEpisode }}</template><template v-if="s.scenes[0]?.sceneTimestamp"> · {{ s.scenes[0].sceneTimestamp }}</template>
                 </div>
                 <div
                   v-if="s.visited && s.visitedAt"
@@ -126,7 +122,7 @@
                   {{ formatVisited(s.visitedAt) }} 인증완료
                   <ion-icon :icon="checkmark" class="ic-14" />
                 </div>
-                <div v-else-if="s.sceneDescription" class="e">{{ s.sceneDescription }}</div>
+                <div v-else-if="s.scenes[0]?.sceneDescription" class="e">{{ s.scenes[0].sceneDescription }}</div>
               </div>
               <div class="spot-action">
                 <ion-icon :icon="s.visited ? checkmark : chevronForwardOutline" class="ic-20" />
@@ -552,21 +548,6 @@ ion-content.wd-content {
   position: relative;
   cursor: pointer;
 }
-.spot-num {
-  position: absolute;
-  left: -2px; top: -2px;
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: var(--fr-ink);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 800;
-  border: 2px solid #ffffff;
-}
-.spot.done .spot-num { background: var(--fr-mint); }
 .spot-thumb {
   width: 64px; height: 64px;
   border-radius: 12px;

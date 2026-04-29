@@ -3,6 +3,7 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 import type { FeedPost } from '@/stores/feed';
+import type { PlaceScene } from '@/stores/placeDetail';
 
 // Matches backend `PhotoDetailResponse` (task #39 final shape).
 export type PhotoVisibility = 'PUBLIC' | 'PRIVATE';
@@ -66,8 +67,12 @@ export interface ShotComment {
 export interface ShotDetail {
   id: number;
   imageUrl: string;
-  /** Drama scene reference frame — null for non-scene shots. */
-  sceneImageUrl: string | null;
+  /**
+   * 작품 씬 목록 — `orderIndex` ASC. 0번이 대표(원본 비교 기준). 회차/타임스탬프/
+   * 설명/이미지 URL 4종은 모두 이 안에 들어간다. 빈 배열 가능(null 아님).
+   * 비교 토글(드라마 원본 vs 인증샷)은 `scenes[0]?.imageUrl` 을 사용한다.
+   */
+  scenes: PlaceScene[];
   caption: string | null;
   tags: string[];
   createdAt: string;

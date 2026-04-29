@@ -14,6 +14,11 @@ ALTER TABLE place_photo DROP COLUMN IF EXISTS group_key;
 -- 1:N 테이블로 분리됨. ddl-auto=update 가 알아서 drop 하지 않으므로 IF EXISTS 로 한 번만 제거.
 ALTER TABLE place DROP COLUMN IF EXISTS cover_image_url;
 
+-- Migration (place scene 1:N): legacy `scene_image_url` / `work_episode` / `scene_timestamp` /
+-- `scene_description` 4 컬럼이 새 `place_scene_image` 1:N 테이블로 분리됨. 컬럼 drop 자체는
+-- LegacyPhotoSchemaMigration 이 (1) 4 컬럼 한꺼번에 자식 행으로 카피 → (2) drop 순서로 처리한다.
+-- data.sql 단계에서 미리 drop 하면 아직 카피 안 된 dev DB 데이터가 유실되므로 여기서는 drop 하지 않음.
+
 INSERT IGNORE INTO work (id, title, poster_url, type, CREATE_DATE, UPDATE_DATE) VALUES
   (1, '도깨비', NULL, 'DRAMA', NOW(), NOW()),
   (2, '이태원 클라쓰', NULL, 'DRAMA', NOW(), NOW()),
@@ -71,47 +76,45 @@ UPDATE place SET photo_count =  410, like_count = 1210, rating = 4.4 WHERE id = 
 UPDATE place SET photo_count =  720, like_count = 1880, rating = 4.5 WHERE id = 16;
 UPDATE place SET photo_count =  390, like_count = 1040, rating = 4.3 WHERE id = 17;
 
--- PlaceDetail 화면용 신규 컬럼 백필. 에피소드/타임스탬프/장면 썸네일/본문/주변 맛집/추천 시간/리뷰수.
-UPDATE place SET work_episode = '1회', scene_timestamp = '00:15:24',
-  scene_image_url = 'https://images.unsplash.com/photo-1502514276747-de8d3fc3a2cb?auto=format&fit=crop&w=800&q=80',
-  scene_description = '공유가 처음 지은탁을 만나던 그 방파제. 빨간 목도리가 바람에 흩날리던 장면입니다.',
-  nearby_restaurant_count = 8, recommended_time_label = '골든아워', review_count = 1204
-  WHERE id = 10;
-UPDATE place SET work_episode = '3회', scene_timestamp = '00:42:11',
-  scene_image_url = 'https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=800&q=80',
-  scene_description = '미스터션샤인의 저잣거리 세트. 애신과 유진이 마주치던 장면이 바로 이곳입니다.',
-  nearby_restaurant_count = 5, recommended_time_label = '오전', review_count = 870
-  WHERE id = 11;
-UPDATE place SET work_episode = '2회', scene_timestamp = '00:08:47',
-  scene_image_url = 'https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=800&q=80',
-  scene_description = '델루나 호텔의 평행세계, 청하공진시장. 장만월이 손님을 맞던 그 입구 장면.',
-  nearby_restaurant_count = 6, recommended_time_label = '저녁', review_count = 542
-  WHERE id = 12;
-UPDATE place SET work_episode = '4회', scene_timestamp = '00:23:55',
-  scene_image_url = 'https://images.unsplash.com/photo-1528702748617-c64d49f918af?auto=format&fit=crop&w=800&q=80',
-  scene_description = '단밤 포차 오픈 첫 날. 박새로이가 간판을 올리던 감격의 장면.',
-  nearby_restaurant_count = 12, recommended_time_label = '밤', review_count = 1980
-  WHERE id = 13;
-UPDATE place SET work_episode = '5회', scene_timestamp = '00:31:02',
-  scene_image_url = 'https://images.unsplash.com/photo-1502635385003-ee1e6a1a742d?auto=format&fit=crop&w=800&q=80',
-  scene_description = '도깨비와 저승사자가 나란히 걷던 그 돌담길. 붉은 단풍이 흩날리던 가을 장면.',
-  nearby_restaurant_count = 9, recommended_time_label = '오후', review_count = 820
-  WHERE id = 14;
-UPDATE place SET work_episode = '6회', scene_timestamp = '00:19:30',
-  scene_image_url = 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=800&q=80',
-  scene_description = '호텔 델루나의 외경 촬영지. 안개 낀 바닷가에서 만월이 추억하던 장면.',
-  nearby_restaurant_count = 3, recommended_time_label = '새벽', review_count = 410
-  WHERE id = 15;
-UPDATE place SET work_episode = '8회', scene_timestamp = '00:55:18',
-  scene_image_url = 'https://images.unsplash.com/photo-1518544801976-3e188ea7cce5?auto=format&fit=crop&w=800&q=80',
-  scene_description = '녹사평역에서 단밤 식구들이 모두 모이던 엔딩 장면.',
-  nearby_restaurant_count = 15, recommended_time_label = '밤', review_count = 720
-  WHERE id = 16;
-UPDATE place SET work_episode = '10회', scene_timestamp = '01:02:44',
-  scene_image_url = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
-  scene_description = '합천 영상테마파크. 개화기 거리 풍경 속에서 촬영된 주요 장면.',
-  nearby_restaurant_count = 4, recommended_time_label = '오전', review_count = 390
-  WHERE id = 17;
+-- PlaceDetail 화면용 보조 메타 백필 (place 평면 컬럼). 회차/타임스탬프/이미지/씬 본문 4종은 더 이상
+-- place 컬럼이 아니라 place_scene_image (1:N) 의 컬럼으로 이전됨 → 아래 INSERT IGNORE 블록 참고.
+UPDATE place SET nearby_restaurant_count = 8, recommended_time_label = '골든아워', review_count = 1204 WHERE id = 10;
+UPDATE place SET nearby_restaurant_count = 5, recommended_time_label = '오전',     review_count =  870 WHERE id = 11;
+UPDATE place SET nearby_restaurant_count = 6, recommended_time_label = '저녁',     review_count =  542 WHERE id = 12;
+UPDATE place SET nearby_restaurant_count = 12, recommended_time_label = '밤',      review_count = 1980 WHERE id = 13;
+UPDATE place SET nearby_restaurant_count = 9, recommended_time_label = '오후',     review_count =  820 WHERE id = 14;
+UPDATE place SET nearby_restaurant_count = 3, recommended_time_label = '새벽',     review_count =  410 WHERE id = 15;
+UPDATE place SET nearby_restaurant_count = 15, recommended_time_label = '밤',      review_count =  720 WHERE id = 16;
+UPDATE place SET nearby_restaurant_count = 4, recommended_time_label = '오전',     review_count =  390 WHERE id = 17;
+
+-- Place 별 씬 1:N 시드. (image_url + work_episode + scene_timestamp + scene_description) 4 필드를 모두
+-- 자식 테이블에 둔다. imageOrderIndex=0 이 대표(primary) — 요약 DTO 평면 필드 폴백, ShotScoringService
+-- 의 비교 기준 후보 중 하나. place 10 / 13 / 14 는 멀티 씬 검증을 위해 order=1 행을 추가.
+INSERT IGNORE INTO place_scene_image
+  (id, place_id, image_url, image_order_index, work_episode, scene_timestamp, scene_description, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 10, 'https://images.unsplash.com/photo-1502514276747-de8d3fc3a2cb?auto=format&fit=crop&w=800&q=80', 0,
+   '1회',  '00:15:24', '공유가 처음 지은탁을 만나던 그 방파제. 빨간 목도리가 바람에 흩날리던 장면입니다.', NOW(), NOW()),
+  (2, 11, 'https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=800&q=80', 0,
+   '3회',  '00:42:11', '미스터션샤인의 저잣거리 세트. 애신과 유진이 마주치던 장면이 바로 이곳입니다.', NOW(), NOW()),
+  (3, 12, 'https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=800&q=80', 0,
+   '2회',  '00:08:47', '델루나 호텔의 평행세계, 청하공진시장. 장만월이 손님을 맞던 그 입구 장면.', NOW(), NOW()),
+  (4, 13, 'https://images.unsplash.com/photo-1528702748617-c64d49f918af?auto=format&fit=crop&w=800&q=80', 0,
+   '4회',  '00:23:55', '단밤 포차 오픈 첫 날. 박새로이가 간판을 올리던 감격의 장면.', NOW(), NOW()),
+  (5, 14, 'https://images.unsplash.com/photo-1502635385003-ee1e6a1a742d?auto=format&fit=crop&w=800&q=80', 0,
+   '5회',  '00:31:02', '도깨비와 저승사자가 나란히 걷던 그 돌담길. 붉은 단풍이 흩날리던 가을 장면.', NOW(), NOW()),
+  (6, 15, 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=800&q=80', 0,
+   '6회',  '00:19:30', '호텔 델루나의 외경 촬영지. 안개 낀 바닷가에서 만월이 추억하던 장면.', NOW(), NOW()),
+  (7, 16, 'https://images.unsplash.com/photo-1518544801976-3e188ea7cce5?auto=format&fit=crop&w=800&q=80', 0,
+   '8회',  '00:55:18', '녹사평역에서 단밤 식구들이 모두 모이던 엔딩 장면.', NOW(), NOW()),
+  (8, 17, 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80', 0,
+   '10회', '01:02:44', '합천 영상테마파크. 개화기 거리 풍경 속에서 촬영된 주요 장면.', NOW(), NOW()),
+  -- 멀티 씬 검증용 추가 행 (place 10 / 13 / 14). order=1 이라 primary 폴백/SavedControllerTest 단언에 영향 없음.
+  (9, 10, 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=800&q=80', 1,
+   '7회',  '00:21:48', '주문진 방파제 또 다른 컷 — 도깨비 후반부 회상 씬.', NOW(), NOW()),
+  (10, 13, 'https://images.unsplash.com/photo-1496483648148-47c686dc86a8?auto=format&fit=crop&w=800&q=80', 1,
+   '11회', '01:05:32', '단밤 포차 새벽 마감 씬 — 박새로이 독백 장면.', NOW(), NOW()),
+  (11, 14, 'https://images.unsplash.com/photo-1502514276747-de8d3fc3a2cb?auto=format&fit=crop&w=800&q=80', 1,
+   '12회', '00:48:20', '덕수궁 돌담길 야간 — 시즌2 도깨비 재회 씬.', NOW(), NOW());
 
 -- place_photo.user_id 가 FK + NOT NULL 이므로 place_photo INSERT 전에 users 1~5 를 먼저 준비.
 -- 하단 148/160 라인의 상세 users INSERT 는 INSERT IGNORE 로 중복 skip 되므로 중복 없이 idempotent.

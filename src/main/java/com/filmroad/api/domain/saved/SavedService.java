@@ -169,7 +169,7 @@ public class SavedService {
                     .longitude(p.getLongitude())
                     .workId(p.getWork().getId())
                     .workTitle(p.getWork().getTitle())
-                    .workEpisode(formatWorkEpisode(p.getWorkEpisode(), p.getSceneTimestamp()))
+                    .workEpisode(formatWorkEpisode(p.getPrimaryWorkEpisode(), p.getPrimarySceneTimestamp()))
                     .likeCount(p.getLikeCount())
                     .photoCount(p.getPhotoCount())
                     .distanceKm(GeoUtils.distanceKmOrNull(lat, lng, p.getLatitude(), p.getLongitude()))
@@ -239,7 +239,7 @@ public class SavedService {
     }
 
     /**
-     * place.work_episode / scene_timestamp 를 "1회 00:15:24" 형태로 결합. 둘 다 없으면 null.
+     * place 의 primary scene workEpisode / sceneTimestamp 를 "1회 00:15:24" 형태로 결합. 둘 다 없으면 null.
      */
     private static String formatWorkEpisode(String episode, String timestamp) {
         boolean hasEp = episode != null && !episode.isBlank();

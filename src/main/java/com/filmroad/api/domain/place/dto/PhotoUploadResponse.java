@@ -50,7 +50,7 @@ public class PhotoUploadResponse {
                 .placeId(post.getPlace().getId())
                 .workId(post.getPlace().getWork().getId())
                 .workTitle(post.getPlace().getWork().getTitle())
-                .workEpisode(post.getPlace().getWorkEpisode())
+                .workEpisode(post.getPlace().getPrimaryWorkEpisode())
                 .caption(post.getCaption())
                 .tags(parseTags(post.getTagsCsv()))
                 .visibility(post.getVisibility())
