@@ -101,9 +101,28 @@
               :value="caption"
               @input="onCaptionInput"
             />
-            <div class="tags">
-              <span v-for="t in tags" :key="t" class="tag">#{{ t }}</span>
-              <span class="tag gray">+ 태그 추가</span>
+            <div class="tags" data-testid="upload-tags">
+              <span v-for="(t, i) in tags" :key="t" class="tag">
+                #{{ t }}
+                <button
+                  type="button"
+                  class="tag-x"
+                  :aria-label="`태그 ${t} 삭제`"
+                  data-testid="upload-tag-remove"
+                  @click="onRemoveTag(i)"
+                >×</button>
+              </span>
+              <input
+                v-if="tags.length < MAX_TAGS"
+                v-model="tagDraft"
+                type="text"
+                class="tag-input"
+                :placeholder="tags.length === 0 ? '+ 태그 추가' : '태그 추가'"
+                :maxlength="MAX_TAG_LEN + 2"
+                data-testid="upload-tag-input"
+                @keydown="onTagKeydown"
+                @blur="onTagBlur"
+              />
             </div>
           </div>
 
@@ -427,7 +446,7 @@
                 data-testid="upload-go-home"
                 @click="onGoHome"
               >
-                홈으로 돌아가기
+                이 성지 인증샷 보기
               </button>
             </div>
           </template>
@@ -613,6 +632,61 @@ function onPickPlace(p: PlaceSummary): void {
 function onCaptionInput(e: Event): void {
   const target = e.target as HTMLTextAreaElement;
   uploadStore.setCaption(target.value);
+}
+
+// ---------- Tag chip input ----------
+// 백엔드는 이미 PhotoUploadRequest.tags(CSV) → tags_csv 컬럼 → PhotoDetailResponse.tags
+// 까지 깔려 있어, 프론트는 입력 UI 만 채우면 ShotDetail 에 즉시 표시된다.
+// 사양: 최대 10개, 각 20자, 한글/영문/숫자/언더스코어만. 중복은 무시.
+const MAX_TAGS = 10;
+const MAX_TAG_LEN = 20;
+const TAG_PATTERN = /^[가-힣a-zA-Z0-9_]+$/;
+const tagDraft = ref('');
+
+function commitTag(): void {
+  // 사용자가 '#' 을 같이 쳤다면 잘라낸다 (보일 때 어차피 '#' 이 prepend 되므로).
+  const raw = tagDraft.value.trim().replace(/^#+/, '');
+  if (raw.length === 0) {
+    tagDraft.value = '';
+    return;
+  }
+  if (raw.length > MAX_TAG_LEN || !TAG_PATTERN.test(raw)) {
+    // 형식 위반 — 입력만 비우고 조용히 드롭. 안내 토스트는 빈도가 잦아질 수
+    // 있어 우선 생략 (추후 필요시 추가).
+    tagDraft.value = '';
+    return;
+  }
+  if (tags.value.includes(raw)) {
+    tagDraft.value = '';
+    return;
+  }
+  if (tags.value.length >= MAX_TAGS) return;
+  uploadStore.setTags([...tags.value, raw]);
+  tagDraft.value = '';
+}
+
+function onTagKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+    e.preventDefault();
+    commitTag();
+    return;
+  }
+  // 빈 입력에서 backspace → 마지막 chip 제거. 흔한 chip-input 패턴.
+  if (e.key === 'Backspace' && tagDraft.value.length === 0 && tags.value.length > 0) {
+    e.preventDefault();
+    uploadStore.setTags(tags.value.slice(0, -1));
+  }
+}
+
+function onTagBlur(): void {
+  // 사용자가 chip 확정 없이 다른 곳을 탭했을 때 입력값을 잃지 않도록 commit.
+  if (tagDraft.value.trim().length > 0) commitTag();
+}
+
+function onRemoveTag(index: number): void {
+  const next = tags.value.slice();
+  next.splice(index, 1);
+  uploadStore.setTags(next);
 }
 
 function onSelectThumb(idx: number): void {
@@ -816,9 +890,14 @@ function onBoast(): void {
 }
 
 async function onGoHome(): Promise<void> {
+  // 인증샷 업로드 직후엔 사용자가 방금 다녀온 성지의 갤러리(=다른 사람들의
+  // 인증샷 + 자기 사진이 같이 보이는 화면)로 이동하는 게 흐름상 자연스럽다.
+  // lastResult.placeId 가 있으면 거기로, 없는 비정상 경로(에러 직후 등)는
+  // /home 으로 폴백해 사용자를 어디로도 못 보내는 막다른 길은 만들지 않는다.
+  const placeId = uploadStore.lastResult?.placeId;
   uploadStore.reset();
   stage.value = 'compose';
-  await router.replace('/home');
+  await router.replace(placeId != null ? `/gallery/${placeId}` : '/home');
 }
 
 onMounted(async () => {
@@ -1126,6 +1205,7 @@ ion-content.up-content {
   display: flex; gap: 6px;
   flex-wrap: wrap;
   margin-top: 10px;
+  align-items: center;
 }
 .tag {
   font-size: 12px;
@@ -1134,12 +1214,38 @@ ion-content.up-content {
   padding: 5px 11px;
   border-radius: 999px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.tag.gray {
+.tag-x {
+  border: none;
+  background: transparent;
+  color: var(--fr-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0.7;
+}
+.tag-x:hover { opacity: 1; }
+.tag-input {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
   color: var(--fr-ink-2);
   background: var(--fr-bg-muted);
-  cursor: pointer;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: none;
+  outline: none;
+  min-width: 96px;
+  flex: 1;
+  letter-spacing: -0.01em;
 }
+.tag-input::placeholder { color: var(--fr-ink-3); }
 
 .toggle {
   width: 42px; height: 24px;

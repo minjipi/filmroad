@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 
-export type GallerySort = 'RECENT' | 'POPULAR' | 'FRIENDS' | 'SCENE_COMPARE';
+export type GallerySort = 'RECENT' | 'POPULAR' | 'SCENE_COMPARE';
 export type GalleryViewMode = 'FEED' | 'GRID';
 
 export interface GalleryPlaceHeader {
@@ -17,6 +17,8 @@ export interface GalleryPhoto {
   id: number;
   imageUrl: string;
   caption: string | null;
+  // 작성자 user numeric id. anonymous 시드 사진은 null — 클릭이 disable 된다.
+  authorUserId: number | null;
   authorNickname: string;
   authorHandle: string;
   authorAvatarUrl: string | null;

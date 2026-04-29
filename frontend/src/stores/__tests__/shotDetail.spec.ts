@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 import api from '@/services/api';
@@ -13,6 +13,8 @@ import { signInForTest } from './__helpers__/auth';
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
+  patch: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
 };
 
 const fixture: ShotDetail = {
@@ -81,6 +83,8 @@ describe('shotDetail store', () => {
     signInForTest();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
+    mockApi.patch.mockReset();
+    mockApi.delete.mockReset();
   });
 
   it('initial state: shot=null, not loading, no error', () => {
@@ -365,6 +369,88 @@ describe('shotDetail store', () => {
       expect(store.appendedShots[0].author.following).toBe(false);
       expect(store.appendedShots[1].author.following).toBe(false);
       expect(store.error).toBe('boom');
+    });
+  });
+
+  describe('updateContent / deleteShot (작성자 수정·삭제)', () => {
+    it('updateContent PATCH 성공 시 새 응답으로 store.shot 덮어쓰고 true 반환', async () => {
+      const store = useShotDetailStore();
+      store.shot = { ...fixture };
+
+      const updated: ShotDetail = {
+        ...fixture,
+        caption: 'after edit',
+        visibility: 'PRIVATE',
+      };
+      mockApi.patch.mockResolvedValueOnce({ data: updated });
+
+      const ok = await store.updateContent({
+        caption: 'after edit',
+        visibility: 'PRIVATE',
+      });
+
+      expect(ok).toBe(true);
+      const [url, body] = mockApi.patch.mock.calls[0];
+      expect(url).toBe(`/api/photos/${fixture.id}`);
+      expect(body).toMatchObject({
+        caption: 'after edit',
+        visibility: 'PRIVATE',
+      });
+      expect(store.shot?.caption).toBe('after edit');
+      expect(store.shot?.visibility).toBe('PRIVATE');
+    });
+
+    it('updateContent PATCH 실패 시 error 메시지 세팅 + false 반환, shot 유지', async () => {
+      const store = useShotDetailStore();
+      store.shot = { ...fixture };
+
+      mockApi.patch.mockRejectedValueOnce(new Error('네트워크 끊김'));
+
+      const ok = await store.updateContent({
+        caption: 'x',
+        visibility: 'PUBLIC',
+      });
+
+      expect(ok).toBe(false);
+      expect(store.error).toBe('네트워크 끊김');
+      expect(store.shot?.caption).toBe(fixture.caption); // 변경 없음
+    });
+
+    it('updateContent shot 미로드 상태에선 PATCH 호출 자체 안 함 + false', async () => {
+      const store = useShotDetailStore();
+      const ok = await store.updateContent({
+        caption: 'x',
+        visibility: 'PUBLIC',
+      });
+      expect(ok).toBe(false);
+      expect(mockApi.patch).not.toHaveBeenCalled();
+    });
+
+    it('deleteShot DELETE 성공 시 store.shot=null + true 반환', async () => {
+      const store = useShotDetailStore();
+      store.shot = { ...fixture };
+
+      mockApi.delete.mockResolvedValueOnce({ data: null });
+
+      const ok = await store.deleteShot();
+
+      expect(ok).toBe(true);
+      const [url] = mockApi.delete.mock.calls[0];
+      expect(url).toBe(`/api/photos/${fixture.id}`);
+      expect(store.shot).toBeNull();
+    });
+
+    it('deleteShot DELETE 실패 시 error 세팅 + false, shot 유지', async () => {
+      const store = useShotDetailStore();
+      store.shot = { ...fixture };
+
+      mockApi.delete.mockRejectedValueOnce(new Error('삭제 실패'));
+
+      const ok = await store.deleteShot();
+
+      expect(ok).toBe(false);
+      expect(store.error).toBe('삭제 실패');
+      expect(store.shot).not.toBeNull();
     });
   });
 });

@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
 // API mock — default resolves with the fixture for happy-path rendering.
 // Individual tests override via mockResolvedValueOnce / mockRejectedValueOnce.
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 import api from '@/services/api';
 
@@ -17,14 +17,27 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy, replace: replaceSpy, back: backSpy }),
 }));
 
-const { toastCreateSpy } = vi.hoisted(() => ({
+const { toastCreateSpy, actionSheetCreateSpy, alertCreateSpy } = vi.hoisted(() => ({
   toastCreateSpy: vi
+    .fn()
+    .mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }),
+  // 더보기 메뉴(actionSheet) / 삭제 확인(alert) 은 Ionic controller 기반.
+  // 테스트는 buttons 배열을 직접 캡처해 handler 호출로 분기 검증한다.
+  actionSheetCreateSpy: vi
+    .fn()
+    .mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }),
+  alertCreateSpy: vi
     .fn()
     .mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }),
 }));
 vi.mock('@ionic/vue', async () => {
   const actual = await vi.importActual<typeof import('@ionic/vue')>('@ionic/vue');
-  return { ...actual, toastController: { create: toastCreateSpy } };
+  return {
+    ...actual,
+    toastController: { create: toastCreateSpy },
+    actionSheetController: { create: actionSheetCreateSpy },
+    alertController: { create: alertCreateSpy },
+  };
 });
 
 import ShotDetailPage from '@/views/ShotDetailPage.vue';
@@ -104,6 +117,8 @@ const fixture: ShotDetail = {
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
+  patch: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
 };
 
 const COMMENT_SHEET_STUB = {
@@ -135,8 +150,12 @@ describe('ShotDetailPage.vue', () => {
     replaceSpy.mockClear();
     backSpy.mockClear();
     toastCreateSpy.mockClear();
+    actionSheetCreateSpy.mockClear();
+    alertCreateSpy.mockClear();
     mockApi.get.mockReset();
     mockApi.post.mockReset();
+    mockApi.patch.mockReset();
+    mockApi.delete.mockReset();
     // Default mock: the onMounted fetchShot hits the API; return the same
     // fixture so the initialState seed isn't clobbered post-fetch.
     mockApi.get.mockResolvedValue({ data: fixture });
@@ -879,5 +898,135 @@ describe('ShotDetailPage.vue', () => {
 
     await wrapper.find('button[aria-label="back"]').trigger('click');
     expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('owner more menu — edit / delete', () => {
+    it('isMe=true 작성자 카드 더보기 → actionSheet 가 수정/삭제/취소 buttons 로 present', async () => {
+      const { wrapper } = mountPage();
+      await flushPromises();
+
+      await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
+      await flushPromises();
+
+      expect(actionSheetCreateSpy).toHaveBeenCalledTimes(1);
+      const opts = actionSheetCreateSpy.mock.calls[0][0] as {
+        header?: string;
+        buttons: Array<{ text: string; role?: string }>;
+      };
+      expect(opts.header).toBe('인증샷');
+      expect(opts.buttons.map((b) => b.text)).toEqual(['수정', '삭제', '취소']);
+      expect(opts.buttons[1].role).toBe('destructive');
+    });
+
+    it('isMe=false 인 다른 사람 카드 → actionSheet 안 뜨고 placeholder toast 만', async () => {
+      // 다른 사람 인증샷 시나리오: fetch 응답을 isMe=false 로 갈아끼움.
+      mockApi.get.mockReset();
+      mockApi.get.mockResolvedValue({
+        data: { ...fixture, author: { ...fixture.author, isMe: false } },
+      });
+      const { wrapper } = mountPage();
+      await flushPromises();
+
+      await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
+      await flushPromises();
+
+      expect(actionSheetCreateSpy).not.toHaveBeenCalled();
+      expect(toastCreateSpy).toHaveBeenCalled();
+    });
+
+    it('수정 행 handler → 수정 모달이 열리고 textarea/visibility 가 현재 값으로 시드', async () => {
+      const { wrapper } = mountPage();
+      await flushPromises();
+      await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
+      await flushPromises();
+
+      const buttons = (actionSheetCreateSpy.mock.calls[0][0] as {
+        buttons: Array<{ text: string; handler?: () => void }>;
+      }).buttons;
+      buttons.find((b) => b.text === '수정')!.handler!();
+      await flushPromises();
+
+      // Teleport 가 body 에 시트를 박아두므로 document.body 에서 직접 조회.
+      const sheet = document.body.querySelector('[data-testid="sd-edit-sheet"]');
+      expect(sheet).not.toBeNull();
+      const textarea = sheet?.querySelector<HTMLTextAreaElement>(
+        '[data-testid="sd-edit-caption"]',
+      );
+      expect(textarea?.value).toBe(fixture.caption);
+      const radio = sheet?.querySelector<HTMLInputElement>(
+        '[data-testid="sd-edit-visibility-PUBLIC"]',
+      );
+      expect(radio?.checked).toBe(true);
+    });
+
+    it('수정 모달 저장 → PATCH /api/photos/:id 호출 + 새 응답으로 store 갱신', async () => {
+      const { wrapper } = mountPage();
+      await flushPromises();
+      await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
+      await flushPromises();
+      const buttons = (actionSheetCreateSpy.mock.calls[0][0] as {
+        buttons: Array<{ text: string; handler?: () => void }>;
+      }).buttons;
+      buttons.find((b) => b.text === '수정')!.handler!();
+      await flushPromises();
+
+      // 사용자 입력 시뮬레이션: 캡션 변경 + 공개범위 PRIVATE.
+      const textarea = document.body.querySelector<HTMLTextAreaElement>(
+        '[data-testid="sd-edit-caption"]',
+      )!;
+      textarea.value = '바뀐 캡션';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      const privateRadio = document.body.querySelector<HTMLInputElement>(
+        '[data-testid="sd-edit-visibility-PRIVATE"]',
+      )!;
+      privateRadio.checked = true;
+      privateRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushPromises();
+
+      mockApi.patch.mockResolvedValueOnce({
+        data: { ...fixture, caption: '바뀐 캡션', visibility: 'PRIVATE' },
+      });
+      const saveBtn = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="sd-edit-save"]',
+      )!;
+      saveBtn.click();
+      await flushPromises();
+
+      const [url, body] = mockApi.patch.mock.calls[0];
+      expect(url).toBe('/api/photos/77');
+      expect(body).toMatchObject({ caption: '바뀐 캡션', visibility: 'PRIVATE' });
+    });
+
+    it('삭제 행 handler → alert present + 확인 시 DELETE 호출 + router.back', async () => {
+      const { wrapper } = mountPage();
+      await flushPromises();
+      await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
+      await flushPromises();
+      const sheetButtons = (actionSheetCreateSpy.mock.calls[0][0] as {
+        buttons: Array<{ text: string; handler?: () => void }>;
+      }).buttons;
+      sheetButtons.find((b) => b.text === '삭제')!.handler!();
+      await flushPromises();
+
+      expect(alertCreateSpy).toHaveBeenCalledTimes(1);
+      const alertButtons = (alertCreateSpy.mock.calls[0][0] as {
+        buttons: Array<{ text: string; role?: string; handler?: () => void }>;
+      }).buttons;
+
+      mockApi.delete.mockResolvedValueOnce({ data: null });
+      backSpy.mockClear();
+      alertButtons.find((b) => b.text === '삭제')!.handler!();
+      await flushPromises();
+
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/photos/77');
+      expect(backSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Teleport 시트가 document.body 에 머물러 다음 테스트로 새는 걸 막는 cleanup.
+  afterEach(() => {
+    document.body
+      .querySelectorAll('[data-testid="sd-edit-sheet"], [data-testid="sd-edit-backdrop"]')
+      .forEach((el) => el.remove());
   });
 });

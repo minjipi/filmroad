@@ -3,25 +3,6 @@
     <ion-content :fullscreen="true" class="feed-content">
       <header class="feed-head">
         <h1>탐색</h1>
-        <div class="head-actions">
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label="notifications"
-            @click="onNotifs"
-          >
-            <ion-icon :icon="heartOutline" class="ic-20" />
-            <span class="dot" />
-          </button>
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label="messages"
-            @click="onMessages"
-          >
-            <ion-icon :icon="paperPlaneOutline" class="ic-20" />
-          </button>
-        </div>
       </header>
 
       <div class="search-row" @click="onSearch">
@@ -151,8 +132,6 @@ import {
 } from '@ionic/vue';
 import {
   heart,
-  heartOutline,
-  paperPlaneOutline,
   searchOutline,
   flameOutline,
 } from 'ionicons/icons';
@@ -166,7 +145,7 @@ const feedStore = useFeedStore();
 const router = useRouter();
 const route = useRoute();
 const { posts, tab, hasMore, loading, error } = storeToRefs(feedStore);
-const { showError, showInfo } = useToast();
+const { showError } = useToast();
 
 const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'RECENT', label: '최신' },
@@ -271,14 +250,6 @@ async function onOpenDetailFeed(): Promise<void> {
   await router.push('/feed/detail');
 }
 
-async function onNotifs(): Promise<void> {
-  await showInfo('알림은 곧 공개됩니다');
-}
-
-async function onMessages(): Promise<void> {
-  await showInfo('메시지는 곧 공개됩니다');
-}
-
 async function onSearch(): Promise<void> {
   await router.push('/search');
 }
@@ -320,34 +291,6 @@ ion-content.feed-content {
   letter-spacing: -0.03em;
   color: var(--fr-ink);
 }
-.head-actions {
-  display: flex;
-  gap: 6px;
-}
-.icon-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--fr-bg-muted);
-  color: var(--fr-ink-2);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-}
-.icon-btn .dot {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--fr-coral);
-  border: 2px solid var(--fr-bg-muted);
-}
-
 .search-row {
   padding: 4px 20px 12px;
   cursor: pointer;

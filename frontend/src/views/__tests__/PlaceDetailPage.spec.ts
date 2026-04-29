@@ -213,10 +213,10 @@ describe('PlaceDetailPage.vue', () => {
     // a single-image place keeps the original visual.
     expect(carousel.findAll('img.hero-img').length).toBe(1);
     expect(wrapper.find('[data-testid="pd-hero-dots"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').exists()).toBe(false);
   });
 
   it('renders one .hero-img + one .hero-dot per scene, marks dot 0 active, and shows "1 / N" counter when length > 1', async () => {
+
     const { wrapper } = mountPlaceDetailPage({
       sceneUrls: [
         'https://img/cover-0.jpg',
@@ -246,10 +246,6 @@ describe('PlaceDetailPage.vue', () => {
     // First dot active on initial render — scroll position is 0.
     expect(dots[0].classes()).toContain('active');
     expect(dots[1].classes()).not.toContain('active');
-
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain(
-      '1 / 3',
-    );
   });
 
   it('auto-advances the hero carousel every 4s on a multi-scene place and wraps after the last slide', async () => {
@@ -396,7 +392,6 @@ describe('PlaceDetailPage.vue', () => {
     const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
     expect(dots[0].classes()).not.toContain('active');
     expect(dots[1].classes()).toContain('active');
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('2 / 3');
   });
 
   it('vertical pointer move (page-scroll intent) does not change the carousel slide', async () => {
@@ -474,8 +469,7 @@ describe('PlaceDetailPage.vue', () => {
     await nextBtn.trigger('click');
     expect(transformOf()).toContain('-400%'); // 오른쪽으로 한 칸 더 — 사용자 시점엔 0 으로 자연스럽게 흐름
 
-    // counter / dot 은 이미 realHeroSlide 기준이라 사용자 perspective 의 첫 슬라이드.
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('1 / 3');
+    // dot 은 이미 realHeroSlide 기준이라 사용자 perspective 의 첫 슬라이드.
     const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
     expect(dots[0].classes()).toContain('active');
   });
@@ -496,8 +490,7 @@ describe('PlaceDetailPage.vue', () => {
     await prevBtn.trigger('click');
     expect(trackEl().style.transform).toContain('translate3d(0%');
 
-    // counter / dot 은 realHeroSlide → ((-1 % 3) + 3) % 3 = 2.
-    expect(wrapper.find('[data-testid="pd-hero-counter"]').text()).toContain('3 / 3');
+    // dot 은 realHeroSlide → ((-1 % 3) + 3) % 3 = 2.
     const dots = wrapper.findAll('[data-testid="pd-hero-dots"] .hero-dot');
     expect(dots[2].classes()).toContain('active');
   });

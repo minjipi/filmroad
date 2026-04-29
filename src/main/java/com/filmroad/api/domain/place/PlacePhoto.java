@@ -132,6 +132,18 @@ public class PlacePhoto extends BaseEntity {
     }
 
     /**
+     * 작성자가 ShotDetail 메뉴에서 caption / 공개범위만 수정. 이미지 / 점수 /
+     * 위치 / 작성자 같은 다른 메타는 업로드 당시 값 유지가 원칙이라 이 헬퍼는
+     * 두 필드만 건드린다.
+     */
+    public void updateContent(String caption, PhotoVisibility visibility) {
+        this.caption = caption;
+        if (visibility != null) {
+            this.visibility = visibility;
+        }
+    }
+
+    /**
      * 대표 이미지 URL — 목록 카드 / signature 응답에서 사용. images 가 비어 있으면 null.
      */
     public String getPrimaryImageUrl() {

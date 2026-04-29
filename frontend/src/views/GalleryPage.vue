@@ -49,10 +49,23 @@
             class="post"
           >
             <div class="post-head">
-              <div class="ava">
+              <!-- ava + handle-block 둘 다 작성자 프로필(/user/:id) 진입 트리거.
+                   authorUserId 가 null 인 anonymous 시드 사진은 클릭 disable. -->
+              <div
+                :class="['ava', p.authorUserId != null ? 'clickable' : '']"
+                :role="p.authorUserId != null ? 'button' : undefined"
+                :tabindex="p.authorUserId != null ? 0 : undefined"
+                :data-testid="p.authorUserId != null ? 'gal-post-author' : undefined"
+                @click="onOpenAuthor(p.authorUserId)"
+              >
                 <img v-if="p.authorAvatarUrl" :src="p.authorAvatarUrl" :alt="p.authorHandle" />
               </div>
-              <div class="handle-block">
+              <div
+                :class="['handle-block', p.authorUserId != null ? 'clickable' : '']"
+                :role="p.authorUserId != null ? 'button' : undefined"
+                :tabindex="p.authorUserId != null ? 0 : undefined"
+                @click="onOpenAuthor(p.authorUserId)"
+              >
                 <div class="n">
                   @{{ p.authorHandle }}
                   <ion-icon v-if="p.authorVerified" :icon="checkmarkCircle" class="ic-16 verify" />
@@ -200,7 +213,6 @@ const placeIdNum = computed(() => Number(props.placeId));
 const sortOptions: Array<{ key: GallerySort; label: string }> = [
   { key: 'RECENT', label: '전체' },
   { key: 'POPULAR', label: '인기순' },
-  { key: 'FRIENDS', label: '친구만' },
   { key: 'SCENE_COMPARE', label: '장면 비교' },
 ];
 
@@ -227,6 +239,12 @@ function onBack(): void {
 async function onOpenMap(): Promise<void> {
   const id = placeIdNum.value;
   await router.push({ path: '/map', query: { selectedId: String(id) } });
+}
+
+async function onOpenAuthor(authorUserId: number | null): Promise<void> {
+  // anonymous 시드 사진처럼 user 가 없는 경우 클릭 무반응 — UI 도 cursor:auto.
+  if (authorUserId == null) return;
+  await router.push(`/user/${authorUserId}`);
 }
 
 async function onSelectSort(s: GallerySort): Promise<void> {
@@ -370,6 +388,15 @@ ion-content.gl-content {
 }
 .ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .handle-block { min-width: 0; }
+/* author 행 클릭 → /user/:id. authorUserId 가 있을 때만 .clickable 부여. */
+.ava.clickable,
+.handle-block.clickable { cursor: pointer; }
+.ava.clickable:focus-visible,
+.handle-block.clickable:focus-visible {
+  outline: 2px solid var(--fr-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 .post-head .n {
   font-size: 13px; font-weight: 800;
   letter-spacing: -0.02em;
