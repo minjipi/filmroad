@@ -203,16 +203,16 @@ public class PhotoUploadService {
             userRepository.save(user);
 
             long stampCount = stampRepository.countByUserId(userId);
-            long workStampCount = stampRepository.countByUserIdAndWorkId(userId, place.getContent().getId());
-            int workPercent = contentTotalCount == 0 ? 0 : (int) Math.round(100.0 * workStampCount / contentTotalCount);
+            long contentStampCount = stampRepository.countByUserIdAndContentId(userId, place.getContent().getId());
+            int workPercent = contentTotalCount == 0 ? 0 : (int) Math.round(100.0 * contentStampCount / contentTotalCount);
 
-            List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, workStampCount, contentTotalCount);
+            List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, contentStampCount, contentTotalCount);
 
             stampReward = StampRewardDto.builder()
                     .placeName(place.getName())
                     .contentId(place.getContent().getId())
                     .contentTitle(place.getContent().getTitle())
-                    .collectedCount(workStampCount)
+                    .collectedCount(contentStampCount)
                     .totalCount(contentTotalCount)
                     .percent(workPercent)
                     .build();
@@ -283,7 +283,7 @@ public class PhotoUploadService {
         }
     }
 
-    private List<UserBadgeDto> awardBadges(User user, Place place, long stampCount, long workStampCount, long contentTotalCount) {
+    private List<UserBadgeDto> awardBadges(User user, Place place, long stampCount, long contentStampCount, long contentTotalCount) {
         List<UserBadgeDto> awarded = new ArrayList<>();
         List<Badge> catalog = badgeRepository.findAllByOrderByOrderIndexAsc();
         for (Badge b : catalog) {
@@ -294,7 +294,7 @@ public class PhotoUploadService {
                 case WORK_COMPLETE -> b.getConditionContentId() != null
                         && b.getConditionContentId().equals(place.getContent().getId())
                         && contentTotalCount > 0
-                        && workStampCount >= contentTotalCount;
+                        && contentStampCount >= contentTotalCount;
                 default -> false;
             };
             if (met) {

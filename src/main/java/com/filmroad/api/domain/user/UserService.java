@@ -111,9 +111,9 @@ public class UserService {
      * `following=false`. 대상 유저 없으면 USER_NOT_FOUND(404).
      *
      * - stats.visitedCount: stamp 총수 / photoCount: user.totalPhotoCount /
-     *   collectedWorksCount: stamp 로 방문한 distinct work 수.
+     *   collectedContentsCount: stamp 로 방문한 distinct content 수.
      * - topPhotos: viewer 기준 visibility 필터(PUBLIC / 본인 / FOLLOWERS+follow) 적용한 최신 9개.
-     * - recentCollectedContents: stamp 를 work 별 집계, collectedCount/totalCount 진행률 포함.
+     * - recentCollectedContents: stamp 를 content 별 집계, collectedCount/totalCount 진행률 포함.
      */
     @Transactional(readOnly = true)
     public PublicUserProfileResponse getPublicProfile(Long targetUserId) {
@@ -122,18 +122,18 @@ public class UserService {
         Long viewerId = currentUser.currentUserIdOrNull();
 
         long visitedCount = stampRepository.countByUserId(targetUserId);
-        long collectedWorksCount = stampRepository.findDistinctWorkIdsByUserId(targetUserId).size();
+        long collectedContentsCount = stampRepository.findDistinctContentIdsByUserId(targetUserId).size();
 
         PublicUserStatsDto stats = PublicUserStatsDto.builder()
                 .visitedCount(visitedCount)
                 .photoCount(target.getTotalPhotoCount())
                 .followersCount(target.getFollowersCount())
                 .followingCount(target.getFollowingCount())
-                .collectedWorksCount(collectedWorksCount)
+                .collectedContentsCount(collectedContentsCount)
                 .build();
 
         List<CollectedContentDto> recentCollectedContents = stampRepository
-                .aggregateWorksByUserId(targetUserId,
+                .aggregateContentsByUserId(targetUserId,
                         PageRequest.of(0, PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT))
                 .stream()
                 .map(row -> {
