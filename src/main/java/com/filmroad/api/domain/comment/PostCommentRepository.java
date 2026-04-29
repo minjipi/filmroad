@@ -2,6 +2,7 @@ package com.filmroad.api.domain.comment;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -27,4 +28,13 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
      * 답글은 깊이 1 만 허용되므로 자식의 자식은 없음.
      */
     List<PostComment> findByParentId(Long parentId);
+
+    /**
+     * 사진 hard delete 시 service-level cascade 로 그 사진의 모든 댓글 일괄 삭제.
+     * 댓글 첨부 이미지 파일 cleanup 은 별도 orphan job 으로 미루고 DB row 만
+     * 정리한다 (PhotoEditService 주석 참고).
+     */
+    @Modifying
+    @Query("DELETE FROM PostComment c WHERE c.placePhoto.id = :photoId")
+    int deleteAllByPlacePhotoId(@Param("photoId") Long photoId);
 }

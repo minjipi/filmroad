@@ -24,7 +24,9 @@ import java.nio.file.Paths;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -662,6 +664,83 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.gpsScore", is(0)))
                 .andExpect(jsonPath("$.results.capturedLatitude").doesNotExist())
                 .andExpect(jsonPath("$.results.capturedLongitude").doesNotExist());
+    }
+
+    /**
+     * 작성자가 갓 업로드한 인증샷의 id 를 뽑아주는 헬퍼. PATCH/DELETE 테스트가
+     * 매번 같은 ownership 전제로 시작하도록 새 사진을 만들어준다.
+     */
+    private long uploadOwnPhoto() throws Exception {
+        PhotoUploadRequest req = new PhotoUploadRequest(
+                10L, "before edit", null, PhotoVisibility.PUBLIC, false, null, null);
+        MvcResult res = mockMvc.perform(multipart("/api/photos")
+                        .file(buildImage())
+                        .file(buildMeta(req))
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode root = objectMapper.readTree(res.getResponse().getContentAsString());
+        return root.path("results").path("id").asLong();
+    }
+
+    @Test
+    @DisplayName("PATCH /api/photos/{id} as owner — caption + visibility 갱신, 응답에 새 값 노출")
+    void patch_asOwner_updatesCaptionAndVisibility() throws Exception {
+        long photoId = uploadOwnPhoto();
+        String body = """
+                { "caption": "after edit", "visibility": "PRIVATE" }
+                """;
+
+        mockMvc.perform(patch("/api/photos/" + photoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.caption", is("after edit")))
+                .andExpect(jsonPath("$.results.visibility", is("PRIVATE")));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/photos/{id} 다른 유저 토큰 → PHOTO_UNAUTHORIZED(40071)")
+    void patch_asNonOwner_returnsUnauthorized() throws Exception {
+        long photoId = uploadOwnPhoto();
+        Cookie otherUser = new Cookie("ATOKEN", jwtTokenService.issueAccess(2L));
+
+        mockMvc.perform(patch("/api/photos/" + photoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"caption\": \"x\", \"visibility\": \"PUBLIC\" }")
+                        .cookie(otherUser))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code", is(40071)));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/photos/{id} as owner — 사진 + 자식 행 정리, 이후 GET 은 404")
+    void delete_asOwner_removesPhotoAndChildren() throws Exception {
+        long photoId = uploadOwnPhoto();
+        assertThat(placePhotoRepository.findById(photoId)).isPresent();
+
+        mockMvc.perform(delete("/api/photos/" + photoId)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        assertThat(placePhotoRepository.findById(photoId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("DELETE /api/photos/{id} 다른 유저 토큰 → PHOTO_UNAUTHORIZED, 사진 그대로")
+    void delete_asNonOwner_returnsUnauthorized() throws Exception {
+        long photoId = uploadOwnPhoto();
+        Cookie otherUser = new Cookie("ATOKEN", jwtTokenService.issueAccess(2L));
+
+        mockMvc.perform(delete("/api/photos/" + photoId)
+                        .cookie(otherUser))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code", is(40071)));
+
+        assertThat(placePhotoRepository.findById(photoId)).isPresent();
     }
 
     @Test

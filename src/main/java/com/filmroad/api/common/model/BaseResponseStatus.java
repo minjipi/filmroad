@@ -67,6 +67,7 @@ public enum BaseResponseStatus {
     INVALID_FILE_TYPE(false, 40060, "지원하지 않는 파일 형식입니다."),
     UPLOAD_FAILED(false, 40061, "파일 업로드에 실패했습니다."),
     PHOTO_NOT_FOUND(false, 40070, "사진을 찾을 수 없습니다."),
+    PHOTO_UNAUTHORIZED(false, 40071, "사진 작성자만 수정/삭제할 수 있어요."),
     SELF_FOLLOW_FORBIDDEN(false, 40080, "자기 자신을 팔로우할 수 없습니다."),
     USER_NOT_FOUND(false, 40081, "사용자를 찾을 수 없습니다."),
     COLLECTION_NOT_FOUND(false, 40090, "컬렉션을 찾을 수 없습니다."),
