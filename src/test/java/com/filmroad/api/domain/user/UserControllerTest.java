@@ -141,6 +141,11 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.places[0].regionLabel", notNullValue()))
                 .andExpect(jsonPath("$.results.places[0].contentTitle", notNullValue()))
                 .andExpect(jsonPath("$.results.places[0].likeCount", greaterThanOrEqualTo(0)))
+                // 카드 썸네일 — coverImageUrls 의 0 번이 그리드에 노출되므로 비어있지 않아야.
+                // place=17 시드는 cover 2장, place=10 은 3장 (data.sql 시드).
+                .andExpect(jsonPath("$.results.places[0].coverImageUrls", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.results.places[0].coverImageUrls[0]", startsWith("https://")))
+                .andExpect(jsonPath("$.results.places[4].coverImageUrls", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.nextCursor").value(nullValue()));
     }
 

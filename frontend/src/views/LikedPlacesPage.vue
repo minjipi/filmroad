@@ -45,14 +45,18 @@
           class="lp-grid"
           data-testid="liked-places-grid"
         >
-          <button
+          <div
             v-for="p in items"
             :key="p.id"
-            type="button"
             class="cell"
+            role="button"
+            tabindex="0"
             data-testid="liked-place-cell"
             :data-place-id="p.id"
+            :aria-label="`${p.name} 상세 보기`"
             @click="onOpenPlace(p.id)"
+            @keydown.enter="onOpenPlace(p.id)"
+            @keydown.space.prevent="onOpenPlace(p.id)"
           >
             <img
               v-if="p.coverImageUrls.length > 0"
@@ -63,10 +67,7 @@
               <ion-icon :icon="locationOutline" class="ic-22" />
             </div>
             <span v-if="p.contentTitle" class="drama">{{ p.contentTitle }}</span>
-            <span class="likes">
-              <ion-icon :icon="heart" class="ic-16" />{{ formatCount(p.likeCount) }}
-            </span>
-          </button>
+          </div>
         </div>
 
         <div
@@ -91,7 +92,6 @@ import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonPage, IonContent, IonIcon } from '@ionic/vue';
 import {
   chevronBackOutline,
-  heart,
   heartOutline,
   locationOutline,
 } from 'ionicons/icons';
@@ -143,12 +143,6 @@ watch(
     }
   },
 );
-
-function formatCount(n: number): string {
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}만`;
-  if (n >= 1000) return n.toLocaleString('ko-KR');
-  return String(n);
-}
 
 function onBack(): void {
   router.back();
@@ -225,10 +219,14 @@ ion-content.lp-content {
   overflow: hidden;
   cursor: pointer;
   background: #eef2f6;
-  border: none;
-  padding: 0;
+  display: block;
+}
+.cell:focus-visible {
+  outline: 2px solid var(--fr-primary);
+  outline-offset: -2px;
 }
 .cell img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -259,18 +257,6 @@ ion-content.lp-content {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.cell .likes {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  font-size: 9.5px;
-  font-weight: 800;
-  color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 .lp-empty {
