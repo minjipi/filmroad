@@ -299,7 +299,9 @@ ion-content.wd-content {
 .hero-bg {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 320px;
+  /* PlaceDetail 의 .hero(440px) 와 동일한 톤. 320 은 .head + card-sheet 가 너무
+     일찍 흰 영역으로 가려져 답답함. */
+  height: 440px;
   overflow: hidden;
   z-index: 0;
 }
@@ -340,7 +342,10 @@ ion-content.wd-content {
 .head {
   position: relative;
   z-index: 5;
-  padding: 20px;
+  /* hero-bg(440px) 안쪽에서 포스터+타이틀이 위아래로 숨 쉴 수 있게 padding 확대.
+     상단은 .top 헤더(40 + safe-area-top) 와의 사이를 띄우고, 하단은 흰
+     card-sheet 가 너무 빨리 올라오지 않도록. */
+  padding: 60px 20px 40px;
   display: flex;
   gap: 16px;
   color: #ffffff;
