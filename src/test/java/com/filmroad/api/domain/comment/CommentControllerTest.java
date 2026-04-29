@@ -1,6 +1,9 @@
 package com.filmroad.api.domain.comment;
 
 import com.filmroad.api.domain.auth.JwtTokenService;
+import com.filmroad.api.domain.place.PhotoVisibility;
+import com.filmroad.api.domain.place.PlacePhoto;
+import com.filmroad.api.domain.place.PlacePhotoRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,9 @@ class CommentControllerTest {
 
     @Autowired
     private JwtTokenService jwtTokenService;
+
+    @Autowired
+    private PlacePhotoRepository placePhotoRepository;
 
     private Cookie userCookie(long userId) {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(userId));
@@ -384,5 +390,47 @@ class CommentControllerTest {
         mockMvc.perform(get("/api/photos/100/comments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.comments[?(@.parentId == 1)]", hasSize(greaterThanOrEqualTo(1))));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/comments — 비작성자가 PRIVATE 사진에 직접 호출 → PHOTO_NOT_FOUND")
+    void createComment_privatePhoto_byNonOwner_returnsNotFound() throws Exception {
+        // photo 100 은 user 1 소유 시드. PRIVATE 으로 바꾼 뒤 user 2 로 댓글 시도.
+        PlacePhoto photo = placePhotoRepository.findById(100L).orElseThrow();
+        photo.updateContent(photo.getCaption(), PhotoVisibility.PRIVATE);
+        placePhotoRepository.save(photo);
+
+        mockMvc.perform(multipart("/api/photos/100/comments")
+                        .param("content", "비공개 사진에 댓글 시도")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .cookie(userCookie(2L)))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code", is(40070)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id}/comments — 비작성자가 PRIVATE 사진 댓글 목록 조회 → PHOTO_NOT_FOUND")
+    void listComments_privatePhoto_byNonOwner_returnsNotFound() throws Exception {
+        PlacePhoto photo = placePhotoRepository.findById(100L).orElseThrow();
+        photo.updateContent(photo.getCaption(), PhotoVisibility.PRIVATE);
+        placePhotoRepository.save(photo);
+
+        mockMvc.perform(get("/api/photos/100/comments")
+                        .cookie(userCookie(2L)))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code", is(40070)));
+    }
+
+    @Test
+    @DisplayName("GET /api/photos/{id}/comments — 작성자 본인은 PRIVATE 사진의 댓글 목록 조회 가능")
+    void listComments_privatePhoto_byOwner_succeeds() throws Exception {
+        PlacePhoto photo = placePhotoRepository.findById(100L).orElseThrow();
+        photo.updateContent(photo.getCaption(), PhotoVisibility.PRIVATE);
+        placePhotoRepository.save(photo);
+
+        mockMvc.perform(get("/api/photos/100/comments")
+                        .cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 }

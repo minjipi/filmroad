@@ -14,7 +14,6 @@ import com.filmroad.api.domain.place.dto.PhotoDetailPlaceDto;
 import com.filmroad.api.domain.place.dto.PhotoDetailResponse;
 import com.filmroad.api.domain.place.dto.PhotoDetailWorkDto;
 import com.filmroad.api.domain.saved.SavedPlaceRepository;
-import com.filmroad.api.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -40,6 +39,7 @@ public class PhotoDetailService {
     private final SavedPlaceRepository savedPlaceRepository;
     private final UserFollowRepository userFollowRepository;
     private final CurrentUser currentUser;
+    private final PhotoVisibilityGuard visibilityGuard;
 
     @Transactional(readOnly = true)
     public PhotoDetailResponse getPhoto(Long photoId) {
@@ -47,10 +47,8 @@ public class PhotoDetailService {
         PlacePhoto photo = placePhotoRepository.findById(photoId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND));
 
-        if (!canView(photo, viewerId)) {
-            // 존재는 하나 권한 없음 — PRIVATE enumeration 방지 위해 동일하게 404.
-            throw BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND);
-        }
+        // 권한 검사 — PhotoVisibilityGuard 가 PHOTO_NOT_FOUND 로 통일 throw.
+        visibilityGuard.assertViewable(photo, viewerId);
 
         Place place = photo.getPlace();
         List<PostComment> commentPreview = postCommentRepository
@@ -104,22 +102,6 @@ public class PhotoDetailService {
                 .moreCommentsCount(moreComments)
                 .images(images)
                 .build();
-    }
-
-    private boolean canView(PlacePhoto photo, Long viewerId) {
-        PhotoVisibility v = photo.getVisibility();
-        if (v == null || v == PhotoVisibility.PUBLIC) return true;
-        User owner = photo.getUser();
-        if (owner == null) {
-            // user 가 없는 시드 사진은 author_nickname 뿐이라 PRIVATE/FOLLOWERS 판단 기준이 모호.
-            // PUBLIC 로 간주 — 실제 운영 업로드 경로에서는 항상 user 가 채워짐.
-            return true;
-        }
-        if (viewerId != null && viewerId.equals(owner.getId())) return true;
-        if (v == PhotoVisibility.FOLLOWERS && viewerId != null) {
-            return userFollowRepository.existsByFollowerIdAndFolloweeId(viewerId, owner.getId());
-        }
-        return false;
     }
 
     private static List<String> parseTags(String tagsCsv) {

@@ -1,6 +1,9 @@
 package com.filmroad.api.domain.like;
 
 import com.filmroad.api.domain.auth.JwtTokenService;
+import com.filmroad.api.domain.place.PhotoVisibility;
+import com.filmroad.api.domain.place.PlacePhoto;
+import com.filmroad.api.domain.place.PlacePhotoRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,8 +30,15 @@ class LikeControllerTest {
     @Autowired
     private JwtTokenService jwtTokenService;
 
+    @Autowired
+    private PlacePhotoRepository placePhotoRepository;
+
     private Cookie demoAccessCookie() {
         return new Cookie("ATOKEN", jwtTokenService.issueAccess(1L));
+    }
+
+    private Cookie accessCookieFor(long userId) {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(userId));
     }
 
     @Test
@@ -70,5 +80,30 @@ class LikeControllerTest {
     void togglePhotoLike_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/api/photos/101/like"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/like — 비작성자가 PRIVATE 사진에 직접 호출 → PHOTO_NOT_FOUND(40070)")
+    void togglePhotoLike_privatePhoto_byNonOwner_returnsNotFound() throws Exception {
+        // photo 100 은 user 1 소유 시드. PRIVATE 으로 바꾼 뒤 user 2 로 like 시도.
+        PlacePhoto photo = placePhotoRepository.findById(100L).orElseThrow();
+        photo.updateContent(photo.getCaption(), PhotoVisibility.PRIVATE);
+        placePhotoRepository.save(photo);
+
+        mockMvc.perform(post("/api/photos/100/like").cookie(accessCookieFor(2L)))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code", is(40070)));
+    }
+
+    @Test
+    @DisplayName("POST /api/photos/{id}/like — 작성자 본인이면 PRIVATE 사진에도 like 가능")
+    void togglePhotoLike_privatePhoto_byOwner_succeeds() throws Exception {
+        PlacePhoto photo = placePhotoRepository.findById(100L).orElseThrow();
+        photo.updateContent(photo.getCaption(), PhotoVisibility.PRIVATE);
+        placePhotoRepository.save(photo);
+
+        mockMvc.perform(post("/api/photos/100/like").cookie(demoAccessCookie())) // user 1
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 }
