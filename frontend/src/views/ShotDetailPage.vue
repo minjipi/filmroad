@@ -371,7 +371,7 @@
                 type="button"
                 class="card-more"
                 aria-label="더보기"
-                @click="onCardMore"
+                @click="onAppendedCardMore"
               >
                 <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
               </button>
@@ -534,12 +534,97 @@
       @close="commentSheetOpen = false"
       @created="onCommentCreated"
     />
+
+    <!-- 인증샷 수정 모달 — Teleport 로 body 에 띄워 ion-page 레이아웃 영향 없이
+         iOS 시트 톤. 닫기 X 는 헤더 우상단, 저장은 footer primary. -->
+    <Teleport to="body">
+      <Transition name="sd-edit-backdrop-fade">
+        <div
+          v-if="editModalOpen"
+          class="sd-edit-backdrop"
+          data-testid="sd-edit-backdrop"
+          @click="closeEditModal"
+        />
+      </Transition>
+      <Transition name="sd-edit-sheet-slide">
+        <div
+          v-if="editModalOpen"
+          class="sd-edit-sheet"
+          role="dialog"
+          aria-label="인증샷 수정"
+          data-testid="sd-edit-sheet"
+        >
+          <header class="sd-edit-head">
+            <h2>인증샷 수정</h2>
+            <button
+              type="button"
+              class="sd-edit-close"
+              aria-label="닫기"
+              data-testid="sd-edit-close"
+              @click="closeEditModal"
+            >
+              <ion-icon :icon="closeOutline" class="ic-22" />
+            </button>
+          </header>
+
+          <div class="sd-edit-body">
+            <label class="sd-edit-label">캡션</label>
+            <textarea
+              v-model="editCaption"
+              class="sd-edit-textarea"
+              data-testid="sd-edit-caption"
+              maxlength="1000"
+              rows="4"
+              placeholder="이 사진에 대한 한 줄을 적어보세요"
+            />
+
+            <label class="sd-edit-label">공개범위</label>
+            <div class="sd-edit-radios">
+              <label
+                v-for="opt in visibilityOptions"
+                :key="opt.value"
+                class="sd-edit-radio"
+              >
+                <input
+                  type="radio"
+                  :value="opt.value"
+                  v-model="editVisibility"
+                  :data-testid="`sd-edit-visibility-${opt.value}`"
+                />
+                <div class="sd-edit-radio-text">
+                  <span class="lbl">{{ opt.label }}</span>
+                  <span class="hint">{{ opt.hint }}</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <footer class="sd-edit-foot">
+            <button
+              type="button"
+              class="sd-edit-save"
+              data-testid="sd-edit-save"
+              :disabled="editSaving"
+              @click="onSaveEdit"
+            >
+              {{ editSaving ? '저장 중…' : '저장' }}
+            </button>
+          </footer>
+        </div>
+      </Transition>
+    </Teleport>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import {
+  IonPage,
+  IonContent,
+  IonIcon,
+  actionSheetController,
+  alertController,
+} from '@ionic/vue';
 import {
   chevronBack,
   ellipsisHorizontal,
@@ -554,10 +639,13 @@ import {
   bookmarkOutline,
   paperPlaneOutline,
   eyeOutline,
+  closeOutline,
+  createOutline,
+  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { useShotDetailStore } from '@/stores/shotDetail';
+import { useShotDetailStore, type PhotoVisibility } from '@/stores/shotDetail';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
@@ -735,11 +823,120 @@ function onShare(): void {
   });
 }
 
-// task #26: sticky header 의 more 버튼이 사라지면서 onMore → onCardMore 로
-// 이름 변경. 카드별 우상단 더보기 버튼 핸들러 — primary 와 추가 카드 모두
-// 같은 stub 동작 (실 메뉴 시트는 별도 task 로). 추후 카드별 컨텍스트(예:
-// 내 카드 = 삭제/수정 / 남 카드 = 신고/숨기기)가 필요해지면 인자 추가.
+// 인증샷 수정 모달 — primary shot 더보기 → 수정 행을 누르면 열린다. caption /
+// 공개범위 두 필드만 작성자 본인이 변경 가능. 모달 닫힘 시 working 값을 그대로
+// 두어 사용자가 실수로 닫아도 다시 열면 입력이 살아 있음 — 명시적 저장이나
+// 갱신 후에만 reset.
+const editModalOpen = ref(false);
+const editCaption = ref('');
+const editVisibility = ref<PhotoVisibility>('PUBLIC');
+const editSaving = ref(false);
+
+const visibilityOptions: Array<{ value: PhotoVisibility; label: string; hint: string }> = [
+  { value: 'PUBLIC', label: '전체 공개', hint: '누구나 볼 수 있어요' },
+  { value: 'FOLLOWERS', label: '팔로워만', hint: '내 팔로워에게만 보여요' },
+  { value: 'PRIVATE', label: '나만 보기', hint: '나만 볼 수 있어요' },
+];
+
+function openEditModal(): void {
+  const s = shot.value;
+  if (!s) return;
+  editCaption.value = s.caption ?? '';
+  editVisibility.value = s.visibility;
+  editModalOpen.value = true;
+}
+
+function closeEditModal(): void {
+  editModalOpen.value = false;
+}
+
+async function onSaveEdit(): Promise<void> {
+  if (editSaving.value) return;
+  editSaving.value = true;
+  try {
+    const ok = await shotStore.updateContent({
+      caption: editCaption.value.trim().length > 0 ? editCaption.value : null,
+      visibility: editVisibility.value,
+    });
+    if (ok) {
+      closeEditModal();
+      await showInfo('인증샷이 수정됐어요');
+    } else if (error.value) {
+      await showError(error.value);
+    }
+  } finally {
+    editSaving.value = false;
+  }
+}
+
+// 작성자 더보기 메뉴: 본인 인증샷에는 수정 / 삭제 행 노출, 남 인증샷에는
+// 아직 부여할 메뉴가 없어 placeholder 토스트 유지(추후 신고 등이 들어갈 자리).
 async function onCardMore(): Promise<void> {
+  const s = shot.value;
+  if (!s) return;
+  if (!s.author.isMe) {
+    await showInfo('더보기 메뉴는 곧 공개됩니다');
+    return;
+  }
+  const sheet = await actionSheetController.create({
+    header: '인증샷',
+    buttons: [
+      {
+        text: '수정',
+        icon: createOutline,
+        handler: () => {
+          openEditModal();
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDelete();
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+}
+
+// 삭제 확인 → API 호출 → 성공 시 ShotDetail 자체가 의미 없으므로 router.back.
+// 백엔드가 자식 행(좋아요/댓글) cascade 정리, 프런트는 별도 invalidation
+// 필요 없음 (다른 페이지가 재진입할 때 어차피 fetch 다시 함).
+async function confirmDelete(): Promise<void> {
+  const alert = await alertController.create({
+    header: '인증샷을 삭제할까요?',
+    message: '삭제한 인증샷은 다시 복구할 수 없어요.',
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      {
+        text: '삭제',
+        role: 'destructive',
+        handler: () => {
+          void performDelete();
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+async function performDelete(): Promise<void> {
+  const ok = await shotStore.deleteShot();
+  if (!ok) {
+    if (error.value) await showError(error.value);
+    return;
+  }
+  await showInfo('인증샷이 삭제됐어요');
+  router.back();
+}
+
+// 추가 카드(appendedShots) 의 더보기는 작성자 컨텍스트가 primary 와 다른
+// 다른 사람 인증샷이라 수정/삭제 메뉴를 띄우면 안 됨. 추후 신고/숨기기
+// 같은 viewer-side 액션이 들어올 자리라 일단 placeholder 유지.
+async function onAppendedCardMore(): Promise<void> {
   await showInfo('더보기 메뉴는 곧 공개됩니다');
 }
 
@@ -1461,4 +1658,128 @@ ion-content.sd-content {
 .sd-placeholder.error {
   color: var(--fr-coral);
 }
+
+/* ---------- 인증샷 수정 모달 (Teleport) ---------- */
+.sd-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.5);
+}
+.sd-edit-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  background: #ffffff;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.18);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.sd-edit-sheet-slide-enter-from,
+.sd-edit-sheet-slide-leave-to { transform: translateY(100%); }
+.sd-edit-sheet-slide-enter-active,
+.sd-edit-sheet-slide-leave-active {
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sd-edit-backdrop-fade-enter-from,
+.sd-edit-backdrop-fade-leave-to { opacity: 0; }
+.sd-edit-backdrop-fade-enter-active,
+.sd-edit-backdrop-fade-leave-active { transition: opacity 0.2s ease; }
+
+.sd-edit-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--fr-line);
+}
+.sd-edit-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fr-ink);
+}
+.sd-edit-close {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--fr-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sd-edit-close:hover { background: var(--fr-bg-muted); color: var(--fr-ink); }
+
+.sd-edit-body {
+  padding: 14px 4px 4px;
+  overflow-y: auto;
+}
+.sd-edit-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fr-ink-3);
+  margin: 12px 0 6px;
+}
+.sd-edit-textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fr-ink);
+  background: var(--fr-bg-muted, #f5f7fa);
+}
+.sd-edit-textarea:focus { outline: 2px solid var(--fr-primary); outline-offset: 1px; }
+
+.sd-edit-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sd-edit-radio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.sd-edit-radio input[type='radio'] { accent-color: var(--fr-primary); }
+.sd-edit-radio-text { display: flex; flex-direction: column; }
+.sd-edit-radio-text .lbl { font-size: 14px; font-weight: 700; color: var(--fr-ink); }
+.sd-edit-radio-text .hint { font-size: 12px; color: var(--fr-ink-3); }
+
+.sd-edit-foot { padding: 12px 0 0; }
+.sd-edit-save {
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 14px;
+  background: var(--fr-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sd-edit-save:disabled { background: var(--fr-line); cursor: not-allowed; }
 </style>

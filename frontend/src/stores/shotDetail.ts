@@ -5,7 +5,9 @@ import { useUiStore } from '@/stores/ui';
 import type { FeedPost } from '@/stores/feed';
 
 // Matches backend `PhotoDetailResponse` (task #39 final shape).
-export type PhotoVisibility = 'PUBLIC' | 'PRIVATE';
+// PUBLIC / FOLLOWERS / PRIVATE — 백엔드 PhotoVisibility enum 과 1:1.
+// FOLLOWERS 는 작성자가 ShotDetail 메뉴에서 수정 시 선택 가능한 옵션.
+export type PhotoVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
 
 export interface ShotAuthor {
   id: number;
@@ -299,6 +301,49 @@ export const useShotDetailStore = defineStore('shotDetail', {
       this.nextEndReached = false;
       this.nextError = null;
       this.nextCursor = null;
+    },
+
+    /**
+     * 작성자가 더보기 메뉴 → 수정 모달에서 caption / 공개범위 갱신.
+     * 백엔드는 PATCH /api/photos/:id 로 받고 갱신된 PhotoDetailResponse 를
+     * 그대로 돌려줘서 별도 refetch 없이 store 상태를 한 번에 덮어쓴다.
+     * 작성자 외 호출은 백엔드가 PHOTO_UNAUTHORIZED 로 차단.
+     */
+    async updateContent(payload: {
+      caption: string | null;
+      visibility: PhotoVisibility;
+    }): Promise<boolean> {
+      if (!this.shot) return false;
+      const id = this.shot.id;
+      try {
+        const { data } = await api.patch<ShotDetail>(`/api/photos/${id}`, {
+          caption: payload.caption,
+          visibility: payload.visibility,
+        });
+        this.shot = data;
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '수정에 실패했어요';
+        return false;
+      }
+    },
+
+    /**
+     * 작성자 hard delete. 백엔드가 자식 행(좋아요/댓글) 까지 cascade 정리.
+     * 성공 시 store 의 shot 을 null 로 비워 호출부가 router.back / replace
+     * 분기하기 좋게 한다.
+     */
+    async deleteShot(): Promise<boolean> {
+      if (!this.shot) return false;
+      const id = this.shot.id;
+      try {
+        await api.delete(`/api/photos/${id}`);
+        this.shot = null;
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '삭제에 실패했어요';
+        return false;
+      }
     },
   },
 });
