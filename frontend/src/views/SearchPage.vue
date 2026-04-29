@@ -97,8 +97,8 @@
               >
                 <div class="cover">
                   <img
-                    v-if="p.coverImageUrls.length > 0"
-                    :src="p.coverImageUrls[0]"
+                    v-if="p.sceneImageUrl"
+                    :src="p.sceneImageUrl"
                     :alt="p.name"
                   />
                   <div class="grad" />

@@ -17,6 +17,9 @@ export interface SearchPlaceResult {
   name: string;
   regionLabel: string;
   coverImageUrls: string[];
+  // Card 썸네일은 sceneImageUrl 우선 (home / work-detail / map / related 와 동일 패턴).
+  // 씬이 등록 안 된 place 는 null — 카드는 회색 fallback 으로 떨어짐.
+  sceneImageUrl?: string | null;
   contentId: number;
   contentTitle: string;
   // Coordinates travel through so /map deep-links can center on the place

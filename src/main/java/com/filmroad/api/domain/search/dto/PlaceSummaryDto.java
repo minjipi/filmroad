@@ -9,6 +9,9 @@ import java.util.List;
 
 /**
  * 통합 검색 결과의 장소 섹션 단건. 지도 점프/딥링크에 필요한 좌표·contentId·썸네일만 포함.
+ *
+ * 카드 썸네일은 home / work-detail / map / related 와 동일하게 `sceneImageUrl` (대표 씬) 을 사용.
+ * `coverImageUrls` 는 응답 호환성을 위해 유지(다른 화면에서 carousel 렌더 가능).
  */
 @Getter
 @Builder
@@ -21,6 +24,7 @@ public class PlaceSummaryDto {
     private Long contentId;
     private String contentTitle;
     private List<String> coverImageUrls;
+    private String sceneImageUrl;
 
     public static PlaceSummaryDto of(Place place) {
         return PlaceSummaryDto.builder()
@@ -32,6 +36,7 @@ public class PlaceSummaryDto {
                 .contentId(place.getContent() == null ? null : place.getContent().getId())
                 .contentTitle(place.getContent() == null ? null : place.getContent().getTitle())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
+                .sceneImageUrl(place.getPrimarySceneImageUrl())
                 .build();
     }
 }
