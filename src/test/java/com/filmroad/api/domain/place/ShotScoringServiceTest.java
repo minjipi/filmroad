@@ -1,7 +1,7 @@
 package com.filmroad.api.domain.place;
 
 import com.filmroad.api.domain.place.dto.ShotScoreDto;
-import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.content.Content;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -100,7 +100,7 @@ class ShotScoringServiceTest {
     }
 
     /**
-     * Place mock — Work 만 minimal stub, 좌표/sceneUrl 만 의미 있음.
+     * Place mock — Content 만 minimal stub, 좌표/sceneUrl 만 의미 있음.
      * sceneUrl == null 이면 sceneImages 컬렉션을 비워두고(=등록된 씬 없음 시나리오),
      * non-null 이면 imageOrderIndex=0 행을 한 장 부착해 primary 로 노출.
      */
@@ -110,7 +110,7 @@ class ShotScoringServiceTest {
                 .regionLabel("test")
                 .latitude(lat)
                 .longitude(lng)
-                .work(Work.builder().title("t").build())
+                .content(Content.builder().title("t").build())
                 .build();
         if (sceneUrl != null) {
             p.addSceneImage(PlaceSceneImage.builder()

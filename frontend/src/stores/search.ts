@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 
-export interface SearchWorkResult {
+export interface SearchContentResult {
   id: number;
   title: string;
   // Backend (task #16) currently emits 'MOVIE' | 'TV' | 'WEBTOON' style tags
@@ -17,8 +17,8 @@ export interface SearchPlaceResult {
   name: string;
   regionLabel: string;
   coverImageUrls: string[];
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   // Coordinates travel through so /map deep-links can center on the place
   // without a second fetch when we wire that up; unused by the results list
   // today, kept on the DTO so the response isn't lossy.
@@ -28,7 +28,7 @@ export interface SearchPlaceResult {
 
 export interface SearchResponse {
   query?: string;
-  works: SearchWorkResult[];
+  contents: SearchContentResult[];
   places: SearchPlaceResult[];
 }
 
@@ -38,7 +38,7 @@ const DEFAULT_LIMIT = 20;
 
 interface State {
   query: string;
-  works: SearchWorkResult[];
+  contents: SearchContentResult[];
   places: SearchPlaceResult[];
   loading: boolean;
   error: string | null;
@@ -47,14 +47,14 @@ interface State {
 export const useSearchStore = defineStore('search', {
   state: (): State => ({
     query: '',
-    works: [],
+    contents: [],
     places: [],
     loading: false,
     error: null,
   }),
   getters: {
     hasResults: (state): boolean =>
-      state.works.length > 0 || state.places.length > 0,
+      state.contents.length > 0 || state.places.length > 0,
   },
   actions: {
     // Single request wrapper. Debouncing is the page's responsibility — the
@@ -65,7 +65,7 @@ export const useSearchStore = defineStore('search', {
       const trimmed = q.trim();
       if (!trimmed) {
         // Empty query = clear results; avoid hitting the server with "".
-        this.works = [];
+        this.contents = [];
         this.places = [];
         this.error = null;
         return;
@@ -76,10 +76,10 @@ export const useSearchStore = defineStore('search', {
         const { data } = await api.get<SearchResponse>('/api/search', {
           params: { q: trimmed, limit: DEFAULT_LIMIT },
         });
-        this.works = data.works ?? [];
+        this.contents = data.contents ?? [];
         this.places = data.places ?? [];
       } catch (e) {
-        this.works = [];
+        this.contents = [];
         this.places = [];
         this.error = e instanceof Error ? e.message : 'Search failed';
       } finally {
@@ -88,7 +88,7 @@ export const useSearchStore = defineStore('search', {
     },
     reset(): void {
       this.query = '';
-      this.works = [];
+      this.contents = [];
       this.places = [];
       this.loading = false;
       this.error = null;

@@ -1023,3 +1023,159 @@ KakaoMap 에 신규 `fitTo: LatLng[]` 옵션 prop 추가. WorkDetailPage 가 마
 - (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
 - (M) `frontend/src/views/__tests__/MapPage.spec.ts`
 - (M) `_workspace/03_frontend_implementation.md`
+
+---
+
+# Task #2 — feat/place-scene-images (place scene 1:N + carousel)
+
+## 컨텍스트
+- 백엔드 DTO 가 place 평면 4필드(`workEpisode`, `sceneTimestamp`, `sceneImageUrl`, `sceneDescription`) 를 `scenes: PlaceSceneDto[]` 로 묶어 내려준다 (PlaceSceneImage 1:N 모델).
+- 상세 surface 3종(PlaceDetailPage / ShotDetailPage / WorkDetailPage) 만 `scenes: PlaceScene[]` 으로 마이그레이션. 요약 surface(Feed/Map/Gallery/Collection/Upload/Camera) 의 평면 필드는 그대로 — 백엔드가 primary(0번) 씬으로 폴백 채움.
+- PlaceDetailPage 의 scene 영역만 캐러셀(자동 4초 전환). 나머지 detail/요약은 첫 씬만 사용.
+
+## 완료 항목
+
+### 1. 타입 (Pinia store interfaces)
+- `frontend/src/stores/placeDetail.ts`
+  - 신규 `PlaceScene` 인터페이스: `{ id, imageUrl, workEpisode, sceneTimestamp, sceneDescription, orderIndex }` — 백엔드 `PlaceSceneDto` 1:1.
+  - `PlaceDetailPlace`: 평면 4필드(`workEpisode/sceneTimestamp/sceneImageUrl/sceneDescription`) 제거, `scenes: PlaceScene[]` 추가.
+- `frontend/src/stores/shotDetail.ts`
+  - `PlaceScene` import.
+  - `ShotDetail`: `sceneImageUrl` 제거, `scenes: PlaceScene[]` 추가.
+  - `ShotWork.episode` / `sceneTimestamp` 는 backend `PhotoDetailWorkDto` 가 primary 폴백으로 계속 내려보내므로 그대로 유지(요약 호환).
+- `frontend/src/stores/workDetail.ts`
+  - `PlaceScene` import.
+  - `WorkDetailSpot`: `workEpisode/sceneTimestamp/sceneDescription` 제거, `scenes: PlaceScene[]` 추가.
+
+### 2. SceneCarousel.vue (신규 컴포넌트)
+- `frontend/src/components/place/SceneCarousel.vue`
+  - props: `scenes: PlaceScene[]`, `intervalMs?: number = 4000`, `placeName?: string = ''`.
+  - emits: `update:index` (parent 가 회차/타임스탬프/설명 chip 동기화에 사용).
+  - 자동 전환: scenes.length > 1 인 경우만 `setInterval`, 만료 시 `(i + 1) % len` 으로 wrap.
+  - dot 인디케이터: scenes.length > 1 일 때만 렌더, 클릭 → `setIndex(i) + 타이머 리셋`.
+  - visibility: `document.visibilitychange` 로 hidden 일 때 stop, visible 복귀 시 start.
+  - 라이프사이클: `onMounted` → start, `onBeforeUnmount` → clearInterval + listener 제거.
+  - scenes 길이 변경 watch → currentIndex 가 범위를 벗어나면 0 으로 정렬 + 타이머 재시작.
+  - 외형: 기존 `.scene-compare` (96×140 floating thumbnail) 와 동일. 슬라이드 stack + opacity cross-fade (작은 thumbnail 에서 transform slide 보다 자연스럽고 clone 처리 불필요). `prefers-reduced-motion: reduce` 시 transition off.
+
+### 3. SceneCarousel 단위 테스트
+- `frontend/src/components/place/__tests__/SceneCarousel.spec.ts` (5 케이스)
+  - 단일 씬 → dot 미렌더 + setInterval 미발동.
+  - 다중 씬 → 4초 간격으로 emit('update:index') 시퀀스 0→1→2→0(wrap), dot active class 동기화.
+  - dot 클릭 → 즉시 점프 + 타이머 리셋(클릭 후 풀 인터벌 만큼 다음 advance 지연).
+  - `document.hidden` visibilitychange → 일시정지, visible 복귀 시 재개.
+  - unmount → clearInterval 호출 + 후속 timer fire 없음.
+
+### 4. PlaceDetailPage.vue (carousel 통합 + currentScene 동기화)
+- `frontend/src/views/PlaceDetailPage.vue`
+  - import `SceneCarousel from '@/components/place/SceneCarousel.vue'`.
+  - hero 안 `.scene-compare` (135–138L) → `<SceneCarousel :scenes="place.scenes" :place-name="place.name" @update:index="onSceneIndexChange" v-if="place.scenes.length > 0" />`.
+  - `currentSceneIndex` ref + `currentScene` computed (=`place.scenes[currentSceneIndex] ?? null`).
+  - `episodeLabel` (회차/타임스탬프 chip) → `currentScene?.workEpisode` / `currentScene?.sceneTimestamp` 사용 (carousel 따라 변경).
+  - "이 장면, 기억나세요?" 본문 (`<p v-if="currentSceneDescription">`) → `currentScene?.sceneDescription`.
+  - `onCapture` → `uploadStore.beginCapture` 에 `primary = p.scenes[0]` 의 `workEpisode` / `imageUrl` 폴백 (CaptureTarget 은 평면 사양 — 백엔드 ShotScoringService 의 비교 기준과 일치).
+  - `mapStore.markLastViewed` → `workEpisode: p.scenes[0]?.workEpisode ?? null`.
+  - placeId watch 안 reset 블록에 `currentSceneIndex.value = 0` 추가 (다른 place 진입 시 이전 인덱스 이월 방지).
+
+### 5. ShotDetailPage.vue (첫 씬만 사용)
+- `frontend/src/views/ShotDetailPage.vue`
+  - 신규 computed `sceneImageUrl = shot.value?.scenes[0]?.imageUrl ?? null` (carousel 없음 — 단일 비교 토글 + clip-path overlay 가 첫 씬을 본다).
+  - 템플릿의 `shot.sceneImageUrl` 8건 모두 → `sceneImageUrl` (computed) 로 교체. 비교 토글 / "드라마 원본" lbl-chip / clip-path overlay 분기.
+  - `shot.work.episode` / `shot.work.sceneTimestamp` 는 backend 가 primary 폴백 유지하므로 변경 없음.
+
+### 6. WorkDetailPage.vue (spot 카드에서 첫 씬만 사용)
+- `frontend/src/views/WorkDetailPage.vue`
+  - spot card 의 `s.workEpisode` → `s.scenes[0]?.workEpisode`, `s.sceneTimestamp` → `s.scenes[0]?.sceneTimestamp`, `s.sceneDescription` → `s.scenes[0]?.sceneDescription`.
+
+### 7. Spec fixture migration
+- `frontend/src/stores/__tests__/placeDetail.spec.ts` — fixture 의 평면 4필드 → `scenes: [{ id, imageUrl, workEpisode, sceneTimestamp, sceneDescription, orderIndex: 0 }]`.
+- `frontend/src/stores/__tests__/shotDetail.spec.ts` — `sceneImageUrl` 평면 → `scenes` 단일 항목.
+- `frontend/src/stores/__tests__/workDetail.spec.ts` — 두 spot fixture 의 평면 3필드 → 각자의 `scenes` 단일 항목.
+- `frontend/src/views/__tests__/PlaceDetailPage.spec.ts` — fixture 동일 마이그레이션.
+- `frontend/src/views/__tests__/ShotDetailPage.spec.ts` — fixture 동일 + 압인된 케이스명을 "compare toggle is hidden when **scenes is empty**" 로 (이전: "sceneImageUrl is null"), `noScene = { ...fixture, scenes: [] }`.
+- `frontend/src/views/__tests__/WorkDetailPage.spec.ts` — 두 spot fixture 동일 마이그레이션.
+
+## 검증
+- `cd frontend && node_modules/.bin/vue-tsc --noEmit` ✓ exit 0.
+- `cd frontend && node_modules/.bin/vitest run` ✓ **53 files / 607 tests passed**, 신규 5케이스 포함 (`src/components/place/__tests__/SceneCarousel.spec.ts`).
+- `cd frontend && npm run build` ✓ vite 빌드 성공 (PlaceDetailPage 청크 20.09 kB, gzip 6.99 kB — SceneCarousel 추가에도 미미한 증가).
+- `npm run lint` 는 SavedPage.spec.ts 의 pre-existing 3건(unused-vars) 만 잔여 — 본 task 와 무관(main HEAD 도 동일 에러). 본 task 가 만진 파일들은 ESLint 클린.
+
+## 변경 파일 (14건)
+- (N) `frontend/src/components/place/SceneCarousel.vue`
+- (N) `frontend/src/components/place/__tests__/SceneCarousel.spec.ts`
+- (M) `frontend/src/stores/placeDetail.ts`
+- (M) `frontend/src/stores/shotDetail.ts`
+- (M) `frontend/src/stores/workDetail.ts`
+- (M) `frontend/src/views/PlaceDetailPage.vue`
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/WorkDetailPage.vue`
+- (M) `frontend/src/stores/__tests__/placeDetail.spec.ts`
+- (M) `frontend/src/stores/__tests__/shotDetail.spec.ts`
+- (M) `frontend/src/stores/__tests__/workDetail.spec.ts`
+- (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/ShotDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/WorkDetailPage.spec.ts`
+
+---
+
+# Task #2 후속 — Hero carousel scene 전환 (사용자 추가 요청)
+
+## 컨텍스트
+- 사용자가 작은 96×140 thumbnail SceneCarousel 을 빼고, 기존 hero 영역의 큰 캐러셀(이미 cover image 1:N 무한 슬라이드 인프라 보유)을 scene 이미지로 전환하라고 함.
+- 백엔드 `place_cover_image` 엔티티는 그대로 둠 (나중에 쓸 가능성). 프론트만 cover image 사용을 hero 에서 중단하고 scene image 로 갈아끼움.
+
+## 변경 사항
+
+### 1. SceneCarousel 제거
+- (D) `frontend/src/components/place/SceneCarousel.vue`
+- (D) `frontend/src/components/place/__tests__/SceneCarousel.spec.ts`
+- 디렉터리 `frontend/src/components/place/` 통째로 제거.
+- `PlaceDetailPage.vue`: import 라인 + 작은 carousel 블록(이전 task 에서 추가했던 6라인) 통째로 삭제.
+- 더 이상 쓰지 않는 `currentSceneIndex` ref / `onSceneIndexChange` 함수 / placeId watch 안 reset 라인 제거.
+- 사용하지 않게 된 `.scene-compare` CSS 블록(약 24줄) 제거 — 본 task 의 변경으로 만들어진 orphan.
+
+### 2. Hero carousel 데이터 소스 전환 (`coverImageUrls` → `scenes`)
+- 무한 슬라이드 / clone 자리 / 드래그 / 자동전환 / dot / counter / prev/next 인프라는 그대로 두고 **데이터 바인딩만** 갈아끼움.
+- 템플릿:
+  - `v-if="place.coverImageUrls.length > N"` → `v-if="place.scenes.length > N"` (5군데).
+  - 진짜 슬라이드 v-for: `(url, i) in place.coverImageUrls` → `(s, i) in place.scenes`, `:src="s.imageUrl"`, `:alt="장면 ${i+1}"`, `:key="s.id"`.
+  - clone-of-last / clone-of-first 의 `:src` 와 `:alt` 도 scenes 기반.
+  - aria-label "이전 커버"/"다음 커버"/"커버 N 보기" → "이전 장면"/"다음 장면"/"장면 N 보기".
+  - counter 의 분모 `place.coverImageUrls.length` → `place.scenes.length`.
+- 스크립트:
+  - `place.value?.coverImageUrls.length ?? 0` (8군데) → `place.value?.scenes.length ?? 0` (sed 일괄).
+  - 자동전환 watch source `() => place.value?.coverImageUrls.length ?? 0` → `() => place.value?.scenes.length ?? 0`.
+  - 주석/comment 의 "cover image" / "single-cover" → "drama scene" / "단일 씬" 으로 정리.
+
+### 3. `currentScene` 인덱스 일원화 (= `realHeroSlide`)
+- 기존 `currentSceneIndex` ref + `onSceneIndexChange` 채널 제거. hero 가 곧 scene carousel 이므로 별도 인덱스 채널을 두지 않음.
+- `currentScene` computed → `place.scenes[realHeroSlide.value]` 직접 참조.
+- `currentSceneDescription` / `episodeLabel` 은 `currentScene` 통해 그대로 동작 → hero 슬라이드 변경 즉시 chip + section 본문 갱신.
+- placeId watch 안의 `heroSlide.value = 0` 만으로 새 place 진입 시 0번 씬으로 초기화 (별도 reset 라인 불필요).
+
+### 4. `coverImageUrls` 잔존 처리
+타입(`PlaceDetailPlace.coverImageUrls: string[]`) 은 백엔드가 계속 내려보내므로 유지. 다음 3개 경로에서만 참조하도록 정리됨:
+- `RelatedPlace.coverImageUrls` (관련 성지 카드 — 요약 surface, 그대로 유지).
+- `onShare` 의 share preview `imageUrl: p.coverImageUrls[0] ?? ''` (요약 surface, 유지).
+- `mapStore.markLastViewed` 의 `coverImageUrls: p.coverImageUrls` (지도 시트 카드 — 요약 surface, 유지).
+이 외 hero / detail 영역은 모두 `scenes` 로 통일.
+
+### 5. PlaceDetailPage.spec 수정
+- `mountPlaceDetailPage` override 키 `coverImageUrls?: string[]` → `sceneUrls?: string[]` (sugar). 내부에서 PlaceScene[] 로 변환해 `fixture.place.scenes` 를 덮어씀. 회차/타임스탬프/설명 메타는 hero 시각 단언 케이스에 무관하므로 null 로 채움.
+- 13개 hero 단언 케이스의 override 키만 일괄 rename (sed 89,$).
+- 테스트 description 의 "single-cover place" / "multi-cover place" / "per cover URL" → "single-scene" / "multi-scene" / "per scene".
+- fixture 의 `coverImageUrls`(line 43, 75, 82) 와 hero URL 문자열(`'https://img/cover-N.jpg'`) 은 손대지 않음 (요약 surface 데이터 + 단순 문자열 리터럴 — 동작 동일).
+
+## 검증
+- `cd frontend && node_modules/.bin/vue-tsc --noEmit` ✓ exit 0.
+- `cd frontend && node_modules/.bin/vitest run src/views/__tests__/PlaceDetailPage.spec.ts` ✓ **26 tests passed**.
+- `cd frontend && node_modules/.bin/vitest run` ✓ **52 files / 602 tests passed** (이전 53/607 에서 SceneCarousel 5케이스 + 1 spec 제거 → 52/602, hero carousel 26케이스 모두 scene 기반으로 그린).
+- `cd frontend && npm run build` ✓ vite 빌드 성공.
+
+## 추가 변경 파일
+- (D) `frontend/src/components/place/SceneCarousel.vue`
+- (D) `frontend/src/components/place/__tests__/SceneCarousel.spec.ts`
+- (M) `frontend/src/views/PlaceDetailPage.vue`
+- (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
+- (참고) `frontend/src/components/place/` 디렉터리 자체도 사라짐.

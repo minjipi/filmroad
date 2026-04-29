@@ -58,7 +58,7 @@ public class SecurityConfig {
                                 "/api/places/*/photos",
                                 "/api/photos/*",
                                 "/api/photos/*/comments",
-                                "/api/works/*",
+                                "/api/contents/*",
                                 "/api/feed",
                                 "/api/feed/**",
                                 "/api/search",
@@ -114,7 +114,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://172.30.1.10:5173"));
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://172.30.1.10:5173", "https://www.filmroad.kro.kr", "http://localhost:5174"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

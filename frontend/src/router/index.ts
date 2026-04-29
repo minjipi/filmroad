@@ -105,9 +105,9 @@ const routes: Array<RouteRecordRaw> = [
     props: true,
   },
   {
-    path: '/work/:id',
-    name: 'WorkDetail',
-    component: () => import('../views/WorkDetailPage.vue'),
+    path: '/content/:id',
+    name: 'ContentDetail',
+    component: () => import('../views/ContentDetailPage.vue'),
     props: true,
   },
   {

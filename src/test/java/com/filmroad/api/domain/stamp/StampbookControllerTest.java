@@ -35,15 +35,15 @@ class StampbookControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/stampbook returns hero counts and work progress bounded by totals")
-    void getStampbook_returnsHeroAndWorks() throws Exception {
+    @DisplayName("GET /api/stampbook returns hero counts and content progress bounded by totals")
+    void getStampbook_returnsHeroAndContents() throws Exception {
         mockMvc.perform(get("/api/stampbook").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.results.hero.worksCollectingCount", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.results.hero.contentsCollectingCount", greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.results.hero.placesCollectedCount", greaterThanOrEqualTo(1)))
-                .andExpect(jsonPath("$.results.works", not(empty())))
-                .andExpect(jsonPath("$.results.works[?(@.collectedCount > @.totalCount)]", hasSize(0)));
+                .andExpect(jsonPath("$.results.contents", not(empty())))
+                .andExpect(jsonPath("$.results.contents[?(@.collectedCount > @.totalCount)]", hasSize(0)));
     }
 
     @Test

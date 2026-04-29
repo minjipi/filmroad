@@ -82,8 +82,8 @@ public class SavedService {
                             .name(p.getName())
                             .regionLabel(p.getRegionLabel())
                             .coverImageUrls(toCoverImageUrls(p))
-                            .workId(p.getWork().getId())
-                            .workTitle(p.getWork().getTitle())
+                            .contentId(p.getContent().getId())
+                            .contentTitle(p.getContent().getTitle())
                             .distanceKm(distance)
                             .likeCount(p.getLikeCount())
                             .visited(stampRepository.existsByUserIdAndPlaceId(userId, p.getId()))
@@ -143,7 +143,7 @@ public class SavedService {
         long totalLikeCount = 0;
         double estimatedRouteKm = 0;
         Double prevLat = null, prevLng = null;
-        Set<Long> distinctWorkIds = new HashSet<>();
+        Set<Long> distinctContentIds = new HashSet<>();
 
         int idx = 0;
         for (SavedPlace sp : savedPlaces) {
@@ -151,7 +151,7 @@ public class SavedService {
             Place p = sp.getPlace();
             Date visitedAt = visitedAtByPlace.get(p.getId());
             totalLikeCount += p.getLikeCount();
-            distinctWorkIds.add(p.getWork().getId());
+            distinctContentIds.add(p.getContent().getId());
             if (prevLat != null) {
                 estimatedRouteKm += GeoUtils.haversineKm(
                         prevLat, prevLng, p.getLatitude(), p.getLongitude());
@@ -167,9 +167,9 @@ public class SavedService {
                     .coverImageUrl(p.getPrimaryCoverImageUrl())
                     .latitude(p.getLatitude())
                     .longitude(p.getLongitude())
-                    .workId(p.getWork().getId())
-                    .workTitle(p.getWork().getTitle())
-                    .workEpisode(formatWorkEpisode(p.getPrimaryWorkEpisode(), p.getPrimarySceneTimestamp()))
+                    .contentId(p.getContent().getId())
+                    .contentTitle(p.getContent().getTitle())
+                    .contentEpisode(formatContentEpisode(p.getPrimaryContentEpisode(), p.getPrimarySceneTimestamp()))
                     .likeCount(p.getLikeCount())
                     .photoCount(p.getPhotoCount())
                     .distanceKm(GeoUtils.distanceKmOrNull(lat, lng, p.getLatitude(), p.getLongitude()))
@@ -191,9 +191,9 @@ public class SavedService {
         int visitedCount = visitedPlacesList.size();
         int certifiedCount = (int) items.stream().filter(CollectionItemDto::isCertified).count();
 
-        // kind/workTitle: 수록 place 들이 모두 같은 작품이면 WORK, 아니면 CUSTOM.
-        String kind = (distinctWorkIds.size() == 1 && totalPlaces > 0) ? "WORK" : "CUSTOM";
-        String workTitle = "WORK".equals(kind) ? items.get(0).getWorkTitle() : null;
+        // kind/contentTitle: 수록 place 들이 모두 같은 작품이면 WORK, 아니면 CUSTOM.
+        String kind = (distinctContentIds.size() == 1 && totalPlaces > 0) ? "CONTENT" : "CUSTOM";
+        String contentTitle = "CONTENT".equals(kind) ? items.get(0).getContentTitle() : null;
 
         String coverImageUrl = null;
         if (collection.getCoverPlaceId() != null) {
@@ -224,7 +224,7 @@ public class SavedService {
                 .subtitle(collection.getDescription())
                 .coverImageUrl(coverImageUrl)
                 .kind(kind)
-                .workTitle(workTitle)
+                .contentTitle(contentTitle)
                 .createdAt(collection.getCreatedAt())
                 .totalPlaces(totalPlaces)
                 .visitedPlaces(visitedCount)
@@ -239,9 +239,9 @@ public class SavedService {
     }
 
     /**
-     * place 의 primary scene workEpisode / sceneTimestamp 를 "1회 00:15:24" 형태로 결합. 둘 다 없으면 null.
+     * place 의 primary scene contentEpisode / sceneTimestamp 를 "1회 00:15:24" 형태로 결합. 둘 다 없으면 null.
      */
-    private static String formatWorkEpisode(String episode, String timestamp) {
+    private static String formatContentEpisode(String episode, String timestamp) {
         boolean hasEp = episode != null && !episode.isBlank();
         boolean hasTs = timestamp != null && !timestamp.isBlank();
         if (!hasEp && !hasTs) return null;

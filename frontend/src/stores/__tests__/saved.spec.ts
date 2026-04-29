@@ -28,8 +28,8 @@ const fixture: SavedResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/p10.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       distanceKm: 1.2,
       likeCount: 3200,
       visited: false,
@@ -40,8 +40,8 @@ const fixture: SavedResponse = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/p13.jpg'],
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       distanceKm: 4.8,
       likeCount: 5100,
       visited: true,
@@ -99,7 +99,7 @@ describe('saved store', () => {
     expect(store.loading).toBe(false);
   });
 
-  it('fetch hydrates savedPlaceIds from items so isSaved(placeId) works across pages', async () => {
+  it('fetch hydrates savedPlaceIds from items so isSaved(placeId) contents across pages', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useSavedStore();
     await store.fetch();
@@ -192,8 +192,8 @@ describe('saved store', () => {
             name: 'x',
             regionLabel: 'y',
             coverImageUrls: ['z'],
-            workId: 1,
-            workTitle: 'w',
+            contentId: 1,
+            contentTitle: 'w',
             distanceKm: null,
             likeCount: 0,
             visited: false,
@@ -254,8 +254,8 @@ describe('saved store', () => {
           name: '영진 커피숍',
           regionLabel: '강릉시 주문진읍',
           coverImageUrls: ['https://img/p99.jpg'],
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           distanceKm: 0.4,
           likeCount: 120,
           visited: false,
@@ -417,9 +417,9 @@ describe('saved store', () => {
       ],
       totalCount: 3,
       items: [
-        { placeId: 10, name: 'A', regionLabel: '', coverImageUrls: [], workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
-        { placeId: 11, name: 'B', regionLabel: '', coverImageUrls: [], workId: 1, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
-        { placeId: 12, name: 'C', regionLabel: '', coverImageUrls: [], workId: 2, workTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 2 },
+        { placeId: 10, name: 'A', regionLabel: '', coverImageUrls: [], contentId: 1, contentTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 11, name: 'B', regionLabel: '', coverImageUrls: [], contentId: 1, contentTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 1 },
+        { placeId: 12, name: 'C', regionLabel: '', coverImageUrls: [], contentId: 2, contentTitle: '', distanceKm: null, likeCount: 0, visited: false, collectionId: 2 },
       ],
       nearbyRouteSuggestion: null,
     };

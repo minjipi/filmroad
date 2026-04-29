@@ -48,8 +48,8 @@ export interface MyPhoto {
   placeId: number;
   placeName: string;
   regionLabel: string;
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   visibility: PhotoVisibility;
   createdAt: string;
 }

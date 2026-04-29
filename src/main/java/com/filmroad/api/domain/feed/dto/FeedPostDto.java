@@ -16,7 +16,7 @@ public class FeedPostDto {
     private String dramaSceneImageUrl;
     private FeedAuthorDto author;
     private FeedPlaceDto place;
-    private FeedWorkDto work;
+    private FeedContentDto content;
     private int likeCount;
     private int commentCount;
     private boolean liked;

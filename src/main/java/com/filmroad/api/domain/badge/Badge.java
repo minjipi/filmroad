@@ -45,6 +45,6 @@ public class Badge extends BaseEntity {
     @Column(name = "condition_threshold")
     private Integer conditionThreshold;
 
-    @Column(name = "condition_work_id")
-    private Long conditionWorkId;
+    @Column(name = "condition_content_id")
+    private Long conditionContentId;
 }

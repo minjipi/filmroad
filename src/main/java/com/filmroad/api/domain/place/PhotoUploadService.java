@@ -181,7 +181,7 @@ public class PhotoUploadService {
         // 인지하지만, 부정 업로드(다른 장소 사진) 로 보상을 챙기지는 못함. 정책 (b) 와 호환.
         boolean gpsVerified = post.getGpsScore() >= GPS_VERIFY_THRESHOLD;
 
-        long workTotalCount = placeRepository.countByWorkId(place.getWork().getId());
+        long contentTotalCount = placeRepository.countByContentId(place.getContent().getId());
         StampRewardDto stampReward = null;
         RewardDeltaDto rewardDelta = null;
 
@@ -203,17 +203,17 @@ public class PhotoUploadService {
             userRepository.save(user);
 
             long stampCount = stampRepository.countByUserId(userId);
-            long workStampCount = stampRepository.countByUserIdAndWorkId(userId, place.getWork().getId());
-            int workPercent = workTotalCount == 0 ? 0 : (int) Math.round(100.0 * workStampCount / workTotalCount);
+            long contentStampCount = stampRepository.countByUserIdAndContentId(userId, place.getContent().getId());
+            int workPercent = contentTotalCount == 0 ? 0 : (int) Math.round(100.0 * contentStampCount / contentTotalCount);
 
-            List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, workStampCount, workTotalCount);
+            List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, contentStampCount, contentTotalCount);
 
             stampReward = StampRewardDto.builder()
                     .placeName(place.getName())
-                    .workId(place.getWork().getId())
-                    .workTitle(place.getWork().getTitle())
-                    .collectedCount(workStampCount)
-                    .totalCount(workTotalCount)
+                    .contentId(place.getContent().getId())
+                    .contentTitle(place.getContent().getTitle())
+                    .collectedCount(contentStampCount)
+                    .totalCount(contentTotalCount)
                     .percent(workPercent)
                     .build();
 
@@ -283,7 +283,7 @@ public class PhotoUploadService {
         }
     }
 
-    private List<UserBadgeDto> awardBadges(User user, Place place, long stampCount, long workStampCount, long workTotalCount) {
+    private List<UserBadgeDto> awardBadges(User user, Place place, long stampCount, long contentStampCount, long contentTotalCount) {
         List<UserBadgeDto> awarded = new ArrayList<>();
         List<Badge> catalog = badgeRepository.findAllByOrderByOrderIndexAsc();
         for (Badge b : catalog) {
@@ -291,10 +291,10 @@ public class PhotoUploadService {
             boolean met = switch (b.getConditionType()) {
                 case STAMP_COUNT -> b.getConditionThreshold() != null && stampCount >= b.getConditionThreshold();
                 case STREAK -> b.getConditionThreshold() != null && user.getStreakDays() >= b.getConditionThreshold();
-                case WORK_COMPLETE -> b.getConditionWorkId() != null
-                        && b.getConditionWorkId().equals(place.getWork().getId())
-                        && workTotalCount > 0
-                        && workStampCount >= workTotalCount;
+                case WORK_COMPLETE -> b.getConditionContentId() != null
+                        && b.getConditionContentId().equals(place.getContent().getId())
+                        && contentTotalCount > 0
+                        && contentStampCount >= contentTotalCount;
                 default -> false;
             };
             if (met) {

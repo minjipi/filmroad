@@ -415,3 +415,195 @@ After:
 ## 빌드
 WSL Gradle FileLock 환경 그대로. 변경은 단순 필드/매핑 1줄 제거이며 호출처 시그니처
 변경 없음 → 컴파일/테스트 회귀 위험 0. CI / 로컬 IDE 검증.
+
+---
+
+# Backend Implementation — Task #28 (한국관광공사 API 프록시)
+
+브랜치: `feat/nearby-restaurants` · 커밋: `61ff982` (16 files, +994 / -2)
+
+## 작업 범위
+PlaceDetailPage 의 "주변 맛집" 섹션을 위해 한국관광공사 KorService2 의 `locationBasedList2`
+API 를 백엔드에서 프록시. KakaoSection 과 동일하게 외부 API 키 미설정/장애 시에도 200 +
+빈 리스트로 응답 (프론트가 섹션을 자연스럽게 처리).
+
+## 새 패키지 — `integration/koreatourism/`
+- `KoreaTourismProperties` (record, `@ConfigurationProperties("korea-tourism")`) — `disabled-korea-tourism` sentinel 패턴
+- `KoreaTourismClient` — RestClient 기반, `locationBasedList2` 호출. 고정 파라미터 + 동적 좌표/시군구. timeout 3s.
+- `KoreaTourismItem` (record) — 외부 응답 정규화 record (item 한 개)
+- `RegionCode` (record) — `lDongRegnCd / lDongSignguCd` 한 쌍
+- `RegionCodeLookup` — 부팅 시 `data/koreaTourism-region-codes-raw.json` (한국관광공사 ldongCode2 raw 응답 그대로 264개) 로드.
+  - 정확 매칭 (광역+시군구 정규화 문자열) + 토큰 매칭 (광역/시군구 양쪽이 input 에 등장) fallback
+  - 매핑 미스 시 좌표만으로 호출 (radius=200km 라 보조 필터 누락도 동작)
+
+## 새 도메인 산출물 — `domain/place/`
+- `NearbyRestaurantService` — placeId → Place 조회 (없으면 PLACE_NOT_FOUND 404) → RegionCode lookup → 외부 호출 → DTO 매핑
+- `dto/NearbyRestaurantsResponse` (래퍼) + `dto/NearbyRestaurantItem` (평탄 항목)
+- `PlaceController.GET /api/places/{id}/nearby-restaurants` — Operation/ApiResponses 메타
+
+## API 응답 형태 (frontend-dev 가이드)
+```
+GET /api/places/{id}/nearby-restaurants
+인증: 불필요 (permitAll)
+```
+```json
+{
+  "results": {
+    "items": [
+      {
+        "contentId": "C-1234",
+        "title": "주문진해전어",
+        "addr1": "강원 강릉시 주문진읍 ...",
+        "distance": 120,
+        "tel": "033-661-1234",
+        "imageUrl": "https://image.example.com/abc.jpg",
+        "lat": 37.8927,
+        "lng": 128.8350
+      }
+    ]
+  }
+}
+```
+- 외부 API 의 `mapX/mapY` 는 백엔드에서 `lng/lat` 로 의미 있는 이름으로 평탄화
+- 키 미설정/장애/응답 비어있음 → `items: []` (200, 빈 리스트)
+- 존재하지 않는 placeId → 404 PLACE_NOT_FOUND
+
+## 설정 / 보안
+- `application.yml` + `application-test.yml`: `korea-tourism.*` 블록 추가. 서비스키는 `KOREA_TOURISM_KEY` 환경변수에서 주입, 누락 시 sentinel.
+- `SecurityConfig`: `/api/places/*/nearby-restaurants` GET permitAll
+- `FilmroadApplication`: `@ConfigurationPropertiesScan basePackageClasses` 에 `KoreaTourismProperties` 추가
+- **서비스키 하드코딩 0** (grep 검증 완료) — 환경변수 only
+
+## 테스트
+- `NearbyRestaurantServiceTest` (Mockito, 5 케이스):
+  1. unknown placeId → BaseException, 외부 호출 없음
+  2. RegionCode hit → client 에 RegionCode 그대로 전달
+  3. RegionCode miss → client 에 null 전달 (좌표만)
+  4. 외부 빈 결과 → response.items=[]
+  5. 외부 정상 결과 → KoreaTourismItem → NearbyRestaurantItem 매핑 (mapX→lng, mapY→lat)
+- `PlaceControllerTest` 통합 2 케이스:
+  1. `/api/places/10/nearby-restaurants`: disabled key (test profile) → 200 + items=[]
+  2. `/api/places/99999/nearby-restaurants`: 404
+
+## 회귀 점검 (이전 사고 학습)
+- 기존 코드 시그니처 변경 0 — `PlaceController` 에 DI 필드 + 라우트 메서드 추가만
+- 새 DTO 는 `@Builder` + 정적 팩토리 패턴 (`@AllArgsConstructor` 회피) → 위치형 호출처 위험 차단
+- 기존 DTO/엔티티 무수정 — 컴파일 회귀 가능성 0
+
+## 비고
+- 캐싱: 본 commit 에선 적용 안 함. PlaceDetailPage 트래픽 패턴 + 한국관광공사 quota 정책 확인 후 후속 task 로 추가 가능 (KakaoPlaceInfo 의 `lastSyncedAt + ttl` 패턴 적용 가능).
+- 매핑 JSON 은 한국관광공사 `ldongCode2` raw 응답 형태 그대로 보관 — 데이터 갱신 시 API 한 번 호출해 파일 교체로 끝.
+
+---
+
+# Backend Implementation — feat/place-scene-images (task #33)
+
+## 작업 범위
+`Place.scene_image_url` 단일 컬럼 + `Place.work_episode/scene_timestamp/scene_description` 평면 메타 3 종을
+`place_scene_image` 자식 테이블 (1:N) 로 분리. 한 place 가 여러 씬을 가질 수 있는 데이터 모델 확립.
+모델 패턴은 기존 `PlaceCoverImage` (cascade ALL + orphanRemoval + @OrderBy("imageOrderIndex ASC")) 그대로.
+
+## 변경된 파일
+
+### 신규 (production)
+- `src/main/java/com/filmroad/api/domain/place/PlaceSceneImage.java` — 자식 엔티티 (`place_id, image_url, image_order_index, work_episode, scene_timestamp, scene_description`). image_url NOT NULL, 메타 3종 nullable. `attachToPlace` package-private 양방향 헬퍼.
+- `src/main/java/com/filmroad/api/domain/place/dto/PlaceSceneDto.java` — 응답 DTO. `id/imageUrl/workEpisode/sceneTimestamp/sceneDescription/orderIndex` + `from(PlaceSceneImage)` 팩토리.
+
+### 수정 (production - entity / 헬퍼)
+- `src/main/java/com/filmroad/api/domain/place/Place.java`
+  - 컬럼 4종 (`sceneImageUrl/workEpisode/sceneTimestamp/sceneDescription`) 모두 제거
+  - `@OneToMany sceneImages` 추가 (cascade ALL + orphanRemoval + LAZY + OrderBy)
+  - `addSceneImage(...)` 양방향 헬퍼
+  - `getPrimarySceneImageUrl/getPrimaryWorkEpisode/getPrimarySceneTimestamp/getPrimarySceneDescription` 4개 폴백 getter — 요약 DTO 평면 필드 채우는 용도
+
+### 수정 (production - 상세 DTO 3종, 평면 → `scenes: List<PlaceSceneDto>`)
+- `src/main/java/com/filmroad/api/domain/place/dto/PlaceFullDto.java` — 4 평면 필드 제거, `scenes` 추가
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoDetailResponse.java` — `sceneImageUrls` 제거, `scenes` 추가
+- `src/main/java/com/filmroad/api/domain/work/dto/WorkSpotDto.java` — 평면 3 필드 제거, `scenes` 추가
+
+### 수정 (production - 요약 DTO 콜사이트, 평면 유지하되 primary fallback)
+- `src/main/java/com/filmroad/api/domain/feed/FeedService.java` → FeedWorkDto.workEpisode/sceneTimestamp = primary
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoDetailWorkDto.java` → episode/sceneTimestamp = primary
+- `src/main/java/com/filmroad/api/domain/place/dto/RelatedPlaceDto.java` → workEpisode = primary
+- `src/main/java/com/filmroad/api/domain/place/dto/PhotoUploadResponse.java` → workEpisode = primary
+- `src/main/java/com/filmroad/api/domain/place/GalleryService.java` → GalleryPlaceHeaderDto.workEpisode = primary
+- `src/main/java/com/filmroad/api/domain/saved/SavedService.java` → CollectionItemDto.workEpisode = `formatWorkEpisode(primaryEp, primaryTs)`
+
+### 수정 (production - 서비스)
+- `src/main/java/com/filmroad/api/domain/place/PhotoDetailService.java` — `scenes` 매핑
+- `src/main/java/com/filmroad/api/domain/work/WorkDetailService.java` — `scenes` 매핑
+- `src/main/java/com/filmroad/api/domain/place/ShotScoringService.java` — **모든 sceneImage 순회 → max(similarity)**.
+  pHash 비용 (32x32 DCT) 은 외부 다운로드 시간 대비 미미 → 가산 부담 없음. 빈 컬렉션이면 0.
+- `src/main/java/com/filmroad/api/domain/place/dto/ShotScoreDto.java` — javadoc primary 표기 갱신
+
+### 수정 (production - 마이그레이션 / seed)
+- `src/main/java/com/filmroad/api/config/LegacyPhotoSchemaMigration.java`
+  - 4 컬럼 (scene_image_url + work_episode + scene_timestamp + scene_description) 한 번에 자식 행으로 카피 후 모두 drop
+  - `information_schema.columns` 사전 체크로 컬럼 부재 시 SQL 예외 자체를 회피 (catch 만으로는 트랜잭션이 rollback-only 마킹돼 ApplicationContext 부팅 실패하던 문제)
+  - fresh DB 자동 skip
+- `src/main/resources/data.sql`
+  - `UPDATE place SET work_episode/scene_timestamp/scene_description/scene_image_url` 8건 모두 제거
+  - `INSERT INTO place_scene_image` 8 행을 4 메타 모두 채우도록 재작성
+  - **place 10/13/14 에 order=1 멀티 씬 행 3건 추가** (id 9~11) — carousel UI 시각 검증용
+  - 컬럼 drop 은 LegacyPhotoSchemaMigration 이 카피 후 처리하므로 data.sql 에서는 미리 drop 안 함 (dev DB 데이터 손실 방지)
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/place/PlaceControllerTest.java` — `place.workEpisode/sceneTimestamp` 평면 jsonPath → `place.scenes` 컬렉션 확인 + `scenes[0].workEpisode/sceneTimestamp/imageUrl/orderIndex` 어서션
+- `src/test/java/com/filmroad/api/domain/place/ShotScoringServiceTest.java` — `Place.builder().sceneImageUrl(url)` 빌더 → `place.addSceneImage(PlaceSceneImage.builder()...)` 헬퍼 사용. null 인 경우 컬렉션 비워둠
+
+## API 계약 (frontend-dev 와 합의)
+
+### 상세 DTO 3종: 평면 필드 4 제거 → `scenes: PlaceSceneDto[]`
+1. `GET /api/places/{id}` (PlaceFullDto)
+   - 삭제: `workEpisode`, `sceneTimestamp`, `sceneDescription`, `sceneImageUrls`
+   - 추가: `scenes: PlaceSceneDto[]`
+2. `GET /api/photos/{id}` (PhotoDetailResponse)
+   - 삭제: `sceneImageUrls`
+   - 추가: `scenes: PlaceSceneDto[]`
+3. `GET /api/works/{id}` 의 spots[] (WorkSpotDto)
+   - 삭제: `workEpisode`, `sceneTimestamp`, `sceneDescription`
+   - 추가: `scenes: PlaceSceneDto[]`
+
+### 신규 PlaceSceneDto shape
+```ts
+type PlaceSceneDto = {
+  id: number
+  imageUrl: string
+  workEpisode: string | null
+  sceneTimestamp: string | null
+  sceneDescription: string | null
+  orderIndex: number   // 0 = 대표(primary)
+}
+```
+
+### 요약 DTO (변경 없음 — 백엔드가 primary 폴백)
+- `FeedWorkDto.workEpisode/sceneTimestamp`
+- `PhotoDetailWorkDto.episode/sceneTimestamp`
+- `RelatedPlaceDto.workEpisode`
+- `CollectionItemDto.workEpisode` ("5회 00:31:02" 합성)
+- `GalleryPlaceHeaderDto.workEpisode`
+- `PhotoUploadResponse.workEpisode`
+- `FeedPostDto.dramaSceneImageUrl` (단일 string, 피드 카드 1장 비교)
+
+## 마이그레이션 안전성
+- 부팅 순서: Hibernate ddl-auto → data.sql → CommandLineRunner(LegacyPhotoSchemaMigration)
+- **fresh DB**: 새 entity 로 schema 생성, `place.scene_*` 컬럼 자체가 없음. data.sql 도 `INSERT INTO place_scene_image` 만 사용. CommandLineRunner 는 information_schema 체크 후 skip.
+- **기존 dev DB**: ddl-auto=update 가 `scene_*` 컬럼 보존. data.sql 의 INSERT IGNORE 는 자식 테이블에 새 행 추가. CommandLineRunner 가 (1) `NOT EXISTS` 가드로 자식 행 없는 place 만 카피 (2) 4 컬럼 모두 drop.
+- 카피 트리거 키: `image_url IS NOT NULL AND <> ''`. 메타만 있고 이미지 없는 historical row 는 새 모델로 표현 불가하므로 drop 시 손실 — 시드/실서비스 모두 4종이 항상 같이 들어와서 영향 없다고 판단.
+
+## 테스트
+- `./gradlew compileJava compileTestJava` → BUILD SUCCESSFUL
+- `./gradlew test` → BUILD SUCCESSFUL
+  - **206 tests / 0 failures / 0 ignored** (실행 18.6s, 빌드 2m 6s)
+- 핵심 회귀 점검:
+  - `PlaceControllerTest`: scenes 컬렉션 노출 확인
+  - `SavedControllerTest`: `visitedPlacesList[0].workEpisode == "5회 00:31:02"` 그대로 그린 (place 14 order=0 시드)
+  - `ShotScoringServiceTest`: 51 케이스 그린 (null/empty/single scene 모두)
+  - `PhotoControllerTest`: 업로드 → similarity/total/gps 응답 그린 (1:N 모델 + max similarity 로직)
+
+## 의사결정 메모
+1. **상세 vs 요약 DTO 분리**: 상세 3 DTO 만 `scenes` 노출, 요약 6 DTO 는 평면 + primary 폴백. 카드/리스트 UI 가 1장 메타만 쓰니 프론트 수정 최소화.
+2. **ShotScoringService max-similarity**: 같은 place 의 모든 씬 후보 중 best score 채택. 사용자가 어떤 씬을 재현했는지 알 수 없어 최선의 매칭 1건 기준이 자연스러움.
+3. **마이그레이션 트랜잭션 폴루션 회피**: `try { native query } catch (...)` 만으로는 부족. JPA 트랜잭션이 rollback-only 마킹돼 commit 시점에 `UnexpectedRollbackException` → ApplicationContext 부팅 실패. information_schema 사전 체크로 예외 자체를 차단.
+4. **메타-only row 손실 감수**: 기존 데이터 모두 4종이 함께 들어오는 패턴. image_url 없이 메타만 있는 historical row 는 사실상 없음. drop 으로 손실 허용.
+5. **commit 보류**: 프론트 작업 끝나면 합께 한 commit 으로 — team-lead 지시.

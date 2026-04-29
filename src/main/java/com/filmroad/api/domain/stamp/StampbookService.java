@@ -10,7 +10,7 @@ import com.filmroad.api.domain.badge.dto.UserBadgeDto;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.dto.StampbookHeroDto;
 import com.filmroad.api.domain.stamp.dto.StampbookResponse;
-import com.filmroad.api.domain.stamp.dto.WorkProgressDto;
+import com.filmroad.api.domain.stamp.dto.ContentProgressDto;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 public class StampbookService {
 
     private static final int LOCKED_BADGE_LIMIT = 3;
-    private static final String[] WORK_GRADIENTS = {"sky-violet", "amber-coral", "mint-sky", "indigo-violet", "ink-violet"};
+    private static final String[] CONTENT_GRADIENTS = {"sky-violet", "amber-coral", "mint-sky", "indigo-violet", "ink-violet"};
 
     private final StampRepository stampRepository;
     private final UserRepository userRepository;
@@ -46,34 +46,34 @@ public class StampbookService {
         List<Stamp> allStamps = stampRepository.findByUserIdOrderByAcquiredAtDesc(userId);
         long stampCount = allStamps.size();
 
-        Map<Long, List<Stamp>> stampsByWork = allStamps.stream()
-                .collect(Collectors.groupingBy(s -> s.getPlace().getWork().getId()));
+        Map<Long, List<Stamp>> stampsByContent = allStamps.stream()
+                .collect(Collectors.groupingBy(s -> s.getPlace().getContent().getId()));
 
-        List<WorkProgressDto> works = new ArrayList<>();
-        long completedWorksCount = 0;
-        for (Map.Entry<Long, List<Stamp>> entry : stampsByWork.entrySet()) {
-            Long workId = entry.getKey();
+        List<ContentProgressDto> contents = new ArrayList<>();
+        long completedContentsCount = 0;
+        for (Map.Entry<Long, List<Stamp>> entry : stampsByContent.entrySet()) {
+            Long contentId = entry.getKey();
             List<Stamp> stamps = entry.getValue();
             long collectedCount = stamps.size();
-            long totalCount = placeRepository.countByWorkId(workId);
+            long totalCount = placeRepository.countByContentId(contentId);
             int percent = totalCount == 0 ? 0 : (int) Math.round(100.0 * collectedCount / totalCount);
             boolean completed = totalCount > 0 && collectedCount >= totalCount;
-            if (completed) completedWorksCount++;
+            if (completed) completedContentsCount++;
 
             Stamp sample = stamps.get(0);
-            works.add(WorkProgressDto.builder()
-                    .workId(workId)
-                    .title(sample.getPlace().getWork().getTitle())
-                    .posterUrl(sample.getPlace().getWork().getPosterUrl())
+            contents.add(ContentProgressDto.builder()
+                    .contentId(contentId)
+                    .title(sample.getPlace().getContent().getTitle())
+                    .posterUrl(sample.getPlace().getContent().getPosterUrl())
                     .year(null)
                     .collectedCount(collectedCount)
                     .totalCount(totalCount)
                     .percent(percent)
                     .completed(completed)
-                    .gradient(WORK_GRADIENTS[(int) (workId % WORK_GRADIENTS.length)])
+                    .gradient(CONTENT_GRADIENTS[(int) (contentId % CONTENT_GRADIENTS.length)])
                     .build());
         }
-        works.sort((a, b) -> Long.compare(a.getWorkId(), b.getWorkId()));
+        contents.sort((a, b) -> Long.compare(a.getContentId(), b.getContentId()));
 
         List<UserBadge> acquiredUserBadges = userBadgeRepository.findByUserIdOrderByAcquiredAtDesc(userId);
         Set<Long> acquiredBadgeIds = acquiredUserBadges.stream()
@@ -95,15 +95,15 @@ public class StampbookService {
         }
 
         StampbookHeroDto hero = StampbookHeroDto.builder()
-                .worksCollectingCount(stampsByWork.size())
+                .contentsCollectingCount(stampsByContent.size())
                 .placesCollectedCount(stampCount)
                 .badgesCount(acquiredUserBadges.size())
-                .completedWorksCount(completedWorksCount)
+                .completedContentsCount(completedContentsCount)
                 .build();
 
         return StampbookResponse.builder()
                 .hero(hero)
-                .works(works)
+                .contents(contents)
                 .recentBadges(recentBadges)
                 .build();
     }
@@ -117,14 +117,14 @@ public class StampbookService {
         int current = switch (b.getConditionType()) {
             case STAMP_COUNT -> (int) stampCount;
             case STREAK -> user == null ? 0 : user.getStreakDays();
-            case WORK_COMPLETE -> b.getConditionWorkId() == null
+            case WORK_COMPLETE -> b.getConditionContentId() == null
                     ? 0
-                    : (int) stampRepository.countByUserIdAndWorkId(userId, b.getConditionWorkId());
+                    : (int) stampRepository.countByUserIdAndContentId(userId, b.getConditionContentId());
             default -> 0;
         };
         int threshold;
-        if (b.getConditionType() == BadgeConditionType.WORK_COMPLETE && b.getConditionWorkId() != null) {
-            threshold = (int) placeRepository.countByWorkId(b.getConditionWorkId());
+        if (b.getConditionType() == BadgeConditionType.WORK_COMPLETE && b.getConditionContentId() != null) {
+            threshold = (int) placeRepository.countByContentId(b.getConditionContentId());
         } else {
             threshold = b.getConditionThreshold() == null ? 0 : b.getConditionThreshold();
         }

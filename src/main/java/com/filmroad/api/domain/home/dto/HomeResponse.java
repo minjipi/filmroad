@@ -9,7 +9,7 @@ import java.util.List;
 @Builder
 public class HomeResponse {
     private HeroDto hero;
-    private List<WorkSummaryDto> works;
-    private List<WorkSummaryDto> popularWorks;
+    private List<ContentSummaryDto> contents;
+    private List<ContentSummaryDto> popularContents;
     private List<PlaceSummaryDto> places;
 }

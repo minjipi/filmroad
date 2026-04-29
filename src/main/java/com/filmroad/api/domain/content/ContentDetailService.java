@@ -1,4 +1,4 @@
-package com.filmroad.api.domain.work;
+package com.filmroad.api.domain.content;
 
 import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
@@ -12,10 +12,10 @@ import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.place.dto.PlaceSceneDto;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
-import com.filmroad.api.domain.work.dto.WorkDetailDto;
-import com.filmroad.api.domain.work.dto.WorkDetailResponse;
-import com.filmroad.api.domain.work.dto.WorkProgressSummaryDto;
-import com.filmroad.api.domain.work.dto.WorkSpotDto;
+import com.filmroad.api.domain.content.dto.ContentDetailDto;
+import com.filmroad.api.domain.content.dto.ContentDetailResponse;
+import com.filmroad.api.domain.content.dto.ContentProgressSummaryDto;
+import com.filmroad.api.domain.content.dto.ContentSpotDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,23 +26,23 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class WorkDetailService {
+public class ContentDetailService {
 
-    private final WorkRepository workRepository;
+    private final ContentRepository contentRepository;
     private final PlaceRepository placeRepository;
     private final StampRepository stampRepository;
     private final BadgeRepository badgeRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public WorkDetailResponse getWork(Long workId) {
-        Work work = workRepository.findById(workId)
-                .orElseThrow(() -> BaseException.of(BaseResponseStatus.WORK_NOT_FOUND));
+    public ContentDetailResponse getContent(Long contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.CONTENT_NOT_FOUND));
 
         Long userId = currentUser.currentUserId();
-        List<Place> places = placeRepository.findByWorkIdOrderByIdAsc(workId);
+        List<Place> places = placeRepository.findByContentIdOrderByIdAsc(contentId);
 
-        List<Stamp> userStamps = stampRepository.findByUserIdAndWorkId(userId, workId);
+        List<Stamp> userStamps = stampRepository.findByUserIdAndContentId(userId, contentId);
         Map<Long, Stamp> stampByPlaceId = new HashMap<>();
         for (Stamp s : userStamps) {
             stampByPlaceId.put(s.getPlace().getId(), s);
@@ -51,9 +51,9 @@ public class WorkDetailService {
         long totalCount = places.size();
         int percent = totalCount == 0 ? 0 : (int) Math.round(100.0 * collectedCount / totalCount);
 
-        List<WorkSpotDto> spots = places.stream().map(p -> {
+        List<ContentSpotDto> spots = places.stream().map(p -> {
             Stamp s = stampByPlaceId.get(p.getId());
-            return WorkSpotDto.builder()
+            return ContentSpotDto.builder()
                     .placeId(p.getId())
                     .name(p.getName())
                     .regionShort(shortenRegion(p.getRegionLabel()))
@@ -67,25 +67,25 @@ public class WorkDetailService {
                     .build();
         }).toList();
 
-        WorkProgressSummaryDto progress = WorkProgressSummaryDto.builder()
+        ContentProgressSummaryDto progress = ContentProgressSummaryDto.builder()
                 .collectedCount(collectedCount)
                 .totalCount(totalCount)
                 .percent(percent)
-                .nextBadgeText(nextBadgeText(workId, collectedCount, totalCount))
+                .nextBadgeText(nextBadgeText(contentId, collectedCount, totalCount))
                 .build();
 
-        return WorkDetailResponse.builder()
-                .work(WorkDetailDto.from(work))
+        return ContentDetailResponse.builder()
+                .content(ContentDetailDto.from(content))
                 .progress(progress)
                 .spots(spots)
                 .build();
     }
 
-    private String nextBadgeText(Long workId, long collected, long total) {
+    private String nextBadgeText(Long contentId, long collected, long total) {
         if (collected >= total) return null;
         return badgeRepository.findAllByOrderByOrderIndexAsc().stream()
                 .filter(b -> b.getConditionType() == BadgeConditionType.WORK_COMPLETE)
-                .filter(b -> workId.equals(b.getConditionWorkId()))
+                .filter(b -> contentId.equals(b.getConditionContentId()))
                 .findFirst()
                 .map((Badge b) -> (total - collected) + "곳 더 모으면 " + b.getName() + " 뱃지")
                 .orElse(null);

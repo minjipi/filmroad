@@ -26,9 +26,9 @@ import { mountWithStubs } from './__helpers__/mount';
 
 const target: CaptureTarget = {
   placeId: 10,
-  workId: 1,
-  workTitle: '도깨비',
-  workEpisode: '1회',
+  contentId: 1,
+  contentTitle: '도깨비',
+  contentEpisode: '1회',
   placeName: '주문진 영진해변 방파제',
   sceneImageUrl: 'https://img/scene.jpg',
 };

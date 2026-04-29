@@ -24,7 +24,7 @@
       </nav>
 
       <div class="feed-scroll no-scrollbar">
-        <!-- Work-title chip row — filters the grid client-side. "전체"
+        <!-- Content-title chip row — filters the grid client-side. "전체"
              resets to the full list. Mirrors 13-feed.html's .chip-row. -->
         <div class="chip-row no-scrollbar">
           <div
@@ -63,7 +63,7 @@
               </span>
               <div class="t">{{ featured.caption ?? featured.place.name }}</div>
               <div class="s">
-                {{ featured.author.handle }} · {{ featured.work.title }}
+                {{ featured.author.handle }} · {{ featured.content.title }}
                 <span class="dot" />♥ {{ formatCount(featured.likeCount) }}
               </div>
             </div>
@@ -92,7 +92,7 @@
             @click="onOpenShot(p.id)"
           >
             <img :src="p.imageUrl" :alt="p.place.name" />
-            <span class="drama">{{ p.work.title }}</span>
+            <span class="drama">{{ p.content.title }}</span>
             <span class="likes">
               <ion-icon :icon="heart" class="ic-16" />{{ formatCount(p.likeCount) }}
             </span>
@@ -152,19 +152,19 @@ const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'POPULAR', label: '인기' },
   { key: 'FOLLOWING', label: '팔로잉' },
   { key: 'NEARBY', label: '내 주변' },
-  { key: 'BY_WORK', label: '작품별' },
+  { key: 'BY_CONTENT', label: '작품별' },
 ];
 
 // Chip filter — derives the distinct set of work titles from the current
 // `posts` so the row always reflects what the grid can actually surface.
 // "전체" (null) disables the filter. Kept client-side for now; a later
-// iteration could push this to the server as `workTitle` param.
+// iteration could push this to the server as `contentTitle` param.
 const activeChip = ref<string | null>(null);
 const chips = computed<string[]>(() => {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const p of posts.value) {
-    const t = p.work.title;
+    const t = p.content.title;
     if (!t || seen.has(t)) continue;
     seen.add(t);
     out.push(t);
@@ -176,7 +176,7 @@ const chips = computed<string[]>(() => {
 // set; grid = everything else.
 const filteredPosts = computed(() => {
   if (activeChip.value === null) return posts.value;
-  return posts.value.filter((p) => p.work.title === activeChip.value);
+  return posts.value.filter((p) => p.content.title === activeChip.value);
 });
 const featured = computed(() => {
   if (filteredPosts.value.length === 0) return null;
@@ -210,7 +210,7 @@ async function onSelectTab(t: FeedTab): Promise<void> {
 
 // 유효한 FeedTab string 만 store 에 적용 — 잘못된 query 값은 무시.
 const VALID_TABS: ReadonlySet<FeedTab> = new Set([
-  'RECENT', 'POPULAR', 'FOLLOWING', 'NEARBY', 'BY_WORK',
+  'RECENT', 'POPULAR', 'FOLLOWING', 'NEARBY', 'BY_CONTENT',
 ]);
 function pickQueryTab(): FeedTab | null {
   const raw = route.query.tab;

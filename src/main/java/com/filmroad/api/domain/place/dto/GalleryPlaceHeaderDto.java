@@ -8,7 +8,7 @@ import lombok.Getter;
 public class GalleryPlaceHeaderDto {
     private Long placeId;
     private String name;
-    private String workTitle;
-    private String workEpisode;
+    private String contentTitle;
+    private String contentEpisode;
     private long totalPhotoCount;
 }

@@ -29,7 +29,7 @@
           </div>
         </div>
         <div v-if="detail" class="coll-info" data-testid="cd-hero-info">
-          <span v-if="detail.kind === 'WORK'" class="coll-tag">
+          <span v-if="detail.kind === 'CONTENT'" class="coll-tag">
             <ion-icon :icon="filmOutline" class="ic-16" />작품 기반 컬렉션
           </span>
           <span v-else class="coll-tag custom">
@@ -164,9 +164,9 @@
               </div>
               <div class="place-body">
                 <div class="chips">
-                  <span v-if="p.workTitle" class="c">{{ p.workTitle }}</span>
-                  <span v-if="p.workEpisode || p.sceneTimestamp" class="ep">
-                    · {{ [p.workEpisode, p.sceneTimestamp].filter(Boolean).join(' ') }}
+                  <span v-if="p.contentTitle" class="c">{{ p.contentTitle }}</span>
+                  <span v-if="p.contentEpisode || p.sceneTimestamp" class="ep">
+                    · {{ [p.contentEpisode, p.sceneTimestamp].filter(Boolean).join(' ') }}
                   </span>
                 </div>
                 <div class="nm">{{ p.name }}</div>
@@ -219,9 +219,9 @@
               </div>
               <div class="place-body">
                 <div class="chips">
-                  <span v-if="p.workTitle" class="c">{{ p.workTitle }}</span>
-                  <span v-if="p.workEpisode || p.sceneTimestamp" class="ep">
-                    · {{ [p.workEpisode, p.sceneTimestamp].filter(Boolean).join(' ') }}
+                  <span v-if="p.contentTitle" class="c">{{ p.contentTitle }}</span>
+                  <span v-if="p.contentEpisode || p.sceneTimestamp" class="ep">
+                    · {{ [p.contentEpisode, p.sceneTimestamp].filter(Boolean).join(' ') }}
                   </span>
                 </div>
                 <div class="nm">{{ p.name }}</div>
@@ -373,8 +373,8 @@ const mapMarkers = computed<MapMarker[]>(() =>
     name: p.name,
     latitude: p.latitude as number,
     longitude: p.longitude as number,
-    workId: 0,
-    workTitle: p.workTitle ?? '',
+    contentId: 0,
+    contentTitle: p.contentTitle ?? '',
     regionLabel: p.regionLabel,
     distanceKm: p.distanceKm ?? null,
   })),
@@ -458,15 +458,15 @@ async function onOpenPlace(placeId: number): Promise<void> {
 }
 
 async function onCapture(p: CollectionPlace): Promise<void> {
-  // CaptureTarget requires workId/workTitle as non-null. Collections of
+  // CaptureTarget requires contentId/contentTitle as non-null. Collections of
   // kind=CUSTOM carry places without a backing work — fall back to sentinels
   // (0/"") so the upload flow can still run; the Camera/Upload UIs degrade
-  // gracefully when workId=0.
+  // gracefully when contentId=0.
   uploadStore.beginCapture({
     placeId: p.placeId,
-    workId: p.workId ?? 0,
-    workTitle: p.workTitle ?? '',
-    workEpisode: p.workEpisode ?? null,
+    contentId: p.contentId ?? 0,
+    contentTitle: p.contentTitle ?? '',
+    contentEpisode: p.contentEpisode ?? null,
     placeName: p.name,
     sceneImageUrl: null,
   });

@@ -393,7 +393,7 @@ import { formatRelativeTime } from '@/utils/formatRelativeTime';
 import { buildPlaceShareData } from '@/utils/share';
 
 const mapStore = useMapStore();
-const { selected, error, filter, center, zoom, workId, sheetMode, userLocation } =
+const { selected, error, filter, center, zoom, contentId, sheetMode, userLocation } =
   storeToRefs(mapStore);
 const { showError, showInfo } = useToast();
 const route = useRoute();
@@ -494,10 +494,10 @@ const filterChips = computed<ChipSpec[]>(() => {
       key: 'SPOTS',
       label: '성지',
       icon: locationOutline,
-      active: f === 'SPOTS' && workId.value === null,
+      active: f === 'SPOTS' && contentId.value === null,
       onClick: async () => {
         mapStore.setFilter('SPOTS');
-        if (workId.value !== null) await mapStore.setWork(null);
+        if (contentId.value !== null) await mapStore.setContent(null);
       },
     },
     {
@@ -527,8 +527,8 @@ const distanceLabel = computed(() => {
 const workBadge = computed(() => {
   const s = selected.value;
   if (!s) return '';
-  const ep = s.workEpisode ? ` · ${s.workEpisode}` : '';
-  return `${s.workTitle}${ep}`;
+  const ep = s.contentEpisode ? ` · ${s.contentEpisode}` : '';
+  return `${s.contentTitle}${ep}`;
 });
 
 function formatCount(n: number): string {

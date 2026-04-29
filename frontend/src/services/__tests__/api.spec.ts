@@ -99,7 +99,7 @@ describe('api.ts response interceptor — 401 refresh-and-retry', () => {
     expect(fake._calls.length).toBe(1);
     expect(fake._calls[0].url).toBe('/api/places/1');
     expect(result).toMatchObject({ data: { place: { id: 1, name: 'retried' } } });
-    // Refresh body's accessToken is persisted so the retry's Bearer works.
+    // Refresh body's accessToken is persisted so the retry's Bearer contents.
     expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
   });
 

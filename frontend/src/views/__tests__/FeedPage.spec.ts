@@ -42,7 +42,7 @@ import { mountWithStubs } from './__helpers__/mount';
 
 function makePost(
   id: number,
-  workTitle = '도깨비',
+  contentTitle = '도깨비',
   overrides: Partial<FeedPost> = {},
 ): FeedPost {
   return {
@@ -61,7 +61,7 @@ function makePost(
       following: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시 주문진읍' },
-    work: { id: 1, title: workTitle, workEpisode: '1회', sceneTimestamp: '00:24:10' },
+    content: { id: 1, title: contentTitle, contentEpisode: '1회', sceneTimestamp: '00:24:10' },
     likeCount: 100 + id,
     commentCount: 3,
     liked: false,
@@ -87,7 +87,7 @@ function mountFeed(overrides: {
         ],
         recommendedUsers: [],
         tab: overrides.tab ?? 'RECENT',
-        workId: null,
+        contentId: null,
         cursor: null,
         hasMore: false,
         loading: false,

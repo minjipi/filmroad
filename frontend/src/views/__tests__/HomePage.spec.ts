@@ -13,7 +13,7 @@ const { pushSpy, backSpy } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
 }));
-// task #25: useRoute also needed (HomePage syncs scope/workId to query).
+// task #25: useRoute also needed (HomePage syncs scope/contentId to query).
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy, back: backSpy, replace: vi.fn().mockResolvedValue(undefined) }),
   useRoute: () => ({ path: '/home', query: {} }),
@@ -48,10 +48,10 @@ const fixture: HomeResponse = {
     tag: '주말 추천',
     title: "오늘은 '도깨비'의 주문진을 걸어볼까요?",
     subtitle: '내 위치에서 차로 12분 · 2곳의 성지',
-    workId: 1,
+    contentId: 1,
     primaryPlaceId: 10,
   },
-  works: [
+  contents: [
     { id: 1, title: '도깨비' },
     { id: 2, title: '이태원 클라쓰' },
   ],
@@ -61,8 +61,9 @@ const fixture: HomeResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/1.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      sceneImageUrl: 'https://img/scene-1.jpg',
+      contentId: 1,
+      contentTitle: '도깨비',
       liked: false,
       likeCount: 3200,
     },
@@ -71,8 +72,9 @@ const fixture: HomeResponse = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/2.jpg'],
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      sceneImageUrl: 'https://img/scene-2.jpg',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       liked: false,
       likeCount: 1800,
     },
@@ -81,8 +83,9 @@ const fixture: HomeResponse = {
       name: '덕수궁 돌담길',
       regionLabel: '서울 중구 정동',
       coverImageUrls: ['https://img/3.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      sceneImageUrl: 'https://img/scene-3.jpg',
+      contentId: 1,
+      contentTitle: '도깨비',
       liked: false,
       likeCount: 420,
     },
@@ -90,14 +93,14 @@ const fixture: HomeResponse = {
 };
 
 interface HomeTestOpts {
-  popularWorks?: Array<{
+  popularContents?: Array<{
     id: number;
     title: string;
     posterUrl?: string | null;
     placeCount: number;
   }>;
-  selectedWorkId?: number | null;
-  scope?: 'NEAR' | 'TRENDING' | 'POPULAR_WORKS';
+  selectedContentId?: number | null;
+  scope?: 'NEAR' | 'TRENDING' | 'POPULAR_CONTENTS';
 }
 
 function mountHomePage(opts: HomeTestOpts = {}) {
@@ -105,12 +108,12 @@ function mountHomePage(opts: HomeTestOpts = {}) {
     initialState: {
       home: {
         hero: fixture.hero,
-        works: fixture.works,
+        contents: fixture.contents,
         places: [...fixture.places],
-        popularWorks: opts.popularWorks ?? [],
+        popularContents: opts.popularContents ?? [],
         loading: false,
         error: null,
-        selectedWorkId: opts.selectedWorkId ?? null,
+        selectedContentId: opts.selectedContentId ?? null,
         scope: opts.scope ?? 'NEAR',
       },
     },
@@ -157,26 +160,26 @@ describe('HomePage.vue', () => {
     expect(cards.length).toBe(fixture.places.length);
   });
 
-  it("dispatches setWork when a work tab is clicked", async () => {
+  it("dispatches setContent when a work tab is clicked", async () => {
     const { wrapper, store } = mountHomePage();
     await flushPromises();
 
-    const setWorkSpy = vi.spyOn(store, 'setWork');
+    const setContentSpy = vi.spyOn(store, 'setContent');
 
-    // The first .tab is "모두" (null); subsequent tabs map to works by index.
+    // The first .tab is "모두" (null); subsequent tabs map to contents by index.
     const tabs = wrapper.findAll('.tab');
-    expect(tabs.length).toBe(fixture.works.length + 1);
-    await tabs[1].trigger('click'); // works[0] => id 1
-    expect(setWorkSpy).toHaveBeenCalledWith(1);
+    expect(tabs.length).toBe(fixture.contents.length + 1);
+    await tabs[1].trigger('click'); // contents[0] => id 1
+    expect(setContentSpy).toHaveBeenCalledWith(1);
   });
 
-  it('shows an error toast when setWork fails', async () => {
+  it('shows an error toast when setContent fails', async () => {
     const { wrapper, store } = mountHomePage();
     await flushPromises();
     toastCreateSpy.mockClear();
 
-    vi.spyOn(store, 'setWork').mockImplementation(async (id: number | null) => {
-      store.selectedWorkId = id;
+    vi.spyOn(store, 'setContent').mockImplementation(async (id: number | null) => {
+      store.selectedContentId = id;
       store.error = '네트워크 오류';
     });
 
@@ -203,71 +206,71 @@ describe('HomePage.vue', () => {
     ]);
   });
 
-  it('POPULAR_WORKS scope swaps the place grid for a works grid (one card per popular work)', async () => {
+  it('POPULAR_CONTENTS scope swaps the place grid for a contents grid (one card per popular work)', async () => {
     const { wrapper } = mountHomePage({
-      popularWorks: [
+      popularContents: [
         { id: 1, title: '도깨비', posterUrl: 'https://img/p1.jpg', placeCount: 12 },
         { id: 2, title: '이태원 클라쓰', posterUrl: null, placeCount: 6 },
       ],
-      scope: 'POPULAR_WORKS',
+      scope: 'POPULAR_CONTENTS',
     });
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="works-grid"]').exists()).toBe(true);
-    // Place grid is hidden under POPULAR_WORKS.
-    expect(wrapper.findAll('.home-grid.works-grid .photo-card').length).toBe(2);
-    const cards = wrapper.findAll('[data-testid="work-card"]');
+    expect(wrapper.find('[data-testid="contents-grid"]').exists()).toBe(true);
+    // Place grid is hidden under POPULAR_CONTENTS.
+    expect(wrapper.findAll('.home-grid.contents-grid .photo-card').length).toBe(2);
+    const cards = wrapper.findAll('[data-testid="content-card"]');
     expect(cards[0].find('.cap .t').text()).toBe('도깨비');
     expect(cards[0].text()).toContain('성지 12곳');
     expect(cards[1].find('.cap .t').text()).toBe('이태원 클라쓰');
     // No posterUrl → initial fallback renders.
-    expect(cards[1].find('.work-initial').exists()).toBe(true);
-    expect(cards[1].find('.work-initial').text()).toBe('이');
+    expect(cards[1].find('.content-initial').exists()).toBe(true);
+    expect(cards[1].find('.content-initial').text()).toBe('이');
   });
 
-  it('home-segmented is hidden on work tab (selectedWorkId !== null)', async () => {
-    const { wrapper } = mountHomePage({ selectedWorkId: 1 });
+  it('home-segmented is hidden on work tab (selectedContentId !== null)', async () => {
+    const { wrapper } = mountHomePage({ selectedContentId: 1 });
     await flushPromises();
     expect(wrapper.find('[data-testid="home-segmented"]').exists()).toBe(false);
   });
 
-  it('home-segmented is visible on 모두 tab (selectedWorkId === null)', async () => {
-    const { wrapper } = mountHomePage({ selectedWorkId: null });
+  it('home-segmented is visible on 모두 tab (selectedContentId === null)', async () => {
+    const { wrapper } = mountHomePage({ selectedContentId: null });
     await flushPromises();
     expect(wrapper.find('[data-testid="home-segmented"]').exists()).toBe(true);
   });
 
-  it('work tab with stored POPULAR_WORKS scope renders place grid, not works-grid', async () => {
-    // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태로 작품 탭에 들어온
-    // 케이스 — works-grid 가 새어 나와선 안 되고 place grid 가 떠야 한다.
+  it('work tab with stored POPULAR_CONTENTS scope renders place grid, not contents-grid', async () => {
+    // 사용자가 모두 탭에서 POPULAR_CONTENTS 를 골라둔 상태로 작품 탭에 들어온
+    // 케이스 — contents-grid 가 새어 나와선 안 되고 place grid 가 떠야 한다.
     const { wrapper } = mountHomePage({
-      selectedWorkId: 1,
-      scope: 'POPULAR_WORKS',
-      popularWorks: [
+      selectedContentId: 1,
+      scope: 'POPULAR_CONTENTS',
+      popularContents: [
         { id: 1, title: '도깨비', posterUrl: null, placeCount: 12 },
       ],
     });
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="works-grid"]').exists()).toBe(false);
-    expect(wrapper.findAll('.home-grid:not(.works-grid) .photo-card').length)
+    expect(wrapper.find('[data-testid="contents-grid"]').exists()).toBe(false);
+    expect(wrapper.findAll('.home-grid:not(.contents-grid) .photo-card').length)
       .toBeGreaterThan(0);
   });
 
-  it('tapping a work card navigates to that work detail page (/work/:id)', async () => {
+  it('tapping a work card navigates to that work detail page (/content/:id)', async () => {
     const { wrapper } = mountHomePage({
-      popularWorks: [
+      popularContents: [
         { id: 42, title: '도깨비', posterUrl: null, placeCount: 12 },
       ],
-      scope: 'POPULAR_WORKS',
+      scope: 'POPULAR_CONTENTS',
     });
     await flushPromises();
     pushSpy.mockClear();
 
-    await wrapper.find('[data-testid="work-card"]').trigger('click');
+    await wrapper.find('[data-testid="content-card"]').trigger('click');
     await flushPromises();
 
-    expect(pushSpy).toHaveBeenCalledWith('/work/42');
+    expect(pushSpy).toHaveBeenCalledWith('/content/42');
   });
 
   it('search icon pushes /search', async () => {

@@ -7,7 +7,7 @@ import com.filmroad.api.domain.feed.dto.FeedPlaceDto;
 import com.filmroad.api.domain.feed.dto.FeedPostDto;
 import com.filmroad.api.domain.feed.dto.FeedResponse;
 import com.filmroad.api.domain.feed.dto.FeedUserDto;
-import com.filmroad.api.domain.feed.dto.FeedWorkDto;
+import com.filmroad.api.domain.feed.dto.FeedContentDto;
 import com.filmroad.api.domain.follow.UserFollowRepository;
 import com.filmroad.api.domain.like.PhotoLikeRepository;
 import com.filmroad.api.domain.place.Place;
@@ -18,7 +18,7 @@ import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
-import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.content.Content;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -50,18 +50,18 @@ public class FeedService {
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public FeedResponse getFeed(FeedTab tab, Long workId, Double lat, Double lng, Long cursor, int limit) {
+    public FeedResponse getFeed(FeedTab tab, Long contentId, Double lat, Double lng, Long cursor, int limit) {
         FeedTab effectiveTab = tab == null ? FeedTab.RECENT : tab;
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         int fetchSize = safeLimit + 1;
 
         Long viewerId = currentUser.currentUserId();
-        Long effectiveWorkId = (effectiveTab == FeedTab.BY_WORK) ? workId : null;
+        Long effectiveContentId = (effectiveTab == FeedTab.BY_CONTENT) ? contentId : null;
         List<PlacePhoto> fetched = switch (effectiveTab) {
             case RECENT -> placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize));
             case POPULAR -> placePhotoRepository.findFeedPopular(null, cursor, viewerId, PageRequest.of(0, fetchSize));
             case FOLLOWING -> placePhotoRepository.findFeedByFollowedUsers(viewerId, null, cursor, PageRequest.of(0, fetchSize));
-            case BY_WORK -> placePhotoRepository.findFeedPopular(effectiveWorkId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case BY_CONTENT -> placePhotoRepository.findFeedPopular(effectiveContentId, cursor, viewerId, PageRequest.of(0, fetchSize));
             case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng, viewerId);
         };
 
@@ -95,10 +95,10 @@ public class FeedService {
     }
 
     @Transactional(readOnly = true)
-    public List<FeedUserDto> getRecommendedUsers(Long workId, int limit) {
+    public List<FeedUserDto> getRecommendedUsers(Long contentId, int limit) {
         int safeLimit = limit <= 0 ? RECOMMENDED_DEFAULT : Math.min(limit, 20);
         // aggregate는 safeLimit + 1 넉넉히 받아서 본인 제외 후에도 limit 채울 수 있게.
-        List<Object[]> rows = stampRepository.aggregateUserStampCount(workId, PageRequest.of(0, safeLimit + 1));
+        List<Object[]> rows = stampRepository.aggregateUserStampCount(contentId, PageRequest.of(0, safeLimit + 1));
         Long viewerId = currentUser.currentUserId();
 
         List<Long> userIds = rows.stream()
@@ -114,7 +114,7 @@ public class FeedService {
         Set<Long> followedIds = new HashSet<>(
                 userFollowRepository.findFolloweeIdsByFollowerAndFolloweeIdIn(viewerId, userIds));
 
-        String workTitle = null;
+        String contentTitle = null;
         List<FeedUserDto> result = new ArrayList<>();
         for (Object[] row : rows) {
             Long uid = (Long) row[0];
@@ -128,8 +128,8 @@ public class FeedService {
                     .nickname(u.getNickname())
                     .avatarUrl(u.getAvatarUrl())
                     .verified(u.isVerified())
-                    .workTitle(workTitle)
-                    .stampCountForWork(count)
+                    .contentTitle(contentTitle)
+                    .stampCountForContent(count)
                     .following(followedIds.contains(u.getId()))
                     .build());
             if (result.size() >= safeLimit) break;
@@ -151,7 +151,7 @@ public class FeedService {
 
     private FeedPostDto toPostDto(PlacePhoto photo, Long viewerId, boolean liked, Set<Long> followedAuthorIds) {
         Place place = photo.getPlace();
-        Work work = place.getWork();
+        Content content = place.getContent();
         // sceneCompare: 1:N scene 컬렉션이 비어있지 않고(=등록된 씬이 1장이라도 있고)
         // photo.id 가 짝수일 때만 비교 카드 노출 (기존 demo 토글 규칙 유지).
         String primaryScene = place.getPrimarySceneImageUrl();
@@ -172,10 +172,10 @@ public class FeedService {
                         .name(place.getName())
                         .regionLabel(place.getRegionLabel())
                         .build())
-                .work(FeedWorkDto.builder()
-                        .id(work.getId())
-                        .title(work.getTitle())
-                        .workEpisode(place.getPrimaryWorkEpisode())
+                .content(FeedContentDto.builder()
+                        .id(content.getId())
+                        .title(content.getTitle())
+                        .contentEpisode(place.getPrimaryContentEpisode())
                         .sceneTimestamp(place.getPrimarySceneTimestamp())
                         .build())
                 .likeCount(photo.getLikeCount())

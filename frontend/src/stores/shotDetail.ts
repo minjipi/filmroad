@@ -29,7 +29,7 @@ export interface ShotPlace {
   longitude: number;
 }
 
-export interface ShotWork {
+export interface ShotContent {
   id: number;
   title: string;
   network: string | null;
@@ -85,7 +85,7 @@ export interface ShotDetail {
   saved: boolean;
   author: ShotAuthor;
   place: ShotPlace;
-  work: ShotWork;
+  content: ShotContent;
   /** All photos uploaded in this batch — length 1 for a single-image post. */
   images: ShotImage[];
   topComments: ShotComment[];

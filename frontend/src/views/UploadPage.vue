@@ -63,7 +63,7 @@
               <div class="ico"><ion-icon :icon="filmOutline" class="ic-18" /></div>
               <div>
                 <div class="t">
-                  {{ targetPlace.workTitle }}<span v-if="targetPlace.workEpisode"> · {{ targetPlace.workEpisode }}</span>
+                  {{ targetPlace.contentTitle }}<span v-if="targetPlace.contentEpisode"> · {{ targetPlace.contentEpisode }}</span>
                 </div>
                 <div class="s">{{ targetPlace.placeName }}</div>
               </div>
@@ -132,7 +132,7 @@
               <div>
                 <div class="k">작품</div>
                 <div class="v">
-                  {{ targetPlace.workTitle }}<span v-if="targetPlace.workEpisode"> · {{ targetPlace.workEpisode }}</span>
+                  {{ targetPlace.contentTitle }}<span v-if="targetPlace.contentEpisode"> · {{ targetPlace.contentEpisode }}</span>
                 </div>
               </div>
               <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
@@ -289,7 +289,7 @@
               </div>
               <div class="meta">
                 <div class="t">{{ p.name }}</div>
-                <div class="s">{{ p.workTitle }} · {{ p.regionLabel }}</div>
+                <div class="s">{{ p.contentTitle }} · {{ p.regionLabel }}</div>
               </div>
             </button>
             <div v-if="pickerResults.length === 0" class="picker-empty">
@@ -361,7 +361,7 @@
                 <span class="num">{{ completionStamp.collectedCount }}</span>
               </div>
               <div class="stamp-info">
-                <div class="t">{{ completionStamp.workTitle }} 스탬프북</div>
+                <div class="t">{{ completionStamp.contentTitle }} 스탬프북</div>
                 <div class="s">{{ completionStamp.collectedCount }} / {{ completionStamp.totalCount }} 성지 수집</div>
               </div>
             </div>
@@ -373,7 +373,7 @@
               <div class="fill" :style="{ width: `${completionStamp.percent}%` }" />
             </div>
             <div v-if="nextMilestoneCount > 0" class="next-milestone">
-              다음 <b>{{ nextMilestoneCount }}곳</b> 모으면 <b>{{ completionStamp.workTitle }} 완주</b>!
+              다음 <b>{{ nextMilestoneCount }}곳</b> 모으면 <b>{{ completionStamp.contentTitle }} 완주</b>!
             </div>
           </section>
 
@@ -594,7 +594,7 @@ const pickerResults = computed<PlaceSummary[]>(() => {
   return source.filter((p) => {
     return (
       p.name.toLowerCase().includes(q) ||
-      p.workTitle.toLowerCase().includes(q) ||
+      p.contentTitle.toLowerCase().includes(q) ||
       p.regionLabel.toLowerCase().includes(q)
     );
   });
@@ -617,9 +617,9 @@ function onClosePicker(): void {
 function onPickPlace(p: PlaceSummary): void {
   uploadStore.setTargetPlace({
     placeId: p.id,
-    workId: p.workId,
-    workTitle: p.workTitle,
-    workEpisode: null,
+    contentId: p.contentId,
+    contentTitle: p.contentTitle,
+    contentEpisode: null,
     placeName: p.name,
     // Home summary doesn't carry a scene reference — leave null so the
     // upload preview hides the "장면 비교 ON" sticker until the user

@@ -42,8 +42,8 @@ const fixture: MapResponse = {
       name: '주문진 영진해변 방파제',
       latitude: 37.8928,
       longitude: 128.8347,
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       regionLabel: '강릉시 주문진읍',
       distanceKm: 0.1,
     },
@@ -52,8 +52,8 @@ const fixture: MapResponse = {
       name: '단밤 포차',
       latitude: 37.5347,
       longitude: 126.9947,
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       regionLabel: '서울 용산구 이태원동',
       distanceKm: 180.4,
     },
@@ -62,8 +62,8 @@ const fixture: MapResponse = {
       name: '덕수궁 돌담길',
       latitude: 37.5658,
       longitude: 126.9751,
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       regionLabel: '서울 중구 정동',
       distanceKm: 175.2,
     },
@@ -74,9 +74,9 @@ const fixture: MapResponse = {
     regionLabel: '강릉시 주문진읍',
     latitude: 37.8928,
     longitude: 128.8347,
-    workId: 1,
-    workTitle: '도깨비',
-    workEpisode: '1회',
+    contentId: 1,
+    contentTitle: '도깨비',
+    contentEpisode: '1회',
     coverImageUrls: ['https://img/1.jpg'],
     sceneImageUrl: 'https://img/scene-1.jpg',
     photoCount: 1204,
@@ -130,7 +130,7 @@ function mountMapPage(opts: {
           loading: false,
           error: null,
           filter: 'SPOTS',
-          workId: null,
+          contentId: null,
           q: '',
           center: { ...KOREA_CENTER },
           zoom: COUNTRY_ZOOM,
@@ -145,7 +145,7 @@ function mountMapPage(opts: {
           loading: false,
           error: null,
           filter: 'SPOTS',
-          workId: null,
+          contentId: null,
           q: '',
           center: { lat: 37.8928, lng: 128.8347 },
           zoom: DETAIL_ZOOM,
@@ -517,7 +517,7 @@ describe('MapPage.vue', () => {
     vi.advanceTimersByTime(500);
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    // After the suppression window closes, a real user pan still works.
+    // After the suppression window closes, a real user pan still contents.
     vi.advanceTimersByTime(800); // past the 1200ms suppression total
     kakaoStub.vm.$emit('boundsChange', {
       sw: { lat: 35.0, lng: 126.0 },
@@ -634,7 +634,7 @@ describe('MapPage.vue', () => {
     const { wrapper, store } = mountMapPage();
     await flushPromises();
 
-    store.setSheetFilters({ workIds: [1], regions: ['강릉시'] });
+    store.setSheetFilters({ contentIds: [1], regions: ['강릉시'] });
     await flushPromises();
 
     const badge = wrapper.find('[data-testid="filter-badge"]');

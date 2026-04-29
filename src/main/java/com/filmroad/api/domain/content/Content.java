@@ -1,4 +1,4 @@
-package com.filmroad.api.domain.work;
+package com.filmroad.api.domain.content;
 
 import com.filmroad.api.common.model.BaseEntity;
 import jakarta.persistence.*;
@@ -10,11 +10,11 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "work")
+@Table(name = "content")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class Work extends BaseEntity {
+public class Content extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +28,7 @@ public class Work extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private WorkType type;
+    private ContentType type;
 
     @Column(length = 80)
     private String subtitle;

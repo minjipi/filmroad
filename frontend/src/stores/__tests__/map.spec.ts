@@ -30,8 +30,8 @@ const fixture: MapResponse = {
       name: '주문진 영진해변 방파제',
       latitude: 37.8928,
       longitude: 128.8347,
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       regionLabel: '강릉시 주문진읍',
       distanceKm: 0.1,
     },
@@ -40,8 +40,8 @@ const fixture: MapResponse = {
       name: '단밤 포차',
       latitude: 37.5347,
       longitude: 126.9947,
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       regionLabel: '서울 용산구 이태원동',
       distanceKm: 180.4,
     },
@@ -52,9 +52,9 @@ const fixture: MapResponse = {
     regionLabel: '강릉시 주문진읍',
     latitude: 37.8928,
     longitude: 128.8347,
-    workId: 1,
-    workTitle: '도깨비',
-    workEpisode: null,
+    contentId: 1,
+    contentTitle: '도깨비',
+    contentEpisode: null,
     coverImageUrls: ['https://img/1.jpg'],
     sceneImageUrl: 'https://img/scene-1.jpg',
     photoCount: 1204,
@@ -148,9 +148,9 @@ describe('map store', () => {
         regionLabel: '서울 용산구 이태원동',
         latitude: 37.5347,
         longitude: 126.9947,
-        workId: 2,
-        workTitle: '이태원 클라쓰',
-        workEpisode: null,
+        contentId: 2,
+        contentTitle: '이태원 클라쓰',
+        contentEpisode: null,
         coverImageUrls: ['https://img/13.jpg'],
         sceneImageUrl: 'https://img/scene-13.jpg',
         photoCount: 1980,
@@ -285,9 +285,9 @@ describe('map store', () => {
       regionLabel: '서울',
       latitude: 37.5,
       longitude: 127.0,
-      workId: 9,
-      workTitle: '테스트 드라마',
-      workEpisode: '1회',
+      contentId: 9,
+      contentTitle: '테스트 드라마',
+      contentEpisode: '1회',
       coverImageUrls: [],
       sceneImageUrl: null,
       photoCount: 0,
@@ -308,7 +308,7 @@ describe('map store', () => {
     const store = useMapStore();
     store.markLastViewed({
       id: 1, name: 'x', regionLabel: '', latitude: 1, longitude: 2,
-      workId: 0, workTitle: '', workEpisode: null, coverImageUrls: [], sceneImageUrl: null,
+      contentId: 0, contentTitle: '', contentEpisode: null, coverImageUrls: [], sceneImageUrl: null,
       photoCount: 0, likeCount: 0, rating: 0, distanceKm: null, liked: false,
     });
     expect(store.hasBeenViewed).toBe(true);
@@ -357,9 +357,9 @@ describe('map store', () => {
       regionLabel: '서울',
       latitude: 37.5,
       longitude: 127.0,
-      workId: 1,
-      workTitle: '도깨비',
-      workEpisode: null,
+      contentId: 1,
+      contentTitle: '도깨비',
+      contentEpisode: null,
       coverImageUrls: [],
       sceneImageUrl: null,
       photoCount: 0,
@@ -410,28 +410,28 @@ describe('map store', () => {
     expect(store.selected?.id).toBe(13);
   });
 
-  it('sheetFilters defaults: ALL workIds/regions empty, no distance limit, ALL visit', () => {
+  it('sheetFilters defaults: ALL contentIds/regions empty, no distance limit, ALL visit', () => {
     const store = useMapStore();
-    expect(store.sheetFilters.workIds).toEqual([]);
+    expect(store.sheetFilters.contentIds).toEqual([]);
     expect(store.sheetFilters.regions).toEqual([]);
     expect(store.sheetFilters.maxDistanceKm).toBeNull();
     expect(store.sheetFilters.visitStatus).toBe('ALL');
     expect(store.activeSheetFilterCount).toBe(0);
   });
 
-  it('setSheetFilters narrows visibleMarkers by workIds (multi)', async () => {
+  it('setSheetFilters narrows visibleMarkers by contentIds (multi)', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useMapStore();
     await store.fetchMap();
     expect(store.visibleMarkers.length).toBe(2);
 
-    store.setSheetFilters({ workIds: [1] });
+    store.setSheetFilters({ contentIds: [1] });
     expect(store.visibleMarkers.map((m) => m.id)).toEqual([10]);
 
-    store.setSheetFilters({ workIds: [2] });
+    store.setSheetFilters({ contentIds: [2] });
     expect(store.visibleMarkers.map((m) => m.id)).toEqual([13]);
 
-    store.setSheetFilters({ workIds: [1, 2] });
+    store.setSheetFilters({ contentIds: [1, 2] });
     expect(store.visibleMarkers.map((m) => m.id).sort()).toEqual([10, 13]);
   });
 
@@ -474,7 +474,7 @@ describe('map store', () => {
     await store.fetchMap();
     expect(store.activeSheetFilterCount).toBe(0);
 
-    store.setSheetFilters({ workIds: [1] });
+    store.setSheetFilters({ contentIds: [1] });
     expect(store.activeSheetFilterCount).toBe(1);
 
     store.setSheetFilters({ regions: ['서울'], maxDistanceKm: 30 });
@@ -484,12 +484,12 @@ describe('map store', () => {
     expect(store.activeSheetFilterCount).toBe(0);
   });
 
-  it('availableWorks / availableRegions derive from current markers', async () => {
+  it('availableContents / availableRegions derive from current markers', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useMapStore();
     await store.fetchMap();
 
-    expect(store.availableWorks).toEqual([
+    expect(store.availableContents).toEqual([
       { id: 1, title: '도깨비' },
       { id: 2, title: '이태원 클라쓰' },
     ]);
@@ -503,10 +503,10 @@ describe('map store', () => {
     mockApi.get.mockResolvedValueOnce({
       data: {
         markers: [
-          { id: 1, name: 'A', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원 평창', distanceKm: null },
-          { id: 2, name: 'B', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원도 강릉', distanceKm: null },
-          { id: 3, name: 'C', latitude: 0, longitude: 0, workId: 1, workTitle: 'X', regionLabel: '강원특별자치도 속초', distanceKm: null },
-          { id: 4, name: 'D', latitude: 0, longitude: 0, workId: 2, workTitle: 'Y', regionLabel: '서울특별시 종로구', distanceKm: null },
+          { id: 1, name: 'A', latitude: 0, longitude: 0, contentId: 1, contentTitle: 'X', regionLabel: '강원 평창', distanceKm: null },
+          { id: 2, name: 'B', latitude: 0, longitude: 0, contentId: 1, contentTitle: 'X', regionLabel: '강원도 강릉', distanceKm: null },
+          { id: 3, name: 'C', latitude: 0, longitude: 0, contentId: 1, contentTitle: 'X', regionLabel: '강원특별자치도 속초', distanceKm: null },
+          { id: 4, name: 'D', latitude: 0, longitude: 0, contentId: 2, contentTitle: 'Y', regionLabel: '서울특별시 종로구', distanceKm: null },
         ],
         selected: null,
       },

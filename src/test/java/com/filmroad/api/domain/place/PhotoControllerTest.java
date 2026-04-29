@@ -107,7 +107,7 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.placeId", is(10)))
                 .andExpect(jsonPath("$.results.imageUrl", startsWith("/uploads/")))
                 .andExpect(jsonPath("$.results.visibility", is("PUBLIC")))
-                .andExpect(jsonPath("$.results.workId", is(1)));
+                .andExpect(jsonPath("$.results.contentId", is(1)));
     }
 
     @Test
@@ -245,7 +245,7 @@ class PhotoControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진: place/work/author/topComments 블록 + viewer-specific liked/saved")
+    @DisplayName("GET /api/photos/{id} — 공개 PUBLIC 사진: place/content/author/topComments 블록 + viewer-specific liked/saved")
     void getPhoto_publicSeed_returnsDetail() throws Exception {
         // 시드 photo 100 = place 10(주문진 영진해변), work 1(도깨비, tvN), user_id=1, visibility=PUBLIC.
         // user=1 토큰 → isMe=true, photo_like(photo=100)/place_like(place=10)/saved_place(place=10) 전부 시드에 있어 liked=saved=true.
@@ -260,10 +260,10 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.saved", is(true)))
                 .andExpect(jsonPath("$.results.place.id", is(10)))
                 .andExpect(jsonPath("$.results.place.name", is("주문진 영진해변 방파제")))
-                .andExpect(jsonPath("$.results.work.id", is(1)))
-                .andExpect(jsonPath("$.results.work.title", is("도깨비")))
-                .andExpect(jsonPath("$.results.work.type", is("DRAMA")))
-                .andExpect(jsonPath("$.results.work.network", is("tvN")))
+                .andExpect(jsonPath("$.results.content.id", is(1)))
+                .andExpect(jsonPath("$.results.content.title", is("도깨비")))
+                .andExpect(jsonPath("$.results.content.type", is("DRAMA")))
+                .andExpect(jsonPath("$.results.content.network", is("tvN")))
                 .andExpect(jsonPath("$.results.author.id", is(1)))
                 .andExpect(jsonPath("$.results.author.isMe", is(true)))
                 .andExpect(jsonPath("$.results.topComments", notNullValue()))
@@ -395,7 +395,7 @@ class PhotoControllerTest {
                         .file(buildMetaWithCoords(10L, 37.8928, 128.8347))
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results.stamp.workTitle", is("도깨비")))
+                .andExpect(jsonPath("$.results.stamp.contentTitle", is("도깨비")))
                 .andExpect(jsonPath("$.results.stamp.totalCount", greaterThan(0)))
                 .andExpect(jsonPath("$.results.reward.pointsEarned", is(50)))
                 .andExpect(jsonPath("$.results.reward.levelName", notNullValue()))

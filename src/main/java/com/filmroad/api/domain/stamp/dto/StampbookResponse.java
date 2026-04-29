@@ -10,6 +10,6 @@ import java.util.List;
 @Builder
 public class StampbookResponse {
     private StampbookHeroDto hero;
-    private List<WorkProgressDto> works;
+    private List<ContentProgressDto> contents;
     private List<UserBadgeDto> recentBadges;
 }

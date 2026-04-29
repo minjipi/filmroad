@@ -2,9 +2,9 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import type { PlaceScene } from '@/stores/placeDetail';
 
-export type WorkDetailChip = 'SPOTS' | 'INFO' | 'CAST' | 'FANS';
+export type ContentDetailChip = 'SPOTS' | 'INFO' | 'CAST' | 'FANS';
 
-export interface WorkDetailWork {
+export interface ContentDetailContent {
   id: number;
   title: string;
   subtitle: string | null;
@@ -18,14 +18,14 @@ export interface WorkDetailWork {
   synopsis: string | null;
 }
 
-export interface WorkDetailProgress {
+export interface ContentDetailProgress {
   collectedCount: number;
   totalCount: number;
   percent: number;
   nextBadgeText: string | null;
 }
 
-export interface WorkDetailSpot {
+export interface ContentDetailSpot {
   placeId: number;
   name: string;
   regionShort: string;
@@ -42,24 +42,24 @@ export interface WorkDetailSpot {
   longitude?: number | null;
 }
 
-export interface WorkDetailResponse {
-  work: WorkDetailWork;
-  progress: WorkDetailProgress;
-  spots: WorkDetailSpot[];
+export interface ContentDetailResponse {
+  content: ContentDetailContent;
+  progress: ContentDetailProgress;
+  spots: ContentDetailSpot[];
 }
 
 interface State {
-  work: WorkDetailWork | null;
-  progress: WorkDetailProgress | null;
-  spots: WorkDetailSpot[];
-  activeChip: WorkDetailChip;
+  content: ContentDetailContent | null;
+  progress: ContentDetailProgress | null;
+  spots: ContentDetailSpot[];
+  activeChip: ContentDetailChip;
   loading: boolean;
   error: string | null;
 }
 
-export const useWorkDetailStore = defineStore('workDetail', {
+export const useContentDetailStore = defineStore('contentDetail', {
   state: (): State => ({
-    work: null,
+    content: null,
     progress: null,
     spots: [],
     activeChip: 'SPOTS',
@@ -67,12 +67,12 @@ export const useWorkDetailStore = defineStore('workDetail', {
     error: null,
   }),
   actions: {
-    async fetch(workId: number): Promise<void> {
+    async fetch(contentId: number): Promise<void> {
       this.loading = true;
       this.error = null;
       try {
-        const { data } = await api.get<WorkDetailResponse>(`/api/works/${workId}`);
-        this.work = data.work;
+        const { data } = await api.get<ContentDetailResponse>(`/api/contents/${contentId}`);
+        this.content = data.content;
         this.progress = data.progress;
         this.spots = data.spots;
       } catch (e) {
@@ -81,15 +81,15 @@ export const useWorkDetailStore = defineStore('workDetail', {
         this.loading = false;
       }
     },
-    setChip(c: WorkDetailChip): void {
+    setChip(c: ContentDetailChip): void {
       this.activeChip = c;
     },
     /**
      * task #25: clear stale state on page leave so a re-entry into a
-     * different `/work/:id` doesn't flash the previous work's spots.
+     * different `/content/:id` doesn't flash the previous work's spots.
      */
     reset(): void {
-      this.work = null;
+      this.content = null;
       this.progress = null;
       this.spots = [];
       this.activeChip = 'SPOTS';

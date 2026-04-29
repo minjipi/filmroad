@@ -21,8 +21,8 @@ export interface SavedItem {
   name: string;
   regionLabel: string;
   coverImageUrls: string[];
-  workId: number;
-  workTitle: string;
+  contentId: number;
+  contentTitle: string;
   distanceKm: number | null;
   likeCount: number;
   visited: boolean;

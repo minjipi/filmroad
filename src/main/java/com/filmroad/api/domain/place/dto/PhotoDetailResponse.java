@@ -45,7 +45,7 @@ public class PhotoDetailResponse {
 
     private PhotoDetailAuthorDto author;
     private PhotoDetailPlaceDto place;
-    private PhotoDetailWorkDto work;
+    private PhotoDetailContentDto content;
 
     private List<PhotoDetailCommentDto> topComments;  // 상위 3개
     private int moreCommentsCount;                    // commentCount - topComments.size()

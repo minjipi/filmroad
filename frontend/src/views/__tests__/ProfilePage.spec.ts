@@ -75,8 +75,8 @@ const savedSeedState = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/p10.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       distanceKm: 1.2,
       likeCount: 3200,
       visited: false,
@@ -87,8 +87,8 @@ const savedSeedState = {
       name: '덕수궁 돌담길',
       regionLabel: '정동',
       coverImageUrls: ['https://img/p11.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
       distanceKm: 8.4,
       likeCount: 900,
       visited: false,
@@ -99,8 +99,8 @@ const savedSeedState = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/p13.jpg'],
-      workId: 2,
-      workTitle: '이태원 클라쓰',
+      contentId: 2,
+      contentTitle: '이태원 클라쓰',
       distanceKm: 4.8,
       likeCount: 5100,
       visited: true,
@@ -123,8 +123,8 @@ function mountProfile(
       placeId: number;
       placeName: string;
       regionLabel: string;
-      workId: number;
-      workTitle: string;
+      contentId: number;
+      contentTitle: string;
       visibility: 'PUBLIC' | 'PRIVATE';
       createdAt: string;
     }>;
@@ -475,7 +475,7 @@ describe('ProfilePage.vue', () => {
 
     expect(wrapper.find('[data-testid="stampbook-detail-btn"]').exists()).toBe(false);
     expect(wrapper.find('.stampbook-card').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="stampbook-works-list"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="stampbook-contents-list"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('수집 중인 작품');
   });
 
@@ -489,8 +489,8 @@ describe('ProfilePage.vue', () => {
           placeId: 10,
           placeName: '주문진 영진해변 방파제',
           regionLabel: '강원 강릉시',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           visibility: 'PUBLIC' as const,
           createdAt: '2026-04-22T00:00:00Z',
         },
@@ -501,8 +501,8 @@ describe('ProfilePage.vue', () => {
           placeId: 11,
           placeName: '덕수궁 돌담길',
           regionLabel: '서울 중구',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           visibility: 'PUBLIC' as const,
           createdAt: '2026-04-20T00:00:00Z',
         },
@@ -537,8 +537,8 @@ describe('ProfilePage.vue', () => {
           placeId: 10,
           placeName: '주문진',
           regionLabel: '강원',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           visibility: 'PUBLIC' as const,
           createdAt: '2026-04-22T00:00:00Z',
         },
@@ -566,8 +566,8 @@ describe('ProfilePage.vue', () => {
           placeId: 10,
           placeName: '주문진',
           regionLabel: '강원',
-          workId: 1,
-          workTitle: '도깨비',
+          contentId: 1,
+          contentTitle: '도깨비',
           visibility: 'PUBLIC' as const,
           createdAt: '2026-04-22T00:00:00Z',
         },

@@ -17,8 +17,8 @@ public class CollectionDetailResponse {
     private String name;
     private String subtitle;              // Collection.description — 없으면 null
     private String coverImageUrl;         // cover_place_id 의 이미지 → fallback 으로 첫 place 의 커버
-    private String kind;                  // "WORK" | "CUSTOM"
-    private String workTitle;             // kind==WORK 일 때만, 그 외 null
+    private String kind;                  // "CONTENT" | "CUSTOM"
+    private String contentTitle;             // kind==WORK 일 때만, 그 외 null
     private Date createdAt;
 
     private int totalPlaces;

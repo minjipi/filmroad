@@ -8,8 +8,8 @@ function m(id: number, lat: number, lng: number): MapMarker {
     name: `p${id}`,
     latitude: lat,
     longitude: lng,
-    workId: 1,
-    workTitle: '',
+    contentId: 1,
+    contentTitle: '',
     regionLabel: '',
     distanceKm: null,
   };

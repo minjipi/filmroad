@@ -15,9 +15,9 @@ public class PlaceDetailDto {
     private String regionLabel;
     private Double latitude;
     private Double longitude;
-    private Long workId;
-    private String workTitle;
-    private String workEpisode;
+    private Long contentId;
+    private String contentTitle;
+    private String contentEpisode;
     private List<String> coverImageUrls;
     private String sceneImageUrl;
     private int photoCount;
@@ -37,9 +37,9 @@ public class PlaceDetailDto {
                 .regionLabel(place.getRegionLabel())
                 .latitude(place.getLatitude())
                 .longitude(place.getLongitude())
-                .workId(place.getWork().getId())
-                .workTitle(place.getWork().getTitle())
-                .workEpisode(place.getPrimaryWorkEpisode())
+                .contentId(place.getContent().getId())
+                .contentTitle(place.getContent().getTitle())
+                .contentEpisode(place.getPrimaryContentEpisode())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .sceneImageUrl(place.getPrimarySceneImageUrl())
                 .photoCount(place.getPhotoCount())

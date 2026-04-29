@@ -8,7 +8,7 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * 통합 검색 결과의 장소 섹션 단건. 지도 점프/딥링크에 필요한 좌표·workId·썸네일만 포함.
+ * 통합 검색 결과의 장소 섹션 단건. 지도 점프/딥링크에 필요한 좌표·contentId·썸네일만 포함.
  */
 @Getter
 @Builder
@@ -18,8 +18,8 @@ public class PlaceSummaryDto {
     private String regionLabel;
     private Double latitude;
     private Double longitude;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private List<String> coverImageUrls;
 
     public static PlaceSummaryDto of(Place place) {
@@ -29,8 +29,8 @@ public class PlaceSummaryDto {
                 .regionLabel(place.getRegionLabel())
                 .latitude(place.getLatitude())
                 .longitude(place.getLongitude())
-                .workId(place.getWork() == null ? null : place.getWork().getId())
-                .workTitle(place.getWork() == null ? null : place.getWork().getTitle())
+                .contentId(place.getContent() == null ? null : place.getContent().getId())
+                .contentTitle(place.getContent() == null ? null : place.getContent().getTitle())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .build();
     }

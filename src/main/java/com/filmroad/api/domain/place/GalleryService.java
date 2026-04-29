@@ -45,8 +45,8 @@ public class GalleryService {
         GalleryPlaceHeaderDto header = GalleryPlaceHeaderDto.builder()
                 .placeId(place.getId())
                 .name(place.getName())
-                .workTitle(place.getWork().getTitle())
-                .workEpisode(place.getPrimaryWorkEpisode())
+                .contentTitle(place.getContent().getTitle())
+                .contentEpisode(place.getPrimaryContentEpisode())
                 .totalPhotoCount(placePhotoRepository.countByPlaceId(placeId))
                 .build();
 

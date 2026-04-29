@@ -52,9 +52,9 @@ const galleryState = {
   placeHeader: {
     placeId: 10,
     name: '주문진 영진해변 방파제',
-    workId: 1,
-    workTitle: '도깨비',
-    workEpisode: '1회',
+    contentId: 1,
+    contentTitle: '도깨비',
+    contentEpisode: '1회',
     totalPhotoCount: 3,
   },
   photos: [makePhoto(1), makePhoto(2), makePhoto(3)],

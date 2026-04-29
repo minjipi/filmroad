@@ -11,8 +11,8 @@ public class MapMarkerDto {
     private String name;
     private Double latitude;
     private Double longitude;
-    private Long workId;
-    private String workTitle;
+    private Long contentId;
+    private String contentTitle;
     private String regionLabel;
     private Double distanceKm;
 
@@ -22,8 +22,8 @@ public class MapMarkerDto {
                 .name(place.getName())
                 .latitude(place.getLatitude())
                 .longitude(place.getLongitude())
-                .workId(place.getWork().getId())
-                .workTitle(place.getWork().getTitle())
+                .contentId(place.getContent().getId())
+                .contentTitle(place.getContent().getTitle())
                 .regionLabel(place.getRegionLabel())
                 .distanceKm(distanceKm)
                 .build();

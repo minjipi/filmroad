@@ -45,7 +45,7 @@ class GalleryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.results.place.placeId", is(10)))
-                .andExpect(jsonPath("$.results.place.workTitle", is("도깨비")))
+                .andExpect(jsonPath("$.results.place.contentTitle", is("도깨비")))
                 .andExpect(jsonPath("$.results.photos", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.sort", is("RECENT")))
                 .andExpect(jsonPath("$.results.total", greaterThanOrEqualTo(6)));

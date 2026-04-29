@@ -21,7 +21,7 @@ public class MapController {
     public BaseResponse<MapResponse> getPlaces(
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
-            @RequestParam(required = false) Long workId,
+            @RequestParam(required = false) Long contentId,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Long selectedId,
             // viewport bounds. 넷 다 넘기면 bbox 필터가 활성화되고, 비워두면 전국 범위 fallback.
@@ -31,6 +31,6 @@ public class MapController {
             @RequestParam(required = false) Double neLng
     ) {
         return BaseResponse.success(
-                mapService.getMap(lat, lng, workId, q, selectedId, swLat, swLng, neLat, neLng));
+                mapService.getMap(lat, lng, contentId, q, selectedId, swLat, swLng, neLat, neLng));
     }
 }

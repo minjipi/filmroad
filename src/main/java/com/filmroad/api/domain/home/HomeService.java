@@ -5,12 +5,12 @@ import com.filmroad.api.common.util.GeoUtils;
 import com.filmroad.api.domain.home.dto.HeroDto;
 import com.filmroad.api.domain.home.dto.HomeResponse;
 import com.filmroad.api.domain.home.dto.PlaceSummaryDto;
-import com.filmroad.api.domain.home.dto.WorkSummaryDto;
+import com.filmroad.api.domain.home.dto.ContentSummaryDto;
 import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.place.Place;
 import com.filmroad.api.domain.place.PlaceRepository;
-import com.filmroad.api.domain.work.Work;
-import com.filmroad.api.domain.work.WorkRepository;
+import com.filmroad.api.domain.content.Content;
+import com.filmroad.api.domain.content.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -44,12 +44,12 @@ public class HomeService {
     static final double DEFAULT_RADIUS_KM = 30.0;
 
     private final PlaceRepository placeRepository;
-    private final WorkRepository workRepository;
+    private final ContentRepository contentRepository;
     private final PlaceLikeRepository placeLikeRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public HomeResponse getHome(Double lat, Double lng, Double radiusKm, Long workId, HomeScope scope) {
+    public HomeResponse getHome(Double lat, Double lng, Double radiusKm, Long contentId, HomeScope scope) {
         HomeScope effectiveScope = scope == null ? HomeScope.NEAR : scope;
 
         List<Place> places;
@@ -62,7 +62,7 @@ public class HomeService {
             // 떨어져 있을 수 있다. radius 는 정렬 전에 적용 — 필드 두 번 계산하지
             // 않도록 (Place, 거리) 쌍으로 한 번에 처리.
             double effectiveRadius = radiusKm != null && radiusKm > 0 ? radiusKm : DEFAULT_RADIUS_KM;
-            places = placeRepository.findAllWithWork(workId).stream()
+            places = placeRepository.findAllWithContent(contentId).stream()
                     .map(p -> new PlaceWithDistance(p, GeoUtils.haversineKm(effectiveLat, effectiveLng, p.getLatitude(), p.getLongitude())))
                     .filter(pd -> pd.distanceKm <= effectiveRadius)
                     .sorted(Comparator.comparingDouble(PlaceWithDistance::distanceKm))
@@ -70,7 +70,7 @@ public class HomeService {
                     .map(PlaceWithDistance::place)
                     .toList();
         } else {
-            places = placeRepository.findTrending(workId).stream()
+            places = placeRepository.findTrending(contentId).stream()
                     .limit(PLACE_LIMIT)
                     .toList();
         }
@@ -84,12 +84,12 @@ public class HomeService {
                 .map(p -> PlaceSummaryDto.from(p, likedPlaceIds.contains(p.getId())))
                 .toList();
 
-        List<WorkSummaryDto> workDtos = workRepository.findAll().stream()
+        List<ContentSummaryDto> workDtos = contentRepository.findAll().stream()
                 .sorted(Comparator.comparing(w -> w.getId()))
-                .map(WorkSummaryDto::from)
+                .map(ContentSummaryDto::from)
                 .toList();
 
-        List<WorkSummaryDto> popularWorks = buildPopularWorks();
+        List<ContentSummaryDto> popularContents = buildPopularContents();
 
         // Hero 거리 표시는 사용자가 실제로 보낸 좌표가 있을 때만 — 폴백 센터로
         // 만든 가짜 거리 ("내 위치에서 약 12km" 같은) 를 보여주지 않기 위해
@@ -98,20 +98,20 @@ public class HomeService {
 
         return HomeResponse.builder()
                 .hero(hero)
-                .works(workDtos)
-                .popularWorks(popularWorks)
+                .contents(workDtos)
+                .popularContents(popularContents)
                 .places(placeDtos)
                 .build();
     }
 
-    private List<WorkSummaryDto> buildPopularWorks() {
+    private List<ContentSummaryDto> buildPopularContents() {
         // trendingScore 합 DESC / placeCount DESC / title ASC 로 정렬된 튜플을 받아 DTO 로 매핑.
-        return workRepository.findPopular(PageRequest.of(0, POPULAR_WORK_LIMIT)).stream()
+        return contentRepository.findPopular(PageRequest.of(0, POPULAR_WORK_LIMIT)).stream()
                 .map(row -> {
-                    Work w = (Work) row[0];
+                    Content w = (Content) row[0];
                     int placeCount = ((Number) row[1]).intValue();
                     int trendingScore = ((Number) row[2]).intValue();
-                    return WorkSummaryDto.popular(w, placeCount, trendingScore);
+                    return ContentSummaryDto.popular(w, placeCount, trendingScore);
                 })
                 .toList();
     }
@@ -132,26 +132,26 @@ public class HomeService {
         }
 
         Place primary = places.get(0);
-        long sameWorkCount = places.stream()
-                .filter(p -> p.getWork().getId().equals(primary.getWork().getId()))
+        long sameContentCount = places.stream()
+                .filter(p -> p.getContent().getId().equals(primary.getContent().getId()))
                 .count();
 
         String title = String.format("오늘은 '%s'의\n%s을 걸어볼까요?",
-                primary.getWork().getTitle(),
+                primary.getContent().getTitle(),
                 shortenRegion(primary.getRegionLabel()));
-        String subtitle = buildHeroSubtitle(primary, sameWorkCount, userLat, userLng);
+        String subtitle = buildHeroSubtitle(primary, sameContentCount, userLat, userLng);
 
         return HeroDto.builder()
                 .monthLabel(monthLabel)
                 .tag("주말 추천")
                 .title(title)
                 .subtitle(subtitle)
-                .workId(primary.getWork().getId())
+                .contentId(primary.getContent().getId())
                 .primaryPlaceId(primary.getId())
                 .build();
     }
 
-    private String buildHeroSubtitle(Place primary, long sameWorkCount, Double userLat, Double userLng) {
+    private String buildHeroSubtitle(Place primary, long sameContentCount, Double userLat, Double userLng) {
         // 좌표가 모두 있을 때만 실제 haversine 거리 표시. 하나라도 없으면
         // "내 위치에서 약 N km" 같은 거짓 정보를 만들지 않고 중립 카피로 폴백.
         // (이전 버전은 좌표 유무와 무관하게 "차로 12분" 을 하드코딩해서
@@ -159,9 +159,9 @@ public class HomeService {
         if (userLat != null && userLng != null
                 && primary.getLatitude() != null && primary.getLongitude() != null) {
             double km = GeoUtils.haversineKm(userLat, userLng, primary.getLatitude(), primary.getLongitude());
-            return String.format("내 위치에서 약 %s · %d곳의 성지", formatDistance(km), sameWorkCount);
+            return String.format("내 위치에서 약 %s · %d곳의 성지", formatDistance(km), sameContentCount);
         }
-        return String.format("주변 %d곳의 성지", sameWorkCount);
+        return String.format("주변 %d곳의 성지", sameContentCount);
     }
 
     private String formatDistance(double km) {

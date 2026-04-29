@@ -16,8 +16,8 @@ export function buildBoastShareData(
 ): ShareData {
   const placeName = result.stamp?.placeName ?? fallbackPlaceName ?? '성지';
   return {
-    title: `${result.workTitle} · ${placeName} 인증 완료!`,
-    description: `필름로드에서 ${result.workTitle} 성지를 다녀왔어요`,
+    title: `${result.contentTitle} · ${placeName} 인증 완료!`,
+    description: `필름로드에서 ${result.contentTitle} 성지를 다녀왔어요`,
     imageUrl: result.imageUrl,
     url: `${shareOrigin()}/shot/${result.id}`,
   };
@@ -31,14 +31,14 @@ export interface PlaceShareInput {
   id: number;
   name: string;
   regionLabel: string;
-  workTitle: string;
+  contentTitle: string;
   coverImageUrls: string[];
 }
 
 export function buildPlaceShareData(place: PlaceShareInput): ShareData {
   return {
     title: place.name,
-    description: `${place.workTitle} · ${place.regionLabel}`,
+    description: `${place.contentTitle} · ${place.regionLabel}`,
     imageUrl: place.coverImageUrls[0] ?? '',
     url: `${shareOrigin()}/place/${place.id}`,
   };

@@ -32,23 +32,23 @@
 
         <nav class="home-tabs">
           <div
-            :class="['tab', selectedWorkId === null ? 'active' : '']"
-            @click="onSelectWork(null)"
+            :class="['tab', selectedContentId === null ? 'active' : '']"
+            @click="onSelectContent(null)"
           >
             모두
           </div>
           <div
-            v-for="w in works"
+            v-for="w in contents"
             :key="w.id"
-            :class="['tab', selectedWorkId === w.id ? 'active' : '']"
-            @click="onSelectWork(w.id)"
+            :class="['tab', selectedContentId === w.id ? 'active' : '']"
+            @click="onSelectContent(w.id)"
           >
             {{ w.title }}
           </div>
         </nav>
 
         <div
-          v-if="selectedWorkId === null"
+          v-if="selectedContentId === null"
           class="home-segmented"
           data-testid="home-segmented"
         >
@@ -61,32 +61,32 @@
             @click="onSelectScope('TRENDING')"
           >전국 트렌드</span>
           <span
-            :class="['seg', scope === 'POPULAR_WORKS' ? 'active' : '']"
-            data-testid="seg-popular-works"
-            @click="onSelectScope('POPULAR_WORKS')"
+            :class="['seg', scope === 'POPULAR_CONTENTS' ? 'active' : '']"
+            data-testid="seg-popular-contents"
+            @click="onSelectScope('POPULAR_CONTENTS')"
           >인기 작품</span>
         </div>
 
-        <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_WORKS 가 아닌 scope 는
-             기존 place grid 그대로. 작품 탭(selectedWorkId !== null) 에서는
+        <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_CONTENTS 가 아닌 scope 는
+             기존 place grid 그대로. 작품 탭(selectedContentId !== null) 에서는
              segmented 자체가 숨겨지지만, state.scope 는 사용자가 모두 탭에서
-             골라둔 값을 그대로 보존한다. 그래서 POPULAR_WORKS 상태로 작품 탭에
-             들어와도 works-grid 가 뜨지 않도록 명시적으로 가드. -->
+             골라둔 값을 그대로 보존한다. 그래서 POPULAR_CONTENTS 상태로 작품 탭에
+             들어와도 contents-grid 가 뜨지 않도록 명시적으로 가드. -->
         <div
-          v-if="scope === 'POPULAR_WORKS' && selectedWorkId === null"
-          class="home-grid works-grid"
-          data-testid="works-grid"
+          v-if="scope === 'POPULAR_CONTENTS' && selectedContentId === null"
+          class="home-grid contents-grid"
+          data-testid="contents-grid"
         >
           <div
-            v-for="w in popularWorks"
+            v-for="w in popularContents"
             :key="w.id"
-            class="photo-card work-card"
-            data-testid="work-card"
-            @click="onOpenPopularWork(w.id)"
+            class="photo-card content-card"
+            data-testid="content-card"
+            @click="onOpenPopularContent(w.id)"
           >
             <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
-            <div v-else class="work-initial-bg">
-              <span class="work-initial">{{ posterInitial(w.title) }}</span>
+            <div v-else class="content-initial-bg">
+              <span class="content-initial">{{ posterInitial(w.title) }}</span>
             </div>
             <div class="grad" />
             <div class="cap">
@@ -96,7 +96,7 @@
               </div>
             </div>
           </div>
-          <p v-if="popularWorks.length === 0" class="empty-note">
+          <p v-if="popularContents.length === 0" class="empty-note">
             인기 작품 데이터가 없어요
           </p>
         </div>
@@ -107,7 +107,7 @@
                state 상 NEAR 라도 서버에는 TRENDING 으로 보내고 segmented 도
                숨기므로, 이 NEAR-전용 UI 자체도 모두 탭으로 한정한다. -->
           <div
-            v-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'denied'"
+            v-if="selectedContentId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'denied'"
             class="geo-banner"
             data-testid="geo-denied-banner"
           >
@@ -119,7 +119,7 @@
           </div>
 
           <div
-            v-else-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'unavailable'"
+            v-else-if="selectedContentId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'unavailable'"
             class="geo-banner"
             data-testid="geo-unavailable-banner"
           >
@@ -137,7 +137,7 @@
           </div>
 
           <div
-            v-else-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'timeout'"
+            v-else-if="selectedContentId === null && scope === 'NEAR' && geo.status === 'fail' && geo.reason === 'timeout'"
             class="geo-banner"
             data-testid="geo-timeout-banner"
           >
@@ -162,8 +162,8 @@
               @click="onOpenDetail(p.id)"
             >
               <img
-                v-if="p.coverImageUrls.length > 0"
-                :src="p.coverImageUrls[0]"
+                v-if="p.sceneImageUrl"
+                :src="p.sceneImageUrl"
                 :alt="p.name"
               />
               <div class="grad" />
@@ -175,7 +175,7 @@
               </div>
               <div class="cap">
                 <div class="chip-wrap">
-                  <FrChip variant="primary">{{ p.workTitle }}</FrChip>
+                  <FrChip variant="primary">{{ p.contentTitle }}</FrChip>
                 </div>
                 <div class="t">{{ p.name }}</div>
                 <div class="loc">
@@ -186,7 +186,7 @@
           </div>
 
           <div
-            v-if="selectedWorkId === null && scope === 'NEAR' && geo.status === 'granted' && places.length === 0"
+            v-if="selectedContentId === null && scope === 'NEAR' && geo.status === 'granted' && places.length === 0"
             class="nearby-empty"
             data-testid="nearby-empty"
           >
@@ -279,7 +279,7 @@ import {
 } from '@/composables/useGeolocation';
 
 const homeStore = useHomeStore();
-const { hero, works, places, popularWorks, loading, error, selectedWorkId, scope } =
+const { hero, contents, places, popularContents, loading, error, selectedContentId, scope } =
   storeToRefs(homeStore);
 const { showError } = useToast();
 const router = useRouter();
@@ -321,17 +321,17 @@ function markPrimed(): void {
   }
 }
 
-async function onSelectWork(id: number | null): Promise<void> {
-  await homeStore.setWork(id);
+async function onSelectContent(id: number | null): Promise<void> {
+  await homeStore.setContent(id);
   if (error.value) await showError(error.value);
   // task #25: 작품 탭 상태를 URL query 에 동기. id=null 이면 query 제거.
   syncQueryFromState();
 }
 
-// task #25: scope/selectedWorkId 의 라우트 query 동기화 helpers.
+// task #25: scope/selectedContentId 의 라우트 query 동기화 helpers.
 // FeedPage 와 동일 패턴 — 새로고침/공유 URL 시 같은 상태로 복원.
 const VALID_SCOPES: ReadonlySet<HomeScope> = new Set([
-  'NEAR', 'TRENDING', 'POPULAR_WORKS',
+  'NEAR', 'TRENDING', 'POPULAR_CONTENTS',
 ]);
 function pickQueryScope(): HomeScope | null {
   const raw = route.query.scope;
@@ -339,8 +339,8 @@ function pickQueryScope(): HomeScope | null {
   if (typeof value !== 'string') return null;
   return VALID_SCOPES.has(value as HomeScope) ? (value as HomeScope) : null;
 }
-function pickQueryWorkId(): number | null {
-  const raw = route.query.workId;
+function pickQueryContentId(): number | null {
+  const raw = route.query.contentId;
   const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : null;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -348,28 +348,28 @@ function pickQueryWorkId(): number | null {
 function syncQueryFromState(): void {
   const next: Record<string, string> = { ...route.query as Record<string, string> };
   if (homeStore.scope === 'NEAR') delete next.scope; else next.scope = homeStore.scope;
-  if (homeStore.selectedWorkId === null) delete next.workId; else next.workId = String(homeStore.selectedWorkId);
+  if (homeStore.selectedContentId === null) delete next.contentId; else next.contentId = String(homeStore.selectedContentId);
   // 변경 없으면 push 안 함 — Vue Router 가 noop 처리하지만 명시적 가드.
   const cur = route.query;
-  if (cur.scope === next.scope && cur.workId === next.workId) return;
+  if (cur.scope === next.scope && cur.contentId === next.contentId) return;
   void router.replace({ path: route.path, query: next });
 }
 
-// 외부 ?scope=POPULAR_WORKS / ?workId=3 진입 또는 brower history navigation
+// 외부 ?scope=POPULAR_CONTENTS / ?contentId=3 진입 또는 brower history navigation
 // 시 store 상태 catch-up. push 한 본인이 부른 watch 는 store 가 이미 같은
 // 값이라 무시되므로 무한 루프 없음.
 watch(
-  () => [route.query.scope, route.query.workId] as const,
+  () => [route.query.scope, route.query.contentId] as const,
   (next, prev) => {
     // navigation 으로 query 가 실제로 바뀐 경우만. (Vue Router 가 같은
     // 객체를 재사용하면 watch 가 fire 하지 않지만 안전망.)
     if (JSON.stringify(next) === JSON.stringify(prev)) return;
     const s = pickQueryScope();
-    const w = pickQueryWorkId();
+    const w = pickQueryContentId();
     if (s !== null && s !== homeStore.scope) void homeStore.setScope(s);
-    // workId 는 명시적으로 비워질 수도 있음 (?workId 제거) — 그땐 모두 탭으로.
+    // contentId 는 명시적으로 비워질 수도 있음 (?contentId 제거) — 그땐 모두 탭으로.
     // prev 에 값이 있었고 next 에 없으면 의도된 clear 로 해석.
-    if (w !== homeStore.selectedWorkId) void homeStore.setWork(w);
+    if (w !== homeStore.selectedContentId) void homeStore.setContent(w);
   },
 );
 
@@ -468,11 +468,11 @@ async function onSearch(): Promise<void> {
   await router.push('/search');
 }
 
-async function onOpenPopularWork(id: number): Promise<void> {
+async function onOpenPopularContent(id: number): Promise<void> {
   // 인기 작품 카드 → 작품 상세 페이지로 이동. 이전 버전은 scope/filter 를
   // 자동 전환해 place grid 를 보여줬지만, UX 피드백에 따라 작품 상세
   // (포스터 + 성지 리스트 + 진행도) 로 직접 유도하는 쪽이 명확해서 전환.
-  await router.push(`/work/${id}`);
+  await router.push(`/content/${id}`);
 }
 
 function posterInitial(title: string): string {
@@ -487,9 +487,9 @@ onMounted(async () => {
   // query 가 비어있으면 store 기본값 / 외부 시드를 그대로 존중. 명시적 query
   // 값(null 이 아닌 값)만 override 한다.
   const seedScope = pickQueryScope();
-  const seedWork = pickQueryWorkId();
+  const seedContent = pickQueryContentId();
   if (seedScope !== null && seedScope !== homeStore.scope) homeStore.scope = seedScope;
-  if (seedWork !== null && seedWork !== homeStore.selectedWorkId) homeStore.selectedWorkId = seedWork;
+  if (seedContent !== null && seedContent !== homeStore.selectedContentId) homeStore.selectedContentId = seedContent;
   await homeStore.fetchHome();
   if (error.value) await showError(error.value);
 });
@@ -605,11 +605,11 @@ ion-content {
 }
 .seg.active { color: var(--fr-ink); }
 
-/* ---------- 인기 작품 grid (task #24 refactor — POPULAR_WORKS scope) ---------- */
-/* .home-grid.works-grid reuses the 2-column grid + .photo-card envelope
+/* ---------- 인기 작품 grid (task #24 refactor — POPULAR_CONTENTS scope) ---------- */
+/* .home-grid.contents-grid reuses the 2-column grid + .photo-card envelope
    so the work cards match the existing place cards' shape. Only the
    empty-poster fallback needs its own visual. */
-.work-initial-bg {
+.content-initial-bg {
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, #eef2f6, #e2e8f0);
@@ -617,13 +617,13 @@ ion-content {
   align-items: center;
   justify-content: center;
 }
-.work-initial {
+.content-initial {
   font-size: 48px;
   font-weight: 800;
   color: var(--fr-ink-3);
   letter-spacing: -0.02em;
 }
-.works-grid .empty-note {
+.contents-grid .empty-note {
   grid-column: 1 / -1;
   padding: 32px 8px;
   text-align: center;

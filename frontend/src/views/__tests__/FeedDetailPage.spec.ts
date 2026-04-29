@@ -57,7 +57,7 @@ function makePost(id: number, overrides: Partial<FeedPost> = {}): FeedPost {
       following: false,
     },
     place: { id: id * 10, name: `장소${id}`, regionLabel: '강릉시 주문진읍' },
-    work: { id: 1, title: '도깨비', workEpisode: '1회', sceneTimestamp: '00:24:10' },
+    content: { id: 1, title: '도깨비', contentEpisode: '1회', sceneTimestamp: '00:24:10' },
     likeCount: 100 + id,
     commentCount: 3,
     liked: false,
@@ -74,8 +74,8 @@ function makeUser(id: number, following = false): FeedUser {
     nickname: `추천${id}`,
     avatarUrl: `https://img/r${id}.jpg`,
     verified: false,
-    workTitle: '도깨비',
-    stampCountForWork: id,
+    contentTitle: '도깨비',
+    stampCountForContent: id,
     following,
   };
 }
@@ -99,7 +99,7 @@ function mountFeed(overrides: {
         ],
         recommendedUsers: overrides.recommendedUsers ?? [makeUser(10), makeUser(11)],
         tab: overrides.tab ?? 'RECENT',
-        workId: null,
+        contentId: null,
         cursor: null,
         hasMore: false,
         loading: false,

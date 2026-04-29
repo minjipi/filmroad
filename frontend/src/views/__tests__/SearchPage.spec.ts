@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: { works: [], places: [] } }) },
+  default: { get: vi.fn().mockResolvedValue({ data: { contents: [], places: [] } }) },
 }));
 
 const { pushSpy, backSpy } = vi.hoisted(() => ({
@@ -20,7 +20,7 @@ import { useSearchStore, type SearchResponse } from '@/stores/search';
 import { mountWithStubs } from './__helpers__/mount';
 
 const fixture: SearchResponse = {
-  works: [
+  contents: [
     { id: 1, title: '도깨비', posterUrl: 'https://img/g.jpg', placeCount: 12 },
   ],
   places: [
@@ -29,8 +29,8 @@ const fixture: SearchResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/10.jpg'],
-      workId: 1,
-      workTitle: '도깨비',
+      contentId: 1,
+      contentTitle: '도깨비',
     },
   ],
 };
@@ -40,7 +40,7 @@ function mountSearch(initial?: Partial<SearchResponse>) {
     initialState: {
       search: {
         query: '',
-        works: initial?.works ?? [],
+        contents: initial?.contents ?? [],
         places: initial?.places ?? [],
         loading: false,
         error: null,
@@ -61,7 +61,7 @@ describe('SearchPage.vue', () => {
     await flushPromises();
 
     expect(wrapper.find('.sr-empty').text()).toContain('찾고 싶은 작품이나 장소를 입력해 주세요');
-    expect(wrapper.find('[data-testid="work-item"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="content-item"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="place-item"]').exists()).toBe(false);
   });
 
@@ -75,9 +75,9 @@ describe('SearchPage.vue', () => {
     // Flush the 300ms debounce without actually firing the network (store is pre-populated).
     await flushPromises();
 
-    expect(wrapper.findAll('[data-testid="work-item"]').length).toBe(1);
+    expect(wrapper.findAll('[data-testid="content-item"]').length).toBe(1);
     expect(wrapper.findAll('[data-testid="place-item"]').length).toBe(1);
-    // Count badges on the tabs reflect fixtures (works=1, places=1, all=2).
+    // Count badges on the tabs reflect fixtures (contents=1, places=1, all=2).
     const tabs = wrapper.findAll('.sr-tab .cnt');
     expect(tabs.map((t) => t.text())).toEqual(['2', '1', '1']);
   });
@@ -103,7 +103,7 @@ describe('SearchPage.vue', () => {
     vi.useRealTimers();
   });
 
-  it('tapping the 작품 tab hides places and shows only the works list', async () => {
+  it('tapping the 작품 tab hides places and shows only the contents list', async () => {
     const { wrapper } = mountSearch(fixture);
     const input = wrapper.find('input.sr-input');
     await input.setValue('도깨비');
@@ -113,7 +113,7 @@ describe('SearchPage.vue', () => {
     // [전체, 작품, 장소]
     await tabButtons[1].trigger('click');
 
-    expect(wrapper.findAll('[data-testid="work-item"]').length).toBe(1);
+    expect(wrapper.findAll('[data-testid="content-item"]').length).toBe(1);
     expect(wrapper.findAll('[data-testid="place-item"]').length).toBe(0);
   });
 
@@ -127,14 +127,14 @@ describe('SearchPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/place/10');
   });
 
-  it('work item click pushes /work/:id', async () => {
+  it('work item click pushes /content/:id', async () => {
     const { wrapper } = mountSearch(fixture);
     const input = wrapper.find('input.sr-input');
     await input.setValue('도깨비');
     await flushPromises();
 
-    await wrapper.find('[data-testid="work-item"]').trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith('/work/1');
+    await wrapper.find('[data-testid="content-item"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/content/1');
   });
 
   it('clear (×) button resets the input and keeps focus', async () => {

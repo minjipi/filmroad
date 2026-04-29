@@ -4,7 +4,7 @@ import api from '@/services/api';
 // Matches the server's CollectionDetail response. Optional fields are those
 // that only apply to work-based collections or paid features — CUSTOM
 // collections leave them null.
-export type CollectionKind = 'WORK' | 'CUSTOM';
+export type CollectionKind = 'CONTENT' | 'CUSTOM';
 export type CollectionPrivacy = 'PRIVATE' | 'PUBLIC';
 
 export interface CollectionOwner {
@@ -19,10 +19,10 @@ export interface CollectionPlace {
   name: string;
   regionLabel: string;
   coverImageUrl: string;
-  // workId/workTitle null for CUSTOM collections; populated for WORK-kind.
-  workId: number | null;
-  workTitle: string | null;
-  workEpisode: string | null;
+  // contentId/contentTitle null for CUSTOM collections; populated for WORK-kind.
+  contentId: number | null;
+  contentTitle: string | null;
+  contentEpisode: string | null;
   sceneTimestamp: string | null;
   distanceKm: number | null;
   likeCount: number;
@@ -40,7 +40,7 @@ export interface CollectionDetail {
   subtitle: string | null;
   coverImageUrl: string | null;
   kind: CollectionKind;
-  workTitle: string | null;
+  contentTitle: string | null;
   createdAt: string;
   totalPlaces: number;
   visitedPlaces: number;

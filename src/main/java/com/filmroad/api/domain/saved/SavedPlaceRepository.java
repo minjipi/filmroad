@@ -12,7 +12,7 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
     @Query("""
             SELECT sp FROM SavedPlace sp
             JOIN FETCH sp.place p
-            JOIN FETCH p.work w
+            JOIN FETCH p.content w
             LEFT JOIN FETCH sp.collection
             WHERE sp.user.id = :userId
             ORDER BY sp.createdAt DESC
@@ -26,7 +26,7 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
     @Query("""
             SELECT sp FROM SavedPlace sp
             JOIN FETCH sp.place p
-            JOIN FETCH p.work w
+            JOIN FETCH p.content w
             WHERE sp.collection.id = :collectionId
             ORDER BY sp.createdAt ASC, sp.id ASC
             """)

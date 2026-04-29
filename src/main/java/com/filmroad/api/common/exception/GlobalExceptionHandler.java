@@ -88,7 +88,7 @@ public class GlobalExceptionHandler {
     private int mapToHttpStatus(int statusCode) {
         // 리소스 조회 실패 계열은 HTTP 404로 매핑해 RESTful 시맨틱 유지.
         if (statusCode == BaseResponseStatus.PLACE_NOT_FOUND.getCode()
-                || statusCode == BaseResponseStatus.WORK_NOT_FOUND.getCode()
+                || statusCode == BaseResponseStatus.CONTENT_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.USER_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.COMMENT_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.COLLECTION_NOT_FOUND.getCode()

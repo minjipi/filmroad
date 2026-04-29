@@ -5,5 +5,5 @@ public enum FeedTab {
     POPULAR,     // like_count DESC + id DESC.
     FOLLOWING,
     NEARBY,
-    BY_WORK
+    BY_CONTENT
 }

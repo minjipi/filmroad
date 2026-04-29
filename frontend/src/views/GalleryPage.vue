@@ -8,7 +8,7 @@
         <h1>
           {{ placeHeader?.name ?? '갤러리' }}
           <span class="s">
-            {{ formatCount(placeHeader?.totalPhotoCount ?? total) }}개<template v-if="placeHeader"> · {{ placeHeader.workTitle }}<template v-if="placeHeader.workEpisode"> {{ placeHeader.workEpisode }}</template></template>
+            {{ formatCount(placeHeader?.totalPhotoCount ?? total) }}개<template v-if="placeHeader"> · {{ placeHeader.contentTitle }}<template v-if="placeHeader.contentEpisode"> {{ placeHeader.contentEpisode }}</template></template>
           </span>
         </h1>
         <button type="button" aria-label="map" @click="onOpenMap">

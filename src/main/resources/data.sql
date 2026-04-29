@@ -14,18 +14,18 @@ ALTER TABLE place_photo DROP COLUMN IF EXISTS group_key;
 -- 1:N 테이블로 분리됨. ddl-auto=update 가 알아서 drop 하지 않으므로 IF EXISTS 로 한 번만 제거.
 ALTER TABLE place DROP COLUMN IF EXISTS cover_image_url;
 
--- Migration (place scene 1:N): legacy `scene_image_url` / `work_episode` / `scene_timestamp` /
+-- Migration (place scene 1:N): legacy `scene_image_url` / `content_episode` / `scene_timestamp` /
 -- `scene_description` 4 컬럼이 새 `place_scene_image` 1:N 테이블로 분리됨. 컬럼 drop 자체는
 -- LegacyPhotoSchemaMigration 이 (1) 4 컬럼 한꺼번에 자식 행으로 카피 → (2) drop 순서로 처리한다.
 -- data.sql 단계에서 미리 drop 하면 아직 카피 안 된 dev DB 데이터가 유실되므로 여기서는 drop 하지 않음.
 
-INSERT IGNORE INTO work (id, title, poster_url, type, CREATE_DATE, UPDATE_DATE) VALUES
+INSERT IGNORE INTO content (id, title, poster_url, type, CREATE_DATE, UPDATE_DATE) VALUES
   (1, '도깨비', NULL, 'DRAMA', NOW(), NOW()),
   (2, '이태원 클라쓰', NULL, 'DRAMA', NOW(), NOW()),
   (3, '호텔 델루나', NULL, 'DRAMA', NOW(), NOW()),
   (4, '미스터션샤인', NULL, 'DRAMA', NOW(), NOW());
 
-INSERT IGNORE INTO place (id, name, region_label, latitude, longitude, work_id, trending_score, photo_count, like_count, rating, CREATE_DATE, UPDATE_DATE) VALUES
+INSERT IGNORE INTO place (id, name, region_label, latitude, longitude, content_id, trending_score, photo_count, like_count, rating, CREATE_DATE, UPDATE_DATE) VALUES
   (10, '주문진 영진해변 방파제', '강릉시 주문진읍', 37.8928, 128.8347,
    1, 98, 1204, 3200, 4.8, NOW(), NOW()),
   (11, '논산 선샤인 스튜디오', '충남 논산시 연무읍', 36.1349, 127.0983,
@@ -87,11 +87,11 @@ UPDATE place SET nearby_restaurant_count = 3, recommended_time_label = '새벽',
 UPDATE place SET nearby_restaurant_count = 15, recommended_time_label = '밤',      review_count =  720 WHERE id = 16;
 UPDATE place SET nearby_restaurant_count = 4, recommended_time_label = '오전',     review_count =  390 WHERE id = 17;
 
--- Place 별 씬 1:N 시드. (image_url + work_episode + scene_timestamp + scene_description) 4 필드를 모두
+-- Place 별 씬 1:N 시드. (image_url + content_episode + scene_timestamp + scene_description) 4 필드를 모두
 -- 자식 테이블에 둔다. imageOrderIndex=0 이 대표(primary) — 요약 DTO 평면 필드 폴백, ShotScoringService
 -- 의 비교 기준 후보 중 하나. place 10 / 13 / 14 는 멀티 씬 검증을 위해 order=1 행을 추가.
 INSERT IGNORE INTO place_scene_image
-  (id, place_id, image_url, image_order_index, work_episode, scene_timestamp, scene_description, CREATE_DATE, UPDATE_DATE) VALUES
+  (id, place_id, image_url, image_order_index, content_episode, scene_timestamp, scene_description, CREATE_DATE, UPDATE_DATE) VALUES
   (1, 10, 'https://images.unsplash.com/photo-1502514276747-de8d3fc3a2cb?auto=format&fit=crop&w=800&q=80', 0,
    '1회',  '00:15:24', '공유가 처음 지은탁을 만나던 그 방파제. 빨간 목도리가 바람에 흩날리던 장면입니다.', NOW(), NOW()),
   (2, 11, 'https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=800&q=80', 0,
@@ -368,7 +368,7 @@ UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 3;
 UPDATE users SET followers_count = 2, following_count = 2 WHERE id = 4;
 UPDATE users SET followers_count = 0, following_count = 1 WHERE id = 5;
 
-INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_work_id, CREATE_DATE, UPDATE_DATE) VALUES
+INSERT IGNORE INTO badge (id, code, name, description, icon_key, gradient, order_index, condition_type, condition_threshold, condition_content_id, CREATE_DATE, UPDATE_DATE) VALUES
   (1, 'COASTAL_RUNNER', '바다 러너', '바다 성지 5곳 이상 방문', 'waves', 'sky-violet', 1, 'COASTAL_COUNT', 5, NULL, NOW(), NOW()),
   (2, 'STREAK_7', '연속 7일', '7일 연속 성지 방문', 'flame', 'amber-coral', 2, 'STREAK', 7, NULL, NOW(), NOW()),
   (3, 'EARLY_BIRD', '얼리버드', '이른 아침 방문 1회', 'sunrise', 'mint-sky', 3, 'EARLY_BIRD', 1, NULL, NOW(), NOW()),
@@ -394,16 +394,16 @@ INSERT IGNORE INTO stamp (id, user_id, place_id, photo_id, acquired_at, CREATE_D
   (8, 1, 17, 170, NOW(), NOW(), NOW());
 
 -- 작품 확장(#23) 메타데이터 백필: synopsis/ratingAverage/yearStart/episodeCount/network/subtitle.
-UPDATE work SET synopsis = '불멸의 도깨비와 그의 신부가 된 소녀의 이야기',
+UPDATE content SET synopsis = '불멸의 도깨비와 그의 신부가 된 소녀의 이야기',
   rating_average = 9.2, year_start = 2016, episode_count = 16, network = 'tvN',
   subtitle = '쓸쓸하고 찬란하神' WHERE id = 1;
-UPDATE work SET synopsis = '편견과 부조리에 맞서는 청춘의 단밤 창업기',
+UPDATE content SET synopsis = '편견과 부조리에 맞서는 청춘의 단밤 창업기',
   rating_average = 8.6, year_start = 2020, episode_count = 16, network = 'JTBC',
   subtitle = '이태원의 밤' WHERE id = 2;
-UPDATE work SET synopsis = '과거와 현재를 잇는 호텔 델루나의 판타지 로맨스',
+UPDATE content SET synopsis = '과거와 현재를 잇는 호텔 델루나의 판타지 로맨스',
   rating_average = 8.8, year_start = 2019, episode_count = 16, network = 'tvN',
   subtitle = '별이 머무는 호텔' WHERE id = 3;
-UPDATE work SET synopsis = '개화기 조선, 의병이 된 청년들의 서사',
+UPDATE content SET synopsis = '개화기 조선, 의병이 된 청년들의 서사',
   rating_average = 9.5, year_start = 2018, episode_count = 24, network = 'tvN',
   subtitle = '선샤인' WHERE id = 4;
 

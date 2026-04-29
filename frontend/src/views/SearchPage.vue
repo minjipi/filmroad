@@ -60,16 +60,16 @@
         </div>
 
         <template v-else>
-          <section v-if="showWorks && works.length > 0" class="sr-section">
-            <h2>작품 <span class="sm">{{ works.length }}</span></h2>
-            <div class="works-list">
+          <section v-if="showContents && contents.length > 0" class="sr-section">
+            <h2>작품 <span class="sm">{{ contents.length }}</span></h2>
+            <div class="contents-list">
               <button
-                v-for="w in works"
+                v-for="w in contents"
                 :key="w.id"
                 type="button"
-                class="work-card"
-                data-testid="work-item"
-                @click="onOpenWork(w)"
+                class="content-card"
+                data-testid="content-item"
+                @click="onOpenContent(w)"
               >
                 <div class="thumb">
                   <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
@@ -103,7 +103,7 @@
                   />
                   <div class="grad" />
                   <div class="cover-caption">
-                    <span class="chip">{{ p.workTitle }}</span>
+                    <span class="chip">{{ p.contentTitle }}</span>
                     <div class="name">{{ p.name }}</div>
                     <div class="region">
                       <ion-icon :icon="locationOutline" class="ic-14" />{{ p.regionLabel }}
@@ -135,7 +135,7 @@ import { storeToRefs } from 'pinia';
 import {
   useSearchStore,
   type SearchPlaceResult,
-  type SearchWorkResult,
+  type SearchContentResult,
 } from '@/stores/search';
 
 type TabKey = 'ALL' | 'WORKS' | 'PLACES';
@@ -143,7 +143,7 @@ type TabKey = 'ALL' | 'WORKS' | 'PLACES';
 const router = useRouter();
 const route = useRoute();
 const searchStore = useSearchStore();
-const { works, places, loading, error } = storeToRefs(searchStore);
+const { contents, places, loading, error } = storeToRefs(searchStore);
 
 const inputEl = ref<HTMLInputElement | null>(null);
 const rawQuery = ref('');
@@ -151,16 +151,16 @@ const activeTab = ref<TabKey>('ALL');
 
 const trimmedQuery = computed(() => rawQuery.value.trim());
 const hasResults = computed(
-  () => works.value.length > 0 || places.value.length > 0,
+  () => contents.value.length > 0 || places.value.length > 0,
 );
 
 const tabs = computed<Array<{ key: TabKey; label: string; count: number | null }>>(() => [
-  { key: 'ALL', label: '전체', count: hasResults.value ? works.value.length + places.value.length : null },
-  { key: 'WORKS', label: '작품', count: hasResults.value ? works.value.length : null },
+  { key: 'ALL', label: '전체', count: hasResults.value ? contents.value.length + places.value.length : null },
+  { key: 'WORKS', label: '작품', count: hasResults.value ? contents.value.length : null },
   { key: 'PLACES', label: '장소', count: hasResults.value ? places.value.length : null },
 ]);
 
-const showWorks = computed(() => activeTab.value === 'ALL' || activeTab.value === 'WORKS');
+const showContents = computed(() => activeTab.value === 'ALL' || activeTab.value === 'WORKS');
 const showPlaces = computed(() => activeTab.value === 'ALL' || activeTab.value === 'PLACES');
 
 // Debounce the input → single search call. 300ms balances "feels instant"
@@ -191,8 +191,8 @@ function onBack(): void {
   router.back();
 }
 
-async function onOpenWork(w: SearchWorkResult): Promise<void> {
-  await router.push(`/work/${w.id}`);
+async function onOpenContent(w: SearchContentResult): Promise<void> {
+  await router.push(`/content/${w.id}`);
 }
 
 async function onOpenPlace(p: SearchPlaceResult): Promise<void> {
@@ -366,12 +366,12 @@ ion-content.sr-content {
   margin-left: 4px;
 }
 
-.works-list {
+.contents-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.work-card {
+.content-card {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -384,7 +384,7 @@ ion-content.sr-content {
   font: inherit;
   color: inherit;
 }
-.work-card .thumb {
+.content-card .thumb {
   width: 48px;
   height: 64px;
   border-radius: 10px;
@@ -396,20 +396,20 @@ ion-content.sr-content {
   color: var(--fr-ink-4);
   flex-shrink: 0;
 }
-.work-card .thumb img {
+.content-card .thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.work-card .thumb .fallback {
+.content-card .thumb .fallback {
   color: var(--fr-ink-4);
 }
-.work-card .meta {
+.content-card .meta {
   flex: 1;
   min-width: 0;
 }
-.work-card .meta .t {
+.content-card .meta .t {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -417,12 +417,12 @@ ion-content.sr-content {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.work-card .meta .s {
+.content-card .meta .s {
   font-size: 11.5px;
   color: var(--fr-ink-3);
   margin-top: 2px;
 }
-.work-card .chev {
+.content-card .chev {
   color: var(--fr-ink-4);
 }
 

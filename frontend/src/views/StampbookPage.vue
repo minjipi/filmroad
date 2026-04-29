@@ -14,7 +14,7 @@
       <div class="sb-scroll no-scrollbar">
         <section v-if="hero" class="hero">
           <div class="label">COLLECTION</div>
-          <h2>{{ hero.worksCollectingCount }}개 작품 · {{ hero.placesCollectedCount }} 성지<br />수집 중</h2>
+          <h2>{{ hero.contentsCollectingCount }}개 작품 · {{ hero.placesCollectedCount }} 성지<br />수집 중</h2>
           <div class="meter">
             <div class="d">
               <ion-icon :icon="ribbonOutline" class="ic-16 m-primary" />
@@ -26,7 +26,7 @@
             </div>
             <div class="d">
               <ion-icon :icon="filmOutline" class="ic-16 m-violet" />
-              <b>{{ hero.completedWorksCount }}</b><span class="muted">완주</span>
+              <b>{{ hero.completedContentsCount }}</b><span class="muted">완주</span>
             </div>
           </div>
         </section>
@@ -40,17 +40,17 @@
           >{{ f.label }}</div>
         </nav>
 
-        <div v-if="showWorksSection" class="section-title">
+        <div v-if="showContentsSection" class="section-title">
           <h3>{{ filter === 'COMPLETED' ? '완주한 작품' : '수집 중인 작품' }}</h3>
           <span class="see">정렬</span>
         </div>
 
-        <div v-if="showWorksSection" class="drama-list">
+        <div v-if="showContentsSection" class="drama-list">
           <div
-            v-for="w in visibleWorks"
-            :key="w.workId"
+            v-for="w in visibleContents"
+            :key="w.contentId"
             class="drama-card"
-            @click="onOpenWork(w.workId)"
+            @click="onOpenContent(w.contentId)"
           >
             <div v-if="w.completed" class="completed-badge">
               <ion-icon :icon="trophyOutline" class="ic-16" />완주
@@ -70,10 +70,10 @@
               </div>
             </div>
           </div>
-          <p v-if="visibleWorks.length === 0" class="empty-note">표시할 작품이 없습니다</p>
+          <p v-if="visibleContents.length === 0" class="empty-note">표시할 작품이 없습니다</p>
         </div>
 
-        <div v-if="showBadgesSection" class="section-title" :class="{ 'gap-top': showWorksSection }">
+        <div v-if="showBadgesSection" class="section-title" :class="{ 'gap-top': showContentsSection }">
           <h3>최근 획득 뱃지</h3>
           <span class="see">전체 보기</span>
         </div>
@@ -127,7 +127,7 @@ const stampbookStore = useStampbookStore();
 const { hero, recentBadges, filter, error } = storeToRefs(stampbookStore);
 const { showError, showInfo } = useToast();
 
-const visibleWorks = computed(() => stampbookStore.visibleWorks);
+const visibleContents = computed(() => stampbookStore.visibleContents);
 
 const filters: Array<{ key: StampbookFilter; label: string }> = [
   { key: 'WORKS', label: '작품' },
@@ -136,7 +136,7 @@ const filters: Array<{ key: StampbookFilter; label: string }> = [
   { key: 'IN_PROGRESS', label: '진행 중' },
 ];
 
-const showWorksSection = computed(() => filter.value !== 'BADGES');
+const showContentsSection = computed(() => filter.value !== 'BADGES');
 const showBadgesSection = computed(() => filter.value === 'WORKS' || filter.value === 'BADGES');
 
 function onSetFilter(f: StampbookFilter): void {
@@ -147,8 +147,8 @@ function onBack(): void {
   router.back();
 }
 
-async function onOpenWork(id: number): Promise<void> {
-  await router.push(`/work/${id}`);
+async function onOpenContent(id: number): Promise<void> {
+  await router.push(`/content/${id}`);
 }
 
 async function onShare(): Promise<void> {

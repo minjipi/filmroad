@@ -1,7 +1,7 @@
 package com.filmroad.api.domain.place;
 
 import com.filmroad.api.common.model.BaseEntity;
-import com.filmroad.api.domain.work.Work;
+import com.filmroad.api.domain.content.Content;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -16,7 +16,7 @@ import java.util.List;
 @Entity
 @Table(name = "place", indexes = {
         @Index(name = "idx_place_lat_lng", columnList = "latitude, longitude"),
-        @Index(name = "idx_place_work", columnList = "work_id")
+        @Index(name = "idx_place_content", columnList = "content_id")
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -58,8 +58,8 @@ public class Place extends BaseEntity {
     private List<PlaceSceneImage> sceneImages = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "work_id", nullable = false)
-    private Work work;
+    @JoinColumn(name = "content_id", nullable = false)
+    private Content content;
 
     @Column(name = "trending_score", nullable = false)
     private int trendingScore;
@@ -73,7 +73,7 @@ public class Place extends BaseEntity {
     @Column(name = "rating", nullable = false, columnDefinition = "DOUBLE DEFAULT 0")
     private double rating;
 
-    // workEpisode / sceneTimestamp / sceneDescription / sceneImageUrl 4종은 모두
+    // contentEpisode / sceneTimestamp / sceneDescription / sceneImageUrl 4종은 모두
     // place_scene_image (1:N) 의 컬럼으로 이전됨. Place 에는 더 이상 보유하지 않는다.
 
     @Column(name = "nearby_restaurant_count", nullable = false, columnDefinition = "INT DEFAULT 0")
@@ -126,7 +126,7 @@ public class Place extends BaseEntity {
     }
 
     /**
-     * 대표(0번) scene URL. 요약 DTO(FeedWorkDto, PhotoUploadResponse 등) 가 평면 필드로 노출할 때,
+     * 대표(0번) scene URL. 요약 DTO(FeedContentDto, PhotoUploadResponse 등) 가 평면 필드로 노출할 때,
      * 그리고 ShotScoringService 가 fallback 비교 기준이 필요할 때 사용. 상세 DTO 는 `scenes` 리스트
      * 전체를 노출하므로 이 헬퍼를 쓰지 말 것.
      */
@@ -134,9 +134,9 @@ public class Place extends BaseEntity {
         return sceneImages == null || sceneImages.isEmpty() ? null : sceneImages.get(0).getImageUrl();
     }
 
-    /** 대표(0번) workEpisode — 요약 DTO 평면 필드 폴백용. 씬이 없으면 null. */
-    public String getPrimaryWorkEpisode() {
-        return sceneImages == null || sceneImages.isEmpty() ? null : sceneImages.get(0).getWorkEpisode();
+    /** 대표(0번) contentEpisode — 요약 DTO 평면 필드 폴백용. 씬이 없으면 null. */
+    public String getPrimaryContentEpisode() {
+        return sceneImages == null || sceneImages.isEmpty() ? null : sceneImages.get(0).getContentEpisode();
     }
 
     /** 대표(0번) sceneTimestamp — 요약 DTO 평면 필드 폴백용. 씬이 없으면 null. */
