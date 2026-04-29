@@ -142,7 +142,7 @@ describe('StampbookPage.vue', () => {
     expect(setFilterSpy).toHaveBeenCalledWith('COMPLETED');
   });
 
-  it('drama-card count matches visibleWorks (default WORKS shows all three)', async () => {
+  it('drama-card count matches visibleContents (default WORKS shows all three)', async () => {
     const { wrapper } = mountStampbook('WORKS');
     await flushPromises();
 

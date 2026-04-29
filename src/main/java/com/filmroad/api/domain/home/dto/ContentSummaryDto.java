@@ -21,19 +21,19 @@ public class ContentSummaryDto {
     private Integer placeCount;
     private Integer trendingScore;
 
-    public static ContentSummaryDto from(Content work) {
+    public static ContentSummaryDto from(Content content) {
         return ContentSummaryDto.builder()
-                .id(work.getId())
-                .title(work.getTitle())
+                .id(content.getId())
+                .title(content.getTitle())
                 .build();
     }
 
-    public static ContentSummaryDto popular(Content work, int placeCount, int trendingScore) {
+    public static ContentSummaryDto popular(Content content, int placeCount, int trendingScore) {
         return ContentSummaryDto.builder()
-                .id(work.getId())
-                .title(work.getTitle())
-                .type(work.getType())
-                .posterUrl(work.getPosterUrl())
+                .id(content.getId())
+                .title(content.getTitle())
+                .type(content.getType())
+                .posterUrl(content.getPosterUrl())
                 .placeCount(placeCount)
                 .trendingScore(trendingScore)
                 .build();

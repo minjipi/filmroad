@@ -3,7 +3,7 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 
-export interface WorkSummary {
+export interface ContentSummary {
   id: number;
   title: string;
 }
@@ -23,6 +23,7 @@ export interface PlaceSummary {
   name: string;
   regionLabel: string;
   coverImageUrls: string[];
+  sceneImageUrl: string | null;
   contentId: number;
   contentTitle: string;
   liked: boolean;
@@ -40,17 +41,17 @@ export interface Hero {
 
 export interface HomeResponse {
   hero: Hero;
-  contents: WorkSummary[];
+  contents: ContentSummary[];
   places: PlaceSummary[];
   // Added in task #24 alongside backend #23. Optional so older servers
   // keep working — the frontend just renders an empty carousel.
   popularContents?: PopularContent[];
 }
 
-// 'POPULAR_WORKS' swaps the grid from places → contents (task #24 refactor).
+// 'POPULAR_CONTENTS' swaps the grid from places → contents (task #24 refactor).
 // No network round-trip is needed — popularContents ships on every /api/home
 // response, so the store just flips the view mode.
-export type HomeScope = 'NEAR' | 'TRENDING' | 'POPULAR_WORKS';
+export type HomeScope = 'NEAR' | 'TRENDING' | 'POPULAR_CONTENTS';
 
 interface FetchOptions {
   lat?: number;
@@ -62,7 +63,7 @@ interface FetchOptions {
 
 interface State {
   hero: Hero | null;
-  contents: WorkSummary[];
+  contents: ContentSummary[];
   places: PlaceSummary[];
   popularContents: PopularContent[];
   loading: boolean;
@@ -92,7 +93,7 @@ export const useHomeStore = defineStore('home', {
         // 작품 탭(selectedContentId !== null) 에서는 segmented 가 UI 상 숨겨지고
         // "그 작품의 trending places" 만 보여주는 단일 모드. state.scope 는
         // 모두 탭으로 복귀했을 때 사용자의 직전 선택을 복원하기 위해 그대로
-        // 보존하되, 서버 호출에는 항상 TRENDING 을 보낸다 — POPULAR_WORKS 로
+        // 보존하되, 서버 호출에는 항상 TRENDING 을 보낸다 — POPULAR_CONTENTS 로
         // 작품 탭 들어왔을 때 백엔드가 잘못된 scope 를 보고 엉뚱한 정렬을
         // 반환하던 버그(작품 탭에서 모든 작품 카드가 보이던 케이스) 를 차단.
         const effectiveScope = this.selectedContentId !== null ? 'TRENDING' : this.scope;
@@ -122,11 +123,11 @@ export const useHomeStore = defineStore('home', {
       // opts 없을 때만 short-circuit.
       if (this.scope === s && !opts) return;
       this.scope = s;
-      // POPULAR_WORKS is a view-only toggle — contents grid renders from the
+      // POPULAR_CONTENTS is a view-only toggle — contents grid renders from the
       // already-hydrated popularContents array, no network round-trip needed.
       // NEAR / TRENDING affect the server-side place sort, so those still
       // refetch.
-      if (s === 'POPULAR_WORKS') return;
+      if (s === 'POPULAR_CONTENTS') return;
       await this.fetchHome(opts ?? {});
     },
     async toggleLike(placeId: number): Promise<void> {

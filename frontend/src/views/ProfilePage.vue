@@ -92,7 +92,7 @@
 
           <div class="drama-list" data-testid="stampbook-contents-list">
             <div
-              v-for="w in stampbookWorks"
+              v-for="w in stampbookContents"
               :key="w.contentId"
               class="drama-card"
               data-testid="stampbook-content-card"
@@ -116,7 +116,7 @@
                 </div>
               </div>
             </div>
-            <p v-if="stampbookWorks.length === 0" class="empty-note">
+            <p v-if="stampbookContents.length === 0" class="empty-note">
               수집 중인 작품이 없어요
             </p>
           </div>
@@ -311,7 +311,7 @@ const savedStore = useSavedStore();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
 const { user, stats, miniMapPins, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
-const { contents: stampbookWorks } = storeToRefs(stampbookStore);
+const { contents: stampbookContents } = storeToRefs(stampbookStore);
 const { collections: savedCollections, items: savedItems } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 
@@ -344,7 +344,7 @@ function formatCount(n: number): string {
 async function onSelectLocalTab(t: LocalTab): Promise<void> {
   // task #36: saved tab is back to in-place — no router.push for any tab.
   localTab.value = t;
-  if (t === 'stampbook' && stampbookWorks.value.length === 0) {
+  if (t === 'stampbook' && stampbookContents.value.length === 0) {
     await stampbookStore.fetch();
   }
   // First-time entry into 'photos' triggers the fetch; subsequent entries

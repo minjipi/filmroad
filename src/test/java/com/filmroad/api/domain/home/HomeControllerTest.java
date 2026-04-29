@@ -45,8 +45,8 @@ class HomeControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/home?contentId=1 filters places to work 1 only")
-    void getHome_byWorkId_filtersPlaces() throws Exception {
+    @DisplayName("GET /api/home?contentId=1 filters places to content 1 only")
+    void getHome_byContentId_filtersPlaces() throws Exception {
         mockMvc.perform(get("/api/home").param("contentId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -143,8 +143,8 @@ class HomeControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/home?contentId=9999 (unknown work) returns empty places but still lists contents")
-    void getHome_unknownWorkId_returnsEmptyPlacesButKeepsWorks() throws Exception {
+    @DisplayName("GET /api/home?contentId=9999 (unknown content) returns empty places but still lists contents")
+    void getHome_unknownContentId_returnsEmptyPlacesButKeepsContents() throws Exception {
         mockMvc.perform(get("/api/home").param("contentId", "9999"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -179,7 +179,7 @@ class HomeControllerTest {
 
     @Test
     @DisplayName("GET /api/home → popularContents 는 place trendingScore 합 DESC 정렬")
-    void getHome_popularWorks_orderedByAggregatedTrendingScore() throws Exception {
+    void getHome_popularContents_orderedByAggregatedTrendingScore() throws Exception {
         // 시드 기준 작품별 trendingScore 합:
         //   도깨비(1)=98+80=178, 이태원 클라쓰(2)=90+70=160,
         //   호텔 델루나(3)=84+75=159, 미스터션샤인(4)=92+65=157

@@ -59,7 +59,7 @@ export const useStampbookStore = defineStore('stampbook', {
     error: null,
   }),
   getters: {
-    visibleWorks(state): StampbookContent[] {
+    visibleContents(state): StampbookContent[] {
       if (state.filter === 'COMPLETED') return state.contents.filter((w) => w.completed);
       if (state.filter === 'IN_PROGRESS') return state.contents.filter((w) => !w.completed);
       return state.contents;

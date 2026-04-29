@@ -36,8 +36,8 @@ class MapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/map/places?contentId=1 filters markers to work 1 only")
-    void getPlaces_byWorkId_filtersMarkers() throws Exception {
+    @DisplayName("GET /api/map/places?contentId=1 filters markers to content 1 only")
+    void getPlaces_byContentId_filtersMarkers() throws Exception {
         mockMvc.perform(get("/api/map/places").param("contentId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.markers", not(empty())))
@@ -45,7 +45,7 @@ class MapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/map/places?q=이태원 matches name/region/work title")
+    @DisplayName("GET /api/map/places?q=이태원 matches name/region/content title")
     void getPlaces_byQuery_filtersBySearchTerm() throws Exception {
         mockMvc.perform(get("/api/map/places").param("q", "이태원"))
                 .andExpect(status().isOk())

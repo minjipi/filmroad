@@ -124,22 +124,22 @@ describe('stampbook store', () => {
     expect(store.filter).toBe('IN_PROGRESS');
   });
 
-  it('visibleWorks getter filters contents by COMPLETED / IN_PROGRESS', async () => {
+  it('visibleContents getter filters contents by COMPLETED / IN_PROGRESS', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useStampbookStore();
     await store.fetch();
 
     // Default WORKS shows everything.
-    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 2, 3]);
+    expect(store.visibleContents.map((w) => w.contentId)).toEqual([1, 2, 3]);
 
     store.setFilter('COMPLETED');
-    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([2]);
+    expect(store.visibleContents.map((w) => w.contentId)).toEqual([2]);
 
     store.setFilter('IN_PROGRESS');
-    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 3]);
+    expect(store.visibleContents.map((w) => w.contentId)).toEqual([1, 3]);
 
     // BADGES does not filter contents — it's a section toggle at the view layer.
     store.setFilter('BADGES');
-    expect(store.visibleWorks.map((w) => w.contentId)).toEqual([1, 2, 3]);
+    expect(store.visibleContents.map((w) => w.contentId)).toEqual([1, 2, 3]);
   });
 });

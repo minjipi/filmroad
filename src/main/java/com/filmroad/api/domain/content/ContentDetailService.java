@@ -36,13 +36,13 @@ public class ContentDetailService {
 
     @Transactional(readOnly = true)
     public ContentDetailResponse getContent(Long contentId) {
-        Content work = contentRepository.findById(contentId)
+        Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.CONTENT_NOT_FOUND));
 
         Long userId = currentUser.currentUserId();
-        List<Place> places = placeRepository.findByWorkIdOrderByIdAsc(contentId);
+        List<Place> places = placeRepository.findByContentIdOrderByIdAsc(contentId);
 
-        List<Stamp> userStamps = stampRepository.findByUserIdAndWorkId(userId, contentId);
+        List<Stamp> userStamps = stampRepository.findByUserIdAndContentId(userId, contentId);
         Map<Long, Stamp> stampByPlaceId = new HashMap<>();
         for (Stamp s : userStamps) {
             stampByPlaceId.put(s.getPlace().getId(), s);
@@ -75,7 +75,7 @@ public class ContentDetailService {
                 .build();
 
         return ContentDetailResponse.builder()
-                .content(ContentDetailDto.from(work))
+                .content(ContentDetailDto.from(content))
                 .progress(progress)
                 .spots(spots)
                 .build();

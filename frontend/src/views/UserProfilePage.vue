@@ -98,7 +98,7 @@
             <div class="l">팔로잉</div>
           </div>
           <div class="up-stat">
-            <div class="n">{{ formatCount(user.stats.collectedWorksCount) }}</div>
+            <div class="n">{{ formatCount(user.stats.collectedContentsCount) }}</div>
             <div class="l">작품</div>
           </div>
 
@@ -141,7 +141,7 @@
               :key="w.id"
               class="hl"
               data-testid="up-highlight"
-              @click="onOpenWork(w.id)"
+              @click="onOpenContent(w.id)"
             >
               <div class="ring">
                 <div class="inner">
@@ -273,7 +273,7 @@ async function onEditProfile(): Promise<void> {
   await router.push('/profile/edit');
 }
 
-async function onOpenWork(contentId: number): Promise<void> {
+async function onOpenContent(contentId: number): Promise<void> {
   await router.push(`/content/${contentId}`);
 }
 

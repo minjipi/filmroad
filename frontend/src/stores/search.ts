@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 
-export interface SearchWorkResult {
+export interface SearchContentResult {
   id: number;
   title: string;
   // Backend (task #16) currently emits 'MOVIE' | 'TV' | 'WEBTOON' style tags
@@ -28,7 +28,7 @@ export interface SearchPlaceResult {
 
 export interface SearchResponse {
   query?: string;
-  contents: SearchWorkResult[];
+  contents: SearchContentResult[];
   places: SearchPlaceResult[];
 }
 
@@ -38,7 +38,7 @@ const DEFAULT_LIMIT = 20;
 
 interface State {
   query: string;
-  contents: SearchWorkResult[];
+  contents: SearchContentResult[];
   places: SearchPlaceResult[];
   loading: boolean;
   error: string | null;

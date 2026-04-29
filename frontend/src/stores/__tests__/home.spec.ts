@@ -37,6 +37,7 @@ const fixture: HomeResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/1.jpg'],
+      sceneImageUrl: 'https://img/scene-1.jpg',
       contentId: 1,
       contentTitle: '도깨비',
       liked: false,
@@ -47,6 +48,7 @@ const fixture: HomeResponse = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/2.jpg'],
+      sceneImageUrl: 'https://img/scene-2.jpg',
       contentId: 2,
       contentTitle: '이태원 클라쓰',
       liked: false,
@@ -186,24 +188,24 @@ describe('home store', () => {
     expect(store.popularContents).toEqual([]);
   });
 
-  it("setScope('POPULAR_WORKS') is a view-only toggle — no /api/home refetch", async () => {
+  it("setScope('POPULAR_CONTENTS') is a view-only toggle — no /api/home refetch", async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useHomeStore();
     await store.fetchHome();
     mockApi.get.mockClear();
 
-    await store.setScope('POPULAR_WORKS');
-    expect(store.scope).toBe('POPULAR_WORKS');
+    await store.setScope('POPULAR_CONTENTS');
+    expect(store.scope).toBe('POPULAR_CONTENTS');
     expect(mockApi.get).not.toHaveBeenCalled();
   });
 
-  it("setScope back to 'TRENDING' from POPULAR_WORKS refetches (server resorts places)", async () => {
+  it("setScope back to 'TRENDING' from POPULAR_CONTENTS refetches (server resorts places)", async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useHomeStore();
     await store.fetchHome();
     mockApi.get.mockClear();
 
-    await store.setScope('POPULAR_WORKS');
+    await store.setScope('POPULAR_CONTENTS');
     expect(mockApi.get).not.toHaveBeenCalled();
 
     mockApi.get.mockResolvedValueOnce({ data: fixture });
@@ -214,12 +216,12 @@ describe('home store', () => {
     expect(opts?.params).toMatchObject({ scope: 'TRENDING' });
   });
 
-  it('setContent(id) on POPULAR_WORKS state still sends scope=TRENDING (segmented is 모두-only)', async () => {
+  it('setContent(id) on POPULAR_CONTENTS state still sends scope=TRENDING (segmented is 모두-only)', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
     const store = useHomeStore();
-    // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태.
-    await store.setScope('POPULAR_WORKS');
-    expect(store.scope).toBe('POPULAR_WORKS');
+    // 사용자가 모두 탭에서 POPULAR_CONTENTS 를 골라둔 상태.
+    await store.setScope('POPULAR_CONTENTS');
+    expect(store.scope).toBe('POPULAR_CONTENTS');
 
     // 작품 탭 클릭 — 서버에는 TRENDING 으로 호출되고, state.scope 는 보존.
     mockApi.get.mockClear();
@@ -227,24 +229,24 @@ describe('home store', () => {
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
     expect(opts?.params).toMatchObject({ contentId: 1, scope: 'TRENDING' });
-    expect(store.scope).toBe('POPULAR_WORKS');
+    expect(store.scope).toBe('POPULAR_CONTENTS');
   });
 
-  it('setContent(null) returning to 모두 with preserved POPULAR_WORKS scope refetches with that scope', async () => {
+  it('setContent(null) returning to 모두 with preserved POPULAR_CONTENTS scope refetches with that scope', async () => {
     mockApi.get.mockResolvedValue({ data: fixture });
     const store = useHomeStore();
-    await store.setScope('POPULAR_WORKS'); // POPULAR_WORKS 는 view-only 라 fetch X
+    await store.setScope('POPULAR_CONTENTS'); // POPULAR_CONTENTS 는 view-only 라 fetch X
     await store.setContent(1);                // 작품 탭 진입 — TRENDING 호출
     mockApi.get.mockClear();
 
-    // 모두 복귀 — selectedContentId 가 null 로 가니 보존된 POPULAR_WORKS 가 다시 effective.
-    // setContent 가 무조건 fetchHome 을 부르고, 작품 ID 가 빠진 상태에서 state.scope=POPULAR_WORKS
+    // 모두 복귀 — selectedContentId 가 null 로 가니 보존된 POPULAR_CONTENTS 가 다시 effective.
+    // setContent 가 무조건 fetchHome 을 부르고, 작품 ID 가 빠진 상태에서 state.scope=POPULAR_CONTENTS
     // 가 그대로 params 에 실려야 한다.
     await store.setContent(null);
-    expect(store.scope).toBe('POPULAR_WORKS');
+    expect(store.scope).toBe('POPULAR_CONTENTS');
     expect(mockApi.get).toHaveBeenCalledTimes(1);
     const [, opts] = mockApi.get.mock.calls[0];
-    expect(opts?.params).toMatchObject({ scope: 'POPULAR_WORKS' });
+    expect(opts?.params).toMatchObject({ scope: 'POPULAR_CONTENTS' });
     expect(opts?.params).not.toHaveProperty('contentId');
   });
 

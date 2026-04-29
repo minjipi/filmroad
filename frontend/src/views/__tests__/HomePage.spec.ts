@@ -61,6 +61,7 @@ const fixture: HomeResponse = {
       name: '주문진 영진해변 방파제',
       regionLabel: '강릉시 주문진읍',
       coverImageUrls: ['https://img/1.jpg'],
+      sceneImageUrl: 'https://img/scene-1.jpg',
       contentId: 1,
       contentTitle: '도깨비',
       liked: false,
@@ -71,6 +72,7 @@ const fixture: HomeResponse = {
       name: '단밤 포차',
       regionLabel: '서울 용산구 이태원동',
       coverImageUrls: ['https://img/2.jpg'],
+      sceneImageUrl: 'https://img/scene-2.jpg',
       contentId: 2,
       contentTitle: '이태원 클라쓰',
       liked: false,
@@ -81,6 +83,7 @@ const fixture: HomeResponse = {
       name: '덕수궁 돌담길',
       regionLabel: '서울 중구 정동',
       coverImageUrls: ['https://img/3.jpg'],
+      sceneImageUrl: 'https://img/scene-3.jpg',
       contentId: 1,
       contentTitle: '도깨비',
       liked: false,
@@ -97,7 +100,7 @@ interface HomeTestOpts {
     placeCount: number;
   }>;
   selectedContentId?: number | null;
-  scope?: 'NEAR' | 'TRENDING' | 'POPULAR_WORKS';
+  scope?: 'NEAR' | 'TRENDING' | 'POPULAR_CONTENTS';
 }
 
 function mountHomePage(opts: HomeTestOpts = {}) {
@@ -203,18 +206,18 @@ describe('HomePage.vue', () => {
     ]);
   });
 
-  it('POPULAR_WORKS scope swaps the place grid for a contents grid (one card per popular work)', async () => {
+  it('POPULAR_CONTENTS scope swaps the place grid for a contents grid (one card per popular work)', async () => {
     const { wrapper } = mountHomePage({
       popularContents: [
         { id: 1, title: '도깨비', posterUrl: 'https://img/p1.jpg', placeCount: 12 },
         { id: 2, title: '이태원 클라쓰', posterUrl: null, placeCount: 6 },
       ],
-      scope: 'POPULAR_WORKS',
+      scope: 'POPULAR_CONTENTS',
     });
     await flushPromises();
 
     expect(wrapper.find('[data-testid="contents-grid"]').exists()).toBe(true);
-    // Place grid is hidden under POPULAR_WORKS.
+    // Place grid is hidden under POPULAR_CONTENTS.
     expect(wrapper.findAll('.home-grid.contents-grid .photo-card').length).toBe(2);
     const cards = wrapper.findAll('[data-testid="content-card"]');
     expect(cards[0].find('.cap .t').text()).toBe('도깨비');
@@ -237,12 +240,12 @@ describe('HomePage.vue', () => {
     expect(wrapper.find('[data-testid="home-segmented"]').exists()).toBe(true);
   });
 
-  it('work tab with stored POPULAR_WORKS scope renders place grid, not contents-grid', async () => {
-    // 사용자가 모두 탭에서 POPULAR_WORKS 를 골라둔 상태로 작품 탭에 들어온
+  it('work tab with stored POPULAR_CONTENTS scope renders place grid, not contents-grid', async () => {
+    // 사용자가 모두 탭에서 POPULAR_CONTENTS 를 골라둔 상태로 작품 탭에 들어온
     // 케이스 — contents-grid 가 새어 나와선 안 되고 place grid 가 떠야 한다.
     const { wrapper } = mountHomePage({
       selectedContentId: 1,
-      scope: 'POPULAR_WORKS',
+      scope: 'POPULAR_CONTENTS',
       popularContents: [
         { id: 1, title: '도깨비', posterUrl: null, placeCount: 12 },
       ],
@@ -259,7 +262,7 @@ describe('HomePage.vue', () => {
       popularContents: [
         { id: 42, title: '도깨비', posterUrl: null, placeCount: 12 },
       ],
-      scope: 'POPULAR_WORKS',
+      scope: 'POPULAR_CONTENTS',
     });
     await flushPromises();
     pushSpy.mockClear();

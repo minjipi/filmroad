@@ -30,7 +30,7 @@ const fixture: UserProfile = {
     photoCount: 214,
     followersCount: 1200,
     followingCount: 186,
-    collectedWorksCount: 47,
+    collectedContentsCount: 47,
   },
   isMe: false,
   following: false,

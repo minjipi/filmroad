@@ -10,7 +10,7 @@ export interface UserProfileStats {
   photoCount: number;
   followersCount: number;
   followingCount: number;
-  collectedWorksCount: number;
+  collectedContentsCount: number;
 }
 
 export interface UserProfilePhoto {

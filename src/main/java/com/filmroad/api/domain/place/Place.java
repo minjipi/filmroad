@@ -59,7 +59,7 @@ public class Place extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "content_id", nullable = false)
-    private Content work;
+    private Content content;
 
     @Column(name = "trending_score", nullable = false)
     private int trendingScore;

@@ -45,10 +45,10 @@ public class SearchService {
         List<Content> contents = contentRepository.searchByTitle(normalized, pageable);
         List<Place> places = placeRepository.searchByNameOrRegion(normalized, pageable);
 
-        Map<Long, Integer> placeCountByWorkId = countPlacesPerWork(contents);
+        Map<Long, Integer> placeCountByContentId = countPlacesPerContent(contents);
 
         List<ContentSummaryDto> workDtos = contents.stream()
-                .map(w -> ContentSummaryDto.of(w, placeCountByWorkId.getOrDefault(w.getId(), 0)))
+                .map(w -> ContentSummaryDto.of(w, placeCountByContentId.getOrDefault(w.getId(), 0)))
                 .toList();
         List<PlaceSummaryDto> placeDtos = places.stream()
                 .map(PlaceSummaryDto::of)
@@ -61,7 +61,7 @@ public class SearchService {
                 .build();
     }
 
-    private Map<Long, Integer> countPlacesPerWork(List<Content> contents) {
+    private Map<Long, Integer> countPlacesPerContent(List<Content> contents) {
         if (contents.isEmpty()) {
             return Map.of();
         }

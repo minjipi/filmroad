@@ -22,14 +22,14 @@ public class PhotoDetailContentDto {
     private String episode;
     private String sceneTimestamp;
 
-    public static PhotoDetailContentDto of(Content work, Place place) {
-        if (work == null) return null;
+    public static PhotoDetailContentDto of(Content content, Place place) {
+        if (content == null) return null;
         return PhotoDetailContentDto.builder()
-                .id(work.getId())
-                .title(work.getTitle())
-                .type(work.getType())
-                .posterUrl(work.getPosterUrl())
-                .network(work.getNetwork())
+                .id(content.getId())
+                .title(content.getTitle())
+                .type(content.getType())
+                .posterUrl(content.getPosterUrl())
+                .network(content.getNetwork())
                 .episode(place == null ? null : place.getPrimaryContentEpisode())
                 .sceneTimestamp(place == null ? null : place.getPrimarySceneTimestamp())
                 .build();

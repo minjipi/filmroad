@@ -139,7 +139,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.streakDays", greaterThanOrEqualTo(0)))
                 .andExpect(jsonPath("$.results.stats.visitedCount", greaterThanOrEqualTo(0)))
                 .andExpect(jsonPath("$.results.stats.photoCount", greaterThanOrEqualTo(0)))
-                .andExpect(jsonPath("$.results.stats.collectedWorksCount", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.stats.collectedContentsCount", greaterThanOrEqualTo(0)))
                 .andExpect(jsonPath("$.results.following", is(true)))
                 .andExpect(jsonPath("$.results.isMe", is(false)))
                 .andExpect(jsonPath("$.results.topPhotos", notNullValue()))
@@ -156,7 +156,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.results.following", is(false)))
                 // 시드상 user=1 stamp 8개 (place 10,11,12,13,14,15,16,17 전부), 4개 작품 수집.
                 .andExpect(jsonPath("$.results.stats.visitedCount", is(8)))
-                .andExpect(jsonPath("$.results.stats.collectedWorksCount", is(4)));
+                .andExpect(jsonPath("$.results.stats.collectedContentsCount", is(4)));
     }
 
     @Test

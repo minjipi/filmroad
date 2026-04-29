@@ -119,7 +119,7 @@ public class StampbookService {
             case STREAK -> user == null ? 0 : user.getStreakDays();
             case WORK_COMPLETE -> b.getConditionContentId() == null
                     ? 0
-                    : (int) stampRepository.countByUserIdAndWorkId(userId, b.getConditionContentId());
+                    : (int) stampRepository.countByUserIdAndContentId(userId, b.getConditionContentId());
             default -> 0;
         };
         int threshold;

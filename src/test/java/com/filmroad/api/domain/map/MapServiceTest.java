@@ -124,13 +124,13 @@ class MapServiceTest {
     @DisplayName("bbox 내 place 가 trendingScore 낮아도 잘리지 않음 (옛 trending-우선 limit 회귀 방어)")
     void getMap_bbox_doesNotDropLowTrendingPlacesInViewport() {
         // 시드 외에 Seoul bbox 에 trendingScore=1 인 저인기 장소 1개 추가. id ASC 순으로 마지막에 와야 함.
-        Content work = contentRepository.findById(1L).orElseThrow();
+        Content content = contentRepository.findById(1L).orElseThrow();
         Place cameo = placeRepository.save(Place.builder()
                 .name("부암동 카페 (테스트)")
                 .regionLabel("서울 종로구 부암동")
                 .latitude(37.59)
                 .longitude(126.97)
-                .content(work)
+                .content(content)
                 .trendingScore(1)
                 .photoCount(0)
                 .likeCount(0)

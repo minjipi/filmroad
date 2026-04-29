@@ -56,12 +56,12 @@ public class FeedService {
         int fetchSize = safeLimit + 1;
 
         Long viewerId = currentUser.currentUserId();
-        Long effectiveWorkId = (effectiveTab == FeedTab.BY_WORK) ? contentId : null;
+        Long effectiveContentId = (effectiveTab == FeedTab.BY_CONTENT) ? contentId : null;
         List<PlacePhoto> fetched = switch (effectiveTab) {
             case RECENT -> placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize));
             case POPULAR -> placePhotoRepository.findFeedPopular(null, cursor, viewerId, PageRequest.of(0, fetchSize));
             case FOLLOWING -> placePhotoRepository.findFeedByFollowedUsers(viewerId, null, cursor, PageRequest.of(0, fetchSize));
-            case BY_WORK -> placePhotoRepository.findFeedPopular(effectiveWorkId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case BY_CONTENT -> placePhotoRepository.findFeedPopular(effectiveContentId, cursor, viewerId, PageRequest.of(0, fetchSize));
             case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng, viewerId);
         };
 
@@ -129,7 +129,7 @@ public class FeedService {
                     .avatarUrl(u.getAvatarUrl())
                     .verified(u.isVerified())
                     .contentTitle(contentTitle)
-                    .stampCountForWork(count)
+                    .stampCountForContent(count)
                     .following(followedIds.contains(u.getId()))
                     .build());
             if (result.size() >= safeLimit) break;
@@ -151,7 +151,7 @@ public class FeedService {
 
     private FeedPostDto toPostDto(PlacePhoto photo, Long viewerId, boolean liked, Set<Long> followedAuthorIds) {
         Place place = photo.getPlace();
-        Content work = place.getContent();
+        Content content = place.getContent();
         // sceneCompare: 1:N scene 컬렉션이 비어있지 않고(=등록된 씬이 1장이라도 있고)
         // photo.id 가 짝수일 때만 비교 카드 노출 (기존 demo 토글 규칙 유지).
         String primaryScene = place.getPrimarySceneImageUrl();
@@ -173,8 +173,8 @@ public class FeedService {
                         .regionLabel(place.getRegionLabel())
                         .build())
                 .content(FeedContentDto.builder()
-                        .id(work.getId())
-                        .title(work.getTitle())
+                        .id(content.getId())
+                        .title(content.getTitle())
                         .contentEpisode(place.getPrimaryContentEpisode())
                         .sceneTimestamp(place.getPrimarySceneTimestamp())
                         .build())

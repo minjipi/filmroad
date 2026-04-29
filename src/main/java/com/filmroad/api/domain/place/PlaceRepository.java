@@ -14,7 +14,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     List<Place> findTrending(@Param("contentId") Long contentId);
 
     @Query("SELECT p FROM Place p JOIN FETCH p.content w WHERE (:contentId IS NULL OR w.id = :contentId)")
-    List<Place> findAllWithWork(@Param("contentId") Long contentId);
+    List<Place> findAllWithContent(@Param("contentId") Long contentId);
 
     /**
      * 전국 뷰(viewport bbox 없음). 인기 장소 상위 N개를 선별해야 하므로 trendingScore 내림차순 정렬.
@@ -57,13 +57,13 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             WHERE w.id = :contentId AND p.id <> :excludeId
             ORDER BY p.trendingScore DESC, p.id ASC
             """)
-    List<Place> findByWorkIdAndIdNotOrderByTrendingScoreDescIdAsc(
+    List<Place> findByContentIdAndIdNotOrderByTrendingScoreDescIdAsc(
             @Param("contentId") Long contentId, @Param("excludeId") Long excludeId);
 
     long countByContentId(Long contentId);
 
     @Query("SELECT p FROM Place p JOIN FETCH p.content w WHERE w.id = :contentId ORDER BY p.id ASC")
-    List<Place> findByWorkIdOrderByIdAsc(@Param("contentId") Long contentId);
+    List<Place> findByContentIdOrderByIdAsc(@Param("contentId") Long contentId);
 
     /**
      * 통합 검색 장소 섹션 — 장소명 / 지역 라벨 부분일치(대소문자 무시). trending 우선 정렬로 인기 장소 상단.

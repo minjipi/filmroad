@@ -68,10 +68,10 @@ class FeedControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/feed?tab=BY_WORK&contentId=1 returns posts all tagged to work 1")
-    void getFeed_byWork_filtersToSingleWork() throws Exception {
+    @DisplayName("GET /api/feed?tab=BY_CONTENT&contentId=1 returns posts all tagged to content 1")
+    void getFeed_byContent_filtersToSingleContent() throws Exception {
         mockMvc.perform(get("/api/feed")
-                        .param("tab", "BY_WORK")
+                        .param("tab", "BY_CONTENT")
                         .param("contentId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.posts", not(empty())))

@@ -35,8 +35,8 @@ class StampbookControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/stampbook returns hero counts and work progress bounded by totals")
-    void getStampbook_returnsHeroAndWorks() throws Exception {
+    @DisplayName("GET /api/stampbook returns hero counts and content progress bounded by totals")
+    void getStampbook_returnsHeroAndContents() throws Exception {
         mockMvc.perform(get("/api/stampbook").cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))

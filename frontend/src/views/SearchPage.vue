@@ -60,7 +60,7 @@
         </div>
 
         <template v-else>
-          <section v-if="showWorks && contents.length > 0" class="sr-section">
+          <section v-if="showContents && contents.length > 0" class="sr-section">
             <h2>작품 <span class="sm">{{ contents.length }}</span></h2>
             <div class="contents-list">
               <button
@@ -69,7 +69,7 @@
                 type="button"
                 class="content-card"
                 data-testid="content-item"
-                @click="onOpenWork(w)"
+                @click="onOpenContent(w)"
               >
                 <div class="thumb">
                   <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
@@ -135,7 +135,7 @@ import { storeToRefs } from 'pinia';
 import {
   useSearchStore,
   type SearchPlaceResult,
-  type SearchWorkResult,
+  type SearchContentResult,
 } from '@/stores/search';
 
 type TabKey = 'ALL' | 'WORKS' | 'PLACES';
@@ -160,7 +160,7 @@ const tabs = computed<Array<{ key: TabKey; label: string; count: number | null }
   { key: 'PLACES', label: '장소', count: hasResults.value ? places.value.length : null },
 ]);
 
-const showWorks = computed(() => activeTab.value === 'ALL' || activeTab.value === 'WORKS');
+const showContents = computed(() => activeTab.value === 'ALL' || activeTab.value === 'WORKS');
 const showPlaces = computed(() => activeTab.value === 'ALL' || activeTab.value === 'PLACES');
 
 // Debounce the input → single search call. 300ms balances "feels instant"
@@ -191,7 +191,7 @@ function onBack(): void {
   router.back();
 }
 
-async function onOpenWork(w: SearchWorkResult): Promise<void> {
+async function onOpenContent(w: SearchContentResult): Promise<void> {
   await router.push(`/content/${w.id}`);
 }
 

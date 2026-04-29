@@ -152,7 +152,7 @@ const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'POPULAR', label: '인기' },
   { key: 'FOLLOWING', label: '팔로잉' },
   { key: 'NEARBY', label: '내 주변' },
-  { key: 'BY_WORK', label: '작품별' },
+  { key: 'BY_CONTENT', label: '작품별' },
 ];
 
 // Chip filter — derives the distinct set of work titles from the current
@@ -210,7 +210,7 @@ async function onSelectTab(t: FeedTab): Promise<void> {
 
 // 유효한 FeedTab string 만 store 에 적용 — 잘못된 query 값은 무시.
 const VALID_TABS: ReadonlySet<FeedTab> = new Set([
-  'RECENT', 'POPULAR', 'FOLLOWING', 'NEARBY', 'BY_WORK',
+  'RECENT', 'POPULAR', 'FOLLOWING', 'NEARBY', 'BY_CONTENT',
 ]);
 function pickQueryTab(): FeedTab | null {
   const raw = route.query.tab;

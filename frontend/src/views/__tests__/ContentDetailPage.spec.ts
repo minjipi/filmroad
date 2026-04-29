@@ -93,7 +93,7 @@ const contentDetailState = {
   error: null as string | null,
 };
 
-function mountWorkDetail() {
+function mountContentDetail() {
   return mountWithStubs(ContentDetailPage, {
     props: { id: 1 },
     initialState: { contentDetail: { ...contentDetailState } },
@@ -133,7 +133,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('hero head renders the work title (and subtitle)', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     const heroH1 = wrapper.find('.head-info h1');
@@ -147,7 +147,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('progress card shows percent, fraction and nextBadgeText', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     const card = wrapper.find('.progress-card');
@@ -158,7 +158,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('renders four chips and clicking one calls setChip on the store', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
     const store = useContentDetailStore();
     const setChipSpy = vi.spyOn(store, 'setChip');
@@ -174,7 +174,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('spots list renders one row per spot with .done on visited entries', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     const spots = wrapper.findAll('.spots .spot');
@@ -185,7 +185,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('spots section header shows "회차순" + a chevron-down affordance (09-design)', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     const trigger = wrapper.find('[data-testid="spots-sort"]');
@@ -196,7 +196,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('visited spot shows "인증완료" with the check glyph (design mint badge)', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     const badge = wrapper.find('[data-testid="spot-visited"]');
@@ -211,7 +211,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('clicking a spot pushes /place/:id', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
     pushSpy.mockClear();
 
@@ -222,7 +222,7 @@ describe('ContentDetailPage.vue', () => {
   });
 
   it('spots view toggle switches between list and map', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
 
     // Default is list view
@@ -282,7 +282,7 @@ describe('ContentDetailPage.vue', () => {
 
   it('좌표 없는 성지만 있으면 KakaoMap 자체가 미렌더 — 빈 안내 노출 (task #27)', async () => {
     // 좌표 없는 fixture (기본 contentDetailState) — mapMarkers.length === 0.
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
     await wrapper.find('[data-testid="spots-view-map"]').trigger('click');
     await flushPromises();
@@ -294,7 +294,7 @@ describe('ContentDetailPage.vue', () => {
   // task #25: 페이지 언마운트 시 store reset — 다른 contentId 진입 시 이전
   // work / spots / progress 가 잠시 잔류하지 않게.
   it('unmount → contentStore.reset() called (task #25 stale-data guard)', async () => {
-    const { wrapper } = mountWorkDetail();
+    const { wrapper } = mountContentDetail();
     await flushPromises();
     const store = useContentDetailStore();
     const resetSpy = vi.spyOn(store, 'reset');

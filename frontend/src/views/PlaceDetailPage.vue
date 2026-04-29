@@ -111,7 +111,7 @@
           </div>
           <div class="hero-caption">
             <div class="hero-chips">
-              <span class="content-chip" @click.stop="onOpenWork">
+              <span class="content-chip" @click.stop="onOpenContent">
                 <FrChip variant="primary">{{ place.contentTitle }}</FrChip>
               </span>
               <FrChip v-if="episodeLabel" variant="ghost">{{ episodeLabel }}</FrChip>
@@ -824,7 +824,7 @@ async function onOpenGallery(): Promise<void> {
   await router.push(`/gallery/${place.value.id}`);
 }
 
-async function onOpenWork(): Promise<void> {
+async function onOpenContent(): Promise<void> {
   if (!place.value) return;
   await router.push(`/content/${place.value.contentId}`);
 }

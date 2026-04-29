@@ -13,5 +13,5 @@ public class PublicUserStatsDto {
     private int photoCount;             // 업로드한 PlacePhoto 수 (user.totalPhotoCount)
     private int followersCount;
     private int followingCount;
-    private long collectedWorksCount;   // 수집 중인 distinct work 수
+    private long collectedContentsCount;   // 수집 중인 distinct content 수
 }

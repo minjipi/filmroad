@@ -484,12 +484,12 @@ describe('map store', () => {
     expect(store.activeSheetFilterCount).toBe(0);
   });
 
-  it('availableWorks / availableRegions derive from current markers', async () => {
+  it('availableContents / availableRegions derive from current markers', async () => {
     mockApi.get.mockResolvedValueOnce({ data: fixture });
     const store = useMapStore();
     await store.fetchMap();
 
-    expect(store.availableWorks).toEqual([
+    expect(store.availableContents).toEqual([
       { id: 1, title: '도깨비' },
       { id: 2, title: '이태원 클라쓰' },
     ]);

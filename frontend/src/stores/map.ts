@@ -227,7 +227,7 @@ export const useMapStore = defineStore('map', {
     },
     // 시트의 작품 picker 가 보여줄 후보 — 현재 markers 에 등장한 distinct
     // (contentId, contentTitle). 동적 list 라 server round-trip 없이 가능.
-    availableWorks(state): { id: number; title: string }[] {
+    availableContents(state): { id: number; title: string }[] {
       const seen = new Map<number, string>();
       for (const m of state.markers) {
         if (!seen.has(m.contentId)) seen.set(m.contentId, m.contentTitle);

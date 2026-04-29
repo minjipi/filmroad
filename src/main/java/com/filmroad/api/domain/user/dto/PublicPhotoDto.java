@@ -16,14 +16,14 @@ public class PublicPhotoDto {
     private String placeName;
 
     public static PublicPhotoDto from(PlacePhoto photo) {
-        String work = photo.getPlace() != null && photo.getPlace().getContent() != null
+        String contentTitle = photo.getPlace() != null && photo.getPlace().getContent() != null
                 ? photo.getPlace().getContent().getTitle()
                 : null;
         String place = photo.getPlace() != null ? photo.getPlace().getName() : null;
         return PublicPhotoDto.builder()
                 .id(photo.getId())
                 .imageUrl(photo.getPrimaryImageUrl())
-                .contentTitle(work)
+                .contentTitle(contentTitle)
                 .placeName(place)
                 .build();
     }

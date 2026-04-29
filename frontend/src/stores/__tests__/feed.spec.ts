@@ -77,7 +77,7 @@ function makeUser(id: number): FeedUser {
     avatarUrl: `https://img/r${id}.jpg`,
     verified: false,
     contentTitle: '도깨비',
-    stampCountForWork: id,
+    stampCountForContent: id,
     following: false,
   };
 }

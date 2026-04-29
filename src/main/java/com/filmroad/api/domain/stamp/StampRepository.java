@@ -12,12 +12,12 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
     List<Stamp> findByUserIdOrderByAcquiredAtDesc(@Param("userId") Long userId);
 
     @Query("SELECT s FROM Stamp s JOIN FETCH s.place p JOIN FETCH p.content w WHERE s.user.id = :userId AND w.id = :contentId")
-    List<Stamp> findByUserIdAndWorkId(@Param("userId") Long userId, @Param("contentId") Long contentId);
+    List<Stamp> findByUserIdAndContentId(@Param("userId") Long userId, @Param("contentId") Long contentId);
 
     long countByUserId(Long userId);
 
     @Query("SELECT COUNT(s) FROM Stamp s WHERE s.user.id = :userId AND s.place.content.id = :contentId")
-    long countByUserIdAndWorkId(@Param("userId") Long userId, @Param("contentId") Long contentId);
+    long countByUserIdAndContentId(@Param("userId") Long userId, @Param("contentId") Long contentId);
 
     boolean existsByUserIdAndPlaceId(Long userId, Long placeId);
 
@@ -29,7 +29,7 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
                                          @Param("placeIds") java.util.Collection<Long> placeIds);
 
     @Query("SELECT DISTINCT s.place.content.id FROM Stamp s WHERE s.user.id = :userId")
-    List<Long> findDistinctWorkIdsByUserId(@Param("userId") Long userId);
+    List<Long> findDistinctContentIdsByUserId(@Param("userId") Long userId);
 
     java.util.Optional<Stamp> findByUserIdAndPlaceId(Long userId, Long placeId);
 
@@ -54,6 +54,6 @@ public interface StampRepository extends JpaRepository<Stamp, Long> {
             GROUP BY w
             ORDER BY COUNT(s) DESC, w.title ASC
             """)
-    List<Object[]> aggregateWorksByUserId(@Param("userId") Long userId,
+    List<Object[]> aggregateContentsByUserId(@Param("userId") Long userId,
                                           org.springframework.data.domain.Pageable pageable);
 }

@@ -8,7 +8,7 @@ import java.util.List;
 @Getter
 @Builder
 public class ContentDetailResponse {
-    private ContentDetailDto work;
+    private ContentDetailDto content;
     private ContentProgressSummaryDto progress;
     private List<ContentSpotDto> spots;
 }

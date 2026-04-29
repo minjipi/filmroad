@@ -7,9 +7,9 @@ import { useToast } from '@/composables/useToast';
 
 // RECENT = time-sorted feed (task #33, the new default). POPULAR keeps the
 // engagement-ranked view; FOLLOWING scopes to accounts the user follows;
-// NEARBY orders by distance when coordinates are available; BY_WORK filters
+// NEARBY orders by distance when coordinates are available; BY_CONTENT filters
 // to a single work id (paired with `contentId`).
-export type FeedTab = 'RECENT' | 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_WORK';
+export type FeedTab = 'RECENT' | 'POPULAR' | 'FOLLOWING' | 'NEARBY' | 'BY_CONTENT';
 
 export interface FeedAuthor {
   userId: number;
@@ -58,7 +58,7 @@ export interface FeedUser {
   avatarUrl: string | null;
   verified: boolean;
   contentTitle: string | null;
-  stampCountForWork: number;
+  stampCountForContent: number;
   following: boolean;
 }
 

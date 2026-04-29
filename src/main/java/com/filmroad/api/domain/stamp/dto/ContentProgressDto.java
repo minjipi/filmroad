@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @Getter
 @Builder
-public class WorkProgressDto {
+public class ContentProgressDto {
     private Long contentId;
     private String title;
     private String posterUrl;

@@ -19,19 +19,19 @@ public class ContentDetailDto {
     private String network;
     private double ratingAverage;
 
-    public static ContentDetailDto from(Content work) {
+    public static ContentDetailDto from(Content content) {
         return ContentDetailDto.builder()
-                .id(work.getId())
-                .title(work.getTitle())
-                .subtitle(work.getSubtitle())
-                .synopsis(work.getSynopsis())
-                .posterUrl(work.getPosterUrl())
-                .coverUrl(work.getPosterUrl())
-                .kind(work.getType() == null ? null : work.getType().name())
-                .yearStart(work.getYearStart())
-                .episodeCount(work.getEpisodeCount())
-                .network(work.getNetwork())
-                .ratingAverage(work.getRatingAverage())
+                .id(content.getId())
+                .title(content.getTitle())
+                .subtitle(content.getSubtitle())
+                .synopsis(content.getSynopsis())
+                .posterUrl(content.getPosterUrl())
+                .coverUrl(content.getPosterUrl())
+                .kind(content.getType() == null ? null : content.getType().name())
+                .yearStart(content.getYearStart())
+                .episodeCount(content.getEpisodeCount())
+                .network(content.getNetwork())
+                .ratingAverage(content.getRatingAverage())
                 .build();
     }
 }

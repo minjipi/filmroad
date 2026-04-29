@@ -12,6 +12,6 @@ public class FeedUserDto {
     private String avatarUrl;
     private boolean verified;
     private String contentTitle;
-    private long stampCountForWork;
+    private long stampCountForContent;
     private boolean following;
 }

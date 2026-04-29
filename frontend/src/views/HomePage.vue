@@ -33,7 +33,7 @@
         <nav class="home-tabs">
           <div
             :class="['tab', selectedContentId === null ? 'active' : '']"
-            @click="onSelectWork(null)"
+            @click="onSelectContent(null)"
           >
             모두
           </div>
@@ -41,7 +41,7 @@
             v-for="w in contents"
             :key="w.id"
             :class="['tab', selectedContentId === w.id ? 'active' : '']"
-            @click="onSelectWork(w.id)"
+            @click="onSelectContent(w.id)"
           >
             {{ w.title }}
           </div>
@@ -61,19 +61,19 @@
             @click="onSelectScope('TRENDING')"
           >전국 트렌드</span>
           <span
-            :class="['seg', scope === 'POPULAR_WORKS' ? 'active' : '']"
+            :class="['seg', scope === 'POPULAR_CONTENTS' ? 'active' : '']"
             data-testid="seg-popular-contents"
-            @click="onSelectScope('POPULAR_WORKS')"
+            @click="onSelectScope('POPULAR_CONTENTS')"
           >인기 작품</span>
         </div>
 
-        <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_WORKS 가 아닌 scope 는
+        <!-- 인기 작품 뷰: 작품 카드 grid. POPULAR_CONTENTS 가 아닌 scope 는
              기존 place grid 그대로. 작품 탭(selectedContentId !== null) 에서는
              segmented 자체가 숨겨지지만, state.scope 는 사용자가 모두 탭에서
-             골라둔 값을 그대로 보존한다. 그래서 POPULAR_WORKS 상태로 작품 탭에
+             골라둔 값을 그대로 보존한다. 그래서 POPULAR_CONTENTS 상태로 작품 탭에
              들어와도 contents-grid 가 뜨지 않도록 명시적으로 가드. -->
         <div
-          v-if="scope === 'POPULAR_WORKS' && selectedContentId === null"
+          v-if="scope === 'POPULAR_CONTENTS' && selectedContentId === null"
           class="home-grid contents-grid"
           data-testid="contents-grid"
         >
@@ -82,7 +82,7 @@
             :key="w.id"
             class="photo-card content-card"
             data-testid="content-card"
-            @click="onOpenPopularWork(w.id)"
+            @click="onOpenPopularContent(w.id)"
           >
             <img v-if="w.posterUrl" :src="w.posterUrl" :alt="w.title" />
             <div v-else class="content-initial-bg">
@@ -162,8 +162,8 @@
               @click="onOpenDetail(p.id)"
             >
               <img
-                v-if="p.coverImageUrls.length > 0"
-                :src="p.coverImageUrls[0]"
+                v-if="p.sceneImageUrl"
+                :src="p.sceneImageUrl"
                 :alt="p.name"
               />
               <div class="grad" />
@@ -321,7 +321,7 @@ function markPrimed(): void {
   }
 }
 
-async function onSelectWork(id: number | null): Promise<void> {
+async function onSelectContent(id: number | null): Promise<void> {
   await homeStore.setContent(id);
   if (error.value) await showError(error.value);
   // task #25: 작품 탭 상태를 URL query 에 동기. id=null 이면 query 제거.
@@ -331,7 +331,7 @@ async function onSelectWork(id: number | null): Promise<void> {
 // task #25: scope/selectedContentId 의 라우트 query 동기화 helpers.
 // FeedPage 와 동일 패턴 — 새로고침/공유 URL 시 같은 상태로 복원.
 const VALID_SCOPES: ReadonlySet<HomeScope> = new Set([
-  'NEAR', 'TRENDING', 'POPULAR_WORKS',
+  'NEAR', 'TRENDING', 'POPULAR_CONTENTS',
 ]);
 function pickQueryScope(): HomeScope | null {
   const raw = route.query.scope;
@@ -339,7 +339,7 @@ function pickQueryScope(): HomeScope | null {
   if (typeof value !== 'string') return null;
   return VALID_SCOPES.has(value as HomeScope) ? (value as HomeScope) : null;
 }
-function pickQueryWorkId(): number | null {
+function pickQueryContentId(): number | null {
   const raw = route.query.contentId;
   const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : null;
   const n = Number(value);
@@ -355,7 +355,7 @@ function syncQueryFromState(): void {
   void router.replace({ path: route.path, query: next });
 }
 
-// 외부 ?scope=POPULAR_WORKS / ?contentId=3 진입 또는 brower history navigation
+// 외부 ?scope=POPULAR_CONTENTS / ?contentId=3 진입 또는 brower history navigation
 // 시 store 상태 catch-up. push 한 본인이 부른 watch 는 store 가 이미 같은
 // 값이라 무시되므로 무한 루프 없음.
 watch(
@@ -365,7 +365,7 @@ watch(
     // 객체를 재사용하면 watch 가 fire 하지 않지만 안전망.)
     if (JSON.stringify(next) === JSON.stringify(prev)) return;
     const s = pickQueryScope();
-    const w = pickQueryWorkId();
+    const w = pickQueryContentId();
     if (s !== null && s !== homeStore.scope) void homeStore.setScope(s);
     // contentId 는 명시적으로 비워질 수도 있음 (?contentId 제거) — 그땐 모두 탭으로.
     // prev 에 값이 있었고 next 에 없으면 의도된 clear 로 해석.
@@ -468,7 +468,7 @@ async function onSearch(): Promise<void> {
   await router.push('/search');
 }
 
-async function onOpenPopularWork(id: number): Promise<void> {
+async function onOpenPopularContent(id: number): Promise<void> {
   // 인기 작품 카드 → 작품 상세 페이지로 이동. 이전 버전은 scope/filter 를
   // 자동 전환해 place grid 를 보여줬지만, UX 피드백에 따라 작품 상세
   // (포스터 + 성지 리스트 + 진행도) 로 직접 유도하는 쪽이 명확해서 전환.
@@ -487,9 +487,9 @@ onMounted(async () => {
   // query 가 비어있으면 store 기본값 / 외부 시드를 그대로 존중. 명시적 query
   // 값(null 이 아닌 값)만 override 한다.
   const seedScope = pickQueryScope();
-  const seedWork = pickQueryWorkId();
+  const seedContent = pickQueryContentId();
   if (seedScope !== null && seedScope !== homeStore.scope) homeStore.scope = seedScope;
-  if (seedWork !== null && seedWork !== homeStore.selectedContentId) homeStore.selectedContentId = seedWork;
+  if (seedContent !== null && seedContent !== homeStore.selectedContentId) homeStore.selectedContentId = seedContent;
   await homeStore.fetchHome();
   if (error.value) await showError(error.value);
 });
@@ -605,7 +605,7 @@ ion-content {
 }
 .seg.active { color: var(--fr-ink); }
 
-/* ---------- 인기 작품 grid (task #24 refactor — POPULAR_WORKS scope) ---------- */
+/* ---------- 인기 작품 grid (task #24 refactor — POPULAR_CONTENTS scope) ---------- */
 /* .home-grid.contents-grid reuses the 2-column grid + .photo-card envelope
    so the work cards match the existing place cards' shape. Only the
    empty-poster fallback needs its own visual. */

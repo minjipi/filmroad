@@ -17,12 +17,12 @@ public class ContentSummaryDto {
     private String posterUrl;
     private int placeCount;
 
-    public static ContentSummaryDto of(Content work, int placeCount) {
+    public static ContentSummaryDto of(Content content, int placeCount) {
         return ContentSummaryDto.builder()
-                .id(work.getId())
-                .title(work.getTitle())
-                .type(work.getType())
-                .posterUrl(work.getPosterUrl())
+                .id(content.getId())
+                .title(content.getTitle())
+                .type(content.getType())
+                .posterUrl(content.getPosterUrl())
                 .placeCount(placeCount)
                 .build();
     }

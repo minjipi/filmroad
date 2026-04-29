@@ -226,7 +226,7 @@ const tabs: Array<{ key: FeedTab; label: string }> = [
   { key: 'POPULAR', label: '인기' },
   { key: 'FOLLOWING', label: '팔로잉' },
   { key: 'NEARBY', label: '내 주변' },
-  { key: 'BY_WORK', label: '작품별' },
+  { key: 'BY_CONTENT', label: '작품별' },
 ];
 
 function formatCount(n: number): string {
@@ -311,9 +311,9 @@ async function onFollowAuthor(p: FeedPost): Promise<void> {
 }
 
 function recoProgressText(u: FeedUser): string {
-  if (u.stampCountForWork <= 0) return '';
-  if (u.contentTitle) return `${u.contentTitle} ${u.stampCountForWork}곳 수집`;
-  return `${u.stampCountForWork}곳 수집`;
+  if (u.stampCountForContent <= 0) return '';
+  if (u.contentTitle) return `${u.contentTitle} ${u.stampCountForContent}곳 수집`;
+  return `${u.stampCountForContent}곳 수집`;
 }
 
 onMounted(async () => {

@@ -33,14 +33,14 @@
           <h3>작품</h3>
           <div class="mfs-chips">
             <button
-              v-for="w in availableWorks"
+              v-for="w in availableContents"
               :key="w.id"
               type="button"
               :class="['mfs-chip', draft.contentIds.includes(w.id) ? 'on' : '']"
               data-testid="mfs-content-chip"
-              @click="toggleWork(w.id)"
+              @click="toggleContent(w.id)"
             >{{ w.title }}</button>
-            <p v-if="availableWorks.length === 0" class="mfs-empty">
+            <p v-if="availableContents.length === 0" class="mfs-empty">
               아직 표시할 작품이 없어요
             </p>
           </div>
@@ -148,7 +148,7 @@ watch(
   },
 );
 
-const availableWorks = computed(() => mapStore.availableWorks);
+const availableContents = computed(() => mapStore.availableContents);
 const availableRegions = computed(() => mapStore.availableRegions);
 
 interface DistanceOption {
@@ -172,7 +172,7 @@ const VISIT_OPTIONS: VisitOption[] = [
   { label: '방문완료만', value: 'VISITED' },
 ];
 
-function toggleWork(id: number): void {
+function toggleContent(id: number): void {
   const i = draft.contentIds.indexOf(id);
   if (i === -1) draft.contentIds.push(id);
   else draft.contentIds.splice(i, 1);
