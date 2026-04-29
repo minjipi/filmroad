@@ -122,6 +122,10 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
         );
         p.liked = data.liked;
         p.likeCount = data.likeCount;
+        if (!data.liked) {
+          const { useLikedPlacesStore } = await import('@/stores/likedPlaces');
+          useLikedPlacesStore().removeFromList(p.id);
+        }
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to toggle like';
       }

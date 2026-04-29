@@ -4,13 +4,17 @@ import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.domain.follow.UserFollowRepository;
+import com.filmroad.api.domain.like.PlaceLike;
+import com.filmroad.api.domain.like.PlaceLikeRepository;
 import com.filmroad.api.domain.place.PlacePhoto;
 import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
 import com.filmroad.api.domain.user.dto.CollectedContentDto;
+import com.filmroad.api.domain.user.dto.LikedPlaceDto;
 import com.filmroad.api.domain.user.dto.MiniMapPinDto;
+import com.filmroad.api.domain.user.dto.MyLikedPlacesResponse;
 import com.filmroad.api.domain.user.dto.MyPhotoDto;
 import com.filmroad.api.domain.user.dto.MyPhotosResponse;
 import com.filmroad.api.domain.user.dto.ProfileResponse;
@@ -39,6 +43,9 @@ public class UserService {
     // ProfilePage 인증샷 grid 기본값 / 상한. 60 까지로 제한해 infinite scroll 페이지당 부담을 제한.
     private static final int MY_PHOTOS_DEFAULT_LIMIT = 30;
     private static final int MY_PHOTOS_MAX_LIMIT = 60;
+    // 좋아요한 장소 grid 기본값 / 상한. MY_PHOTOS 와 동일 정책.
+    private static final int LIKED_PLACES_DEFAULT_LIMIT = 30;
+    private static final int LIKED_PLACES_MAX_LIMIT = 60;
     // 공개 프로필(17-user-profile.html) grid / collected-contents preview 수량.
     private static final int PUBLIC_PROFILE_COLLECTED_WORKS_LIMIT = 5;
     private static final int PUBLIC_PROFILE_PHOTO_LIMIT = 9;
@@ -47,6 +54,7 @@ public class UserService {
     private final StampRepository stampRepository;
     private final PlacePhotoRepository placePhotoRepository;
     private final PlaceRepository placeRepository;
+    private final PlaceLikeRepository placeLikeRepository;
     private final UserFollowRepository userFollowRepository;
     private final CurrentUser currentUser;
 
@@ -177,6 +185,31 @@ public class UserService {
                 .following(following)
                 .topPhotos(topPhotos)
                 .recentCollectedContents(recentCollectedContents)
+                .build();
+    }
+
+    /**
+     * 로그인 유저가 좋아요한 장소 목록 — PlaceLike PK 의 id DESC (좋아요 시점 역순) +
+     * cursor 기반 페이지네이션. fetchSize = limit + 1 로 다음 페이지 존재 판정.
+     * 카드에 필요한 place 필드 (cover / content / likeCount) 는 JOIN FETCH 로 한번에.
+     */
+    @Transactional(readOnly = true)
+    public MyLikedPlacesResponse getMyLikedPlaces(Long cursor, Integer limit) {
+        int safeLimit = (limit == null || limit <= 0) ? LIKED_PLACES_DEFAULT_LIMIT
+                : Math.min(limit, LIKED_PLACES_MAX_LIMIT);
+        Long userId = currentUser.currentUserId();
+
+        int fetchSize = safeLimit + 1;
+        List<PlaceLike> fetched = placeLikeRepository
+                .findByUserIdWithCursor(userId, cursor, PageRequest.of(0, fetchSize));
+
+        boolean hasMore = fetched.size() > safeLimit;
+        List<PlaceLike> page = hasMore ? fetched.subList(0, safeLimit) : fetched;
+        Long nextCursor = (hasMore && !page.isEmpty()) ? page.get(page.size() - 1).getId() : null;
+
+        return MyLikedPlacesResponse.builder()
+                .places(page.stream().map(LikedPlaceDto::from).toList())
+                .nextCursor(nextCursor)
                 .build();
     }
 

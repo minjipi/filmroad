@@ -125,6 +125,62 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/users/me/liked-places → user=1 의 좋아요 5개를 PlaceLike id DESC 순으로 반환")
+    void getMyLikedPlaces_returnsLikesNewestFirst() throws Exception {
+        // data.sql: PlaceLike id 1..5 → place_id 10, 13, 14, 16, 17. id DESC 면 17, 16, 14, 13, 10.
+        mockMvc.perform(get("/api/users/me/liked-places").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.places", hasSize(5)))
+                .andExpect(jsonPath("$.results.places[0].id", is(17)))
+                .andExpect(jsonPath("$.results.places[1].id", is(16)))
+                .andExpect(jsonPath("$.results.places[2].id", is(14)))
+                .andExpect(jsonPath("$.results.places[3].id", is(13)))
+                .andExpect(jsonPath("$.results.places[4].id", is(10)))
+                .andExpect(jsonPath("$.results.places[0].name", notNullValue()))
+                .andExpect(jsonPath("$.results.places[0].regionLabel", notNullValue()))
+                .andExpect(jsonPath("$.results.places[0].contentTitle", notNullValue()))
+                .andExpect(jsonPath("$.results.places[0].likeCount", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.results.nextCursor").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/liked-places?limit=2 → 상위 2개 + nextCursor = PlaceLike id (다음 페이지 있음)")
+    void getMyLikedPlaces_limitApplied_setsNextCursor() throws Exception {
+        // PlaceLike id 5, 4 → place 17, 16. 다음 페이지 cursor 는 PlaceLike id=4.
+        mockMvc.perform(get("/api/users/me/liked-places")
+                        .param("limit", "2")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.places", hasSize(2)))
+                .andExpect(jsonPath("$.results.places[0].id", is(17)))
+                .andExpect(jsonPath("$.results.places[1].id", is(16)))
+                .andExpect(jsonPath("$.results.nextCursor", is(4)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/liked-places?cursor=4&limit=2 → cursor 미만 PlaceLike row 만 이어서 반환")
+    void getMyLikedPlaces_cursorPagination_continuesAfterCursor() throws Exception {
+        // cursor=4 → PlaceLike id 3, 2 → place 14, 13.
+        mockMvc.perform(get("/api/users/me/liked-places")
+                        .param("cursor", "4")
+                        .param("limit", "2")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.places", hasSize(2)))
+                .andExpect(jsonPath("$.results.places[0].id", is(14)))
+                .andExpect(jsonPath("$.results.places[1].id", is(13)))
+                .andExpect(jsonPath("$.results.nextCursor", is(2)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/me/liked-places 비로그인 → 401")
+    void getMyLikedPlaces_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/users/me/liked-places"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("GET /api/users/2 (auth) — 타 유저 공개 프로필: flat 필드 + stats + topPhotos + recentCollectedContents + following=true")
     void getPublicProfile_otherUser_returnsProfile() throws Exception {
         // 시드 user=2 (이서준). user=1 은 data.sql 의 user_follow 에서 user=2 를 팔로우 중.

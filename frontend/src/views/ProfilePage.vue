@@ -230,6 +230,17 @@
             <button
               type="button"
               class="pf-sheet-row"
+              data-testid="profile-menu-liked-places"
+              @click="onLikedPlacesAndClose"
+            >
+              <span class="pf-sheet-ico">
+                <ion-icon :icon="heartOutline" class="ic-20" />
+              </span>
+              <span class="pf-sheet-label">좋아요한 장소</span>
+            </button>
+            <button
+              type="button"
+              class="pf-sheet-row"
               data-testid="profile-menu-edit"
               @click="onEditAndClose"
             >
@@ -285,6 +296,7 @@ import {
   gridOutline,
   ribbonOutline,
   bookmarkOutline,
+  heartOutline,
   logOutOutline,
   trophyOutline,
   addOutline,
@@ -445,6 +457,11 @@ function closeMenu(): void {
 
 // 각 액션은 시트를 먼저 닫고 → 동작 호출. 라우팅/공유 시트가 떠 있는 메뉴
 // 시트에 가려지지 않게 하기 위함.
+async function onLikedPlacesAndClose(): Promise<void> {
+  closeMenu();
+  await router.push('/profile/likes');
+}
+
 async function onEditAndClose(): Promise<void> {
   closeMenu();
   await onEdit();

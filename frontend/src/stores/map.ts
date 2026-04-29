@@ -430,6 +430,10 @@ export const useMapStore = defineStore('map', {
         );
         target.liked = data.liked;
         target.likeCount = data.likeCount;
+        if (!data.liked) {
+          const { useLikedPlacesStore } = await import('@/stores/likedPlaces');
+          useLikedPlacesStore().removeFromList(placeId);
+        }
       } catch (e) {
         target.liked = prevLiked;
         target.likeCount = prevLikeCount;
