@@ -74,7 +74,7 @@ public class ShotScoringService {
      * 채점 진입점. uploadedFile 은 batch 의 대표(보통 0번) 한 장만 사용 — 5장 업로드해도
      * 점수는 batch 단위 1세트.
      *
-     * @param place         성지 (등록 GPS / sceneImageUrl). null 이면 전 점수 0.
+     * @param place         성지 (등록 GPS / sceneImages). null 이면 전 점수 0.
      * @param uploadedFile  업로드 파일. null 이면 similarity 0.
      * @param capturedLat   촬영 위도. null/범위 밖이면 gps 0.
      * @param capturedLng   촬영 경도. null/범위 밖이면 gps 0.
@@ -129,20 +129,28 @@ public class ShotScoringService {
 
     int computeSimilarityScore(Place place, MultipartFile uploadedFile) {
         if (uploadedFile == null) return 0;
-        String sceneUrl = place.getSceneImageUrl();
-        if (sceneUrl == null || sceneUrl.isBlank()) return 0;
+        // 1:N 씬 모델 — 같은 place 의 모든 씬 후보 중 최대 유사도를 채택. 유저가 어떤 씬을
+        // 재현했는지 알 수 없으므로 가장 잘 맞는 1장 기준으로 점수.
+        if (place.getSceneImages() == null || place.getSceneImages().isEmpty()) return 0;
 
-        BufferedImage scene = loadSceneImage(sceneUrl);
-        if (scene == null) return 0;
         BufferedImage uploaded = loadFromMultipart(uploadedFile);
         if (uploaded == null) return 0;
-
-        long sceneHash = pHash(scene);
         long uploadedHash = pHash(uploaded);
-        int hamming = Long.bitCount(sceneHash ^ uploadedHash);
-        // 0 → 100, HAMMING_ZERO_THRESHOLD(32) → 0. 그 이상은 0.
-        double ratio = Math.max(0.0, 1.0 - (hamming / (double) HAMMING_ZERO_THRESHOLD));
-        return clamp((int) Math.round(ratio * 100), 0, 100);
+
+        int best = 0;
+        for (PlaceSceneImage scene : place.getSceneImages()) {
+            String sceneUrl = scene.getImageUrl();
+            if (sceneUrl == null || sceneUrl.isBlank()) continue;
+            BufferedImage sceneImg = loadSceneImage(sceneUrl);
+            if (sceneImg == null) continue;
+            long sceneHash = pHash(sceneImg);
+            int hamming = Long.bitCount(sceneHash ^ uploadedHash);
+            // 0 → 100, HAMMING_ZERO_THRESHOLD(32) → 0. 그 이상은 0.
+            double ratio = Math.max(0.0, 1.0 - (hamming / (double) HAMMING_ZERO_THRESHOLD));
+            int score = clamp((int) Math.round(ratio * 100), 0, 100);
+            if (score > best) best = score;
+        }
+        return best;
     }
 
     /**

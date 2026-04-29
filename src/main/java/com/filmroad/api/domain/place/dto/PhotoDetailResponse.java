@@ -16,7 +16,12 @@ import java.util.List;
 public class PhotoDetailResponse {
     private Long id;
     private String imageUrl;                // 유저 업로드 사진
-    private String sceneImageUrl;           // 작품 원본 씬 이미지 (place 에 저장, null 가능)
+    /**
+     * 작품 씬 목록 — `imageOrderIndex` ASC. 0 번이 대표(scene vs user 비교의 비교 기준).
+     * 회차/타임스탬프/설명/이미지URL 4종 모두 PlaceSceneDto 안. 빈 리스트 가능(null 아님).
+     * 프론트는 length>1 일 때 hero carousel 로 슬라이드 + indicator 노출.
+     */
+    private List<PlaceSceneDto> scenes;
     private String caption;
     private List<String> tags;
     private PhotoVisibility visibility;

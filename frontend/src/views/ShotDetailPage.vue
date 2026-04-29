@@ -49,8 +49,8 @@
             <div class="carousel-slide" data-testid="sd-slide">
               <div class="compare" :data-mode="compareMode">
                 <img
-                  v-if="shot.sceneImageUrl"
-                  :src="shot.sceneImageUrl"
+                  v-if="sceneImageUrl"
+                  :src="sceneImageUrl"
                   class="compare-img is-guide"
                   alt="드라마 원본 장면"
                 />
@@ -59,7 +59,7 @@
                   class="compare-img is-shot"
                   :alt="shot.place.name"
                 />
-                <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
+                <span v-if="sceneImageUrl" class="lbl-chip l">드라마 원본</span>
                 <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
                 <button
                   type="button"
@@ -79,7 +79,7 @@
                   </template>
                 </div>
                 <button
-                  v-if="shot.sceneImageUrl"
+                  v-if="sceneImageUrl"
                   type="button"
                   class="compare-toggle"
                   :aria-pressed="compareMode === 'guide'"
@@ -118,8 +118,8 @@
              pattern from design/pages/13-feed-detail.html. -->
         <section v-else class="compare" :data-mode="compareMode">
           <img
-            v-if="shot.sceneImageUrl"
-            :src="shot.sceneImageUrl"
+            v-if="sceneImageUrl"
+            :src="sceneImageUrl"
             class="compare-img is-guide"
             alt="드라마 원본 장면"
           />
@@ -128,7 +128,7 @@
             class="compare-img is-shot"
             :alt="shot.place.name"
           />
-          <span v-if="shot.sceneImageUrl" class="lbl-chip l">드라마 원본</span>
+          <span v-if="sceneImageUrl" class="lbl-chip l">드라마 원본</span>
           <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
           <button
             type="button"
@@ -148,7 +148,7 @@
             </template>
           </div>
           <button
-            v-if="shot.sceneImageUrl"
+            v-if="sceneImageUrl"
             type="button"
             class="compare-toggle"
             :aria-pressed="compareMode === 'guide'"
@@ -766,6 +766,13 @@ const images = computed(() => {
   }
   return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, imageOrderIndex: 0 }];
 });
+
+// 드라마 원본 씬은 scenes[0] (primary). 비교 토글 / clip-path overlay / 라벨 chip
+// 모두 이 단일 URL 을 본다. ShotDetailPage 는 carousel 이 아니라 첫 씬만 사용 —
+// PlaceDetailPage 만 multi-scene 캐러셀로 노출.
+const sceneImageUrl = computed<string | null>(
+  () => shot.value?.scenes[0]?.imageUrl ?? null,
+);
 
 function onCarouselScroll(e: Event): void {
   const el = e.target as HTMLElement;

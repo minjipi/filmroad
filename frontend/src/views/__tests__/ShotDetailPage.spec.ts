@@ -47,7 +47,16 @@ import { mountWithStubs } from './__helpers__/mount';
 const fixture: ShotDetail = {
   id: 77,
   imageUrl: 'https://cdn/p/77.jpg',
-  sceneImageUrl: 'https://cdn/scene/77.jpg',
+  scenes: [
+    {
+      id: 200,
+      imageUrl: 'https://cdn/scene/77.jpg',
+      workEpisode: '1회',
+      sceneTimestamp: '00:15:24',
+      sceneDescription: null,
+      orderIndex: 0,
+    },
+  ],
   caption: '메밀꽃 한 다발 들고 기다렸어요 🌾',
   tags: ['도깨비', '주문진'],
   createdAt: '2026-04-20T10:00:00Z',
@@ -398,8 +407,8 @@ describe('ShotDetailPage.vue', () => {
     expect(wrapper.find('section.compare').attributes('data-mode')).toBe('shot');
   });
 
-  it('compare toggle is hidden when sceneImageUrl is null (no guide image to flip to)', async () => {
-    const noScene = { ...fixture, sceneImageUrl: null };
+  it('compare toggle is hidden when scenes is empty (no guide image to flip to)', async () => {
+    const noScene = { ...fixture, scenes: [] };
     mockApi.get.mockResolvedValueOnce({ data: noScene });
     const { wrapper } = mountWithStubs(ShotDetailPage, {
       props: { id: '77' },

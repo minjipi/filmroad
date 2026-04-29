@@ -152,7 +152,10 @@ public class FeedService {
     private FeedPostDto toPostDto(PlacePhoto photo, Long viewerId, boolean liked, Set<Long> followedAuthorIds) {
         Place place = photo.getPlace();
         Work work = place.getWork();
-        boolean sceneCompare = place.getSceneImageUrl() != null && photo.getId() % 2L == 0L;
+        // sceneCompare: 1:N scene 컬렉션이 비어있지 않고(=등록된 씬이 1장이라도 있고)
+        // photo.id 가 짝수일 때만 비교 카드 노출 (기존 demo 토글 규칙 유지).
+        String primaryScene = place.getPrimarySceneImageUrl();
+        boolean sceneCompare = primaryScene != null && photo.getId() % 2L == 0L;
         Optional<Stamp> stamp = stampRepository.findByUserIdAndPlaceId(viewerId, place.getId());
         boolean saved = savedPlaceRepository.existsByUserIdAndPlaceId(viewerId, place.getId());
 
@@ -162,7 +165,7 @@ public class FeedService {
                 .caption(photo.getCaption())
                 .createdAt(photo.getCreatedAt())
                 .sceneCompare(sceneCompare)
-                .dramaSceneImageUrl(sceneCompare ? place.getSceneImageUrl() : null)
+                .dramaSceneImageUrl(sceneCompare ? primaryScene : null)
                 .author(resolveAuthor(photo, followedAuthorIds))
                 .place(FeedPlaceDto.builder()
                         .id(place.getId())
@@ -172,8 +175,8 @@ public class FeedService {
                 .work(FeedWorkDto.builder()
                         .id(work.getId())
                         .title(work.getTitle())
-                        .workEpisode(place.getWorkEpisode())
-                        .sceneTimestamp(place.getSceneTimestamp())
+                        .workEpisode(place.getPrimaryWorkEpisode())
+                        .sceneTimestamp(place.getPrimarySceneTimestamp())
                         .build())
                 .likeCount(photo.getLikeCount())
                 .commentCount(photo.getCommentCount())

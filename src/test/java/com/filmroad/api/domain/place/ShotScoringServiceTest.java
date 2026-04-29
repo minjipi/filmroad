@@ -99,16 +99,26 @@ class ShotScoringServiceTest {
         return out.toByteArray();
     }
 
-    /** Place mock — Work 만 minimal stub, 좌표/sceneUrl 만 의미 있음. */
+    /**
+     * Place mock — Work 만 minimal stub, 좌표/sceneUrl 만 의미 있음.
+     * sceneUrl == null 이면 sceneImages 컬렉션을 비워두고(=등록된 씬 없음 시나리오),
+     * non-null 이면 imageOrderIndex=0 행을 한 장 부착해 primary 로 노출.
+     */
     private static Place place(double lat, double lng, String sceneUrl) {
-        return Place.builder()
+        Place p = Place.builder()
                 .name("test")
                 .regionLabel("test")
                 .latitude(lat)
                 .longitude(lng)
-                .sceneImageUrl(sceneUrl)
                 .work(Work.builder().title("t").build())
                 .build();
+        if (sceneUrl != null) {
+            p.addSceneImage(PlaceSceneImage.builder()
+                    .imageUrl(sceneUrl)
+                    .imageOrderIndex(0)
+                    .build());
+        }
+        return p;
     }
 
     /** scene 이미지를 uploadDir/<name> 에 써두고 그 경로를 `/uploads/<name>` 로 반환. */

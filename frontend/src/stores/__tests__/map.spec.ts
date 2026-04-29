@@ -56,6 +56,7 @@ const fixture: MapResponse = {
     workTitle: '도깨비',
     workEpisode: null,
     coverImageUrls: ['https://img/1.jpg'],
+    sceneImageUrl: 'https://img/scene-1.jpg',
     photoCount: 1204,
     likeCount: 3200,
     rating: 4.8,
@@ -151,6 +152,7 @@ describe('map store', () => {
         workTitle: '이태원 클라쓰',
         workEpisode: null,
         coverImageUrls: ['https://img/13.jpg'],
+        sceneImageUrl: 'https://img/scene-13.jpg',
         photoCount: 1980,
         likeCount: 4100,
         rating: 4.7,
@@ -287,6 +289,7 @@ describe('map store', () => {
       workTitle: '테스트 드라마',
       workEpisode: '1회',
       coverImageUrls: [],
+      sceneImageUrl: null,
       photoCount: 0,
       likeCount: 0,
       rating: 4.2,
@@ -305,7 +308,7 @@ describe('map store', () => {
     const store = useMapStore();
     store.markLastViewed({
       id: 1, name: 'x', regionLabel: '', latitude: 1, longitude: 2,
-      workId: 0, workTitle: '', workEpisode: null, coverImageUrls: [],
+      workId: 0, workTitle: '', workEpisode: null, coverImageUrls: [], sceneImageUrl: null,
       photoCount: 0, likeCount: 0, rating: 0, distanceKm: null, liked: false,
     });
     expect(store.hasBeenViewed).toBe(true);
@@ -358,6 +361,7 @@ describe('map store', () => {
       workTitle: '도깨비',
       workEpisode: null,
       coverImageUrls: [],
+      sceneImageUrl: null,
       photoCount: 0,
       likeCount: 0,
       rating: 4.0,

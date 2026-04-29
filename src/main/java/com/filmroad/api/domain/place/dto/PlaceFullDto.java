@@ -18,10 +18,12 @@ public class PlaceFullDto {
     private List<String> coverImageUrls;
     private Long workId;
     private String workTitle;
-    private String workEpisode;
-    private String sceneTimestamp;
-    private String sceneImageUrl;
-    private String sceneDescription;
+    /**
+     * 작품 씬(scene) 목록 — `imageOrderIndex` ASC. 0 번이 대표.
+     * 회차/타임스탬프/설명/이미지URL 4종은 모두 이 안에 들어가며, place 평면 필드에서는 제거됨.
+     * 등록된 씬이 없으면 빈 리스트(null 아님).
+     */
+    private List<PlaceSceneDto> scenes;
     private double rating;
     private int reviewCount;
     private int photoCount;
@@ -42,10 +44,7 @@ public class PlaceFullDto {
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .workId(place.getWork().getId())
                 .workTitle(place.getWork().getTitle())
-                .workEpisode(place.getWorkEpisode())
-                .sceneTimestamp(place.getSceneTimestamp())
-                .sceneImageUrl(place.getSceneImageUrl())
-                .sceneDescription(place.getSceneDescription())
+                .scenes(place.getSceneImages().stream().map(PlaceSceneDto::from).toList())
                 .rating(place.getRating())
                 .reviewCount(place.getReviewCount())
                 .photoCount(place.getPhotoCount())

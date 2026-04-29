@@ -13,6 +13,7 @@ public class RelatedPlaceDto {
     private Long id;
     private String name;
     private List<String> coverImageUrls;
+    private String sceneImageUrl;
     private String workEpisode;
     private String regionShort;
     private Long workId;
@@ -22,7 +23,8 @@ public class RelatedPlaceDto {
                 .id(place.getId())
                 .name(place.getName())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
-                .workEpisode(place.getWorkEpisode())
+                .sceneImageUrl(place.getPrimarySceneImageUrl())
+                .workEpisode(place.getPrimaryWorkEpisode())
                 .regionShort(shortenRegion(place.getRegionLabel()))
                 .workId(place.getWork().getId())
                 .build();

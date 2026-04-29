@@ -43,10 +43,16 @@ const fixture: PlaceDetailResponse = {
     coverImageUrls: ['https://img/1.jpg'],
     workId: 1,
     workTitle: '도깨비',
-    workEpisode: '1회',
-    sceneTimestamp: '00:24:10',
-    sceneImageUrl: 'https://img/scene-1.jpg',
-    sceneDescription: '도깨비와 은탁이 처음 만난 곳',
+    scenes: [
+      {
+        id: 100,
+        imageUrl: 'https://img/scene-1.jpg',
+        workEpisode: '1회',
+        sceneTimestamp: '00:24:10',
+        sceneDescription: '도깨비와 은탁이 처음 만난 곳',
+        orderIndex: 0,
+      },
+    ],
     rating: 4.8,
     reviewCount: 312,
     photoCount: 1204,
@@ -67,6 +73,7 @@ const fixture: PlaceDetailResponse = {
       id: 11,
       name: '주문진 방파제 등대',
       coverImageUrls: ['https://img/r1.jpg'],
+      sceneImageUrl: 'https://img/r1-scene.jpg',
       workEpisode: '1회',
       regionShort: '강릉시',
     },
@@ -74,6 +81,7 @@ const fixture: PlaceDetailResponse = {
       id: 12,
       name: '안목해변',
       coverImageUrls: ['https://img/r2.jpg'],
+      sceneImageUrl: 'https://img/r2-scene.jpg',
       workEpisode: '3회',
       regionShort: '강릉시',
     },
@@ -82,7 +90,12 @@ const fixture: PlaceDetailResponse = {
 
 function mountPlaceDetailPage(
   overrides: {
-    coverImageUrls?: string[];
+    /**
+     * Hero carousel 의 슬라이드 개수를 흔들 때 쓰는 sugar — string[] 의 imageUrl
+     * 들을 받아 PlaceScene[] 로 변환해 fixture.place.scenes 를 덮어씌운다. 회차/
+     * 타임스탬프/설명 같은 메타는 테스트 별로 신경 쓰지 않으니 빈 값으로 채움.
+     */
+    sceneUrls?: string[];
     kakaoInfo?: PlaceKakaoInfoResponse | null;
     // task #29: 한국관광공사 nearby 시드. 배열을 주면 tourNearby store 가
     // placeId 키로 prefill — 컴포넌트가 fetch 호출해도 cache hit 으로 즉시 return.
@@ -102,15 +115,24 @@ function mountPlaceDetailPage(
       ? { itemsByPlace: { [fixture.place.id]: overrides.tourNearby } }
       : { itemsByPlace: {} };
 
+  const scenesOverride = overrides.sceneUrls
+    ? overrides.sceneUrls.map((imageUrl, i) => ({
+        id: 1000 + i,
+        imageUrl,
+        workEpisode: null,
+        sceneTimestamp: null,
+        sceneDescription: null,
+        orderIndex: i,
+      }))
+    : null;
+
   const { wrapper } = mountWithStubs(PlaceDetailPage, {
     props: { id: fixture.place.id },
     initialState: {
       placeDetail: {
         place: {
           ...fixture.place,
-          ...(overrides.coverImageUrls
-            ? { coverImageUrls: overrides.coverImageUrls }
-            : {}),
+          ...(scenesOverride ? { scenes: scenesOverride } : {}),
         },
         photos: [...fixture.photos],
         related: [...fixture.related],
@@ -181,21 +203,22 @@ describe('PlaceDetailPage.vue', () => {
     expect(chipText).toContain('00:24:10');
   });
 
-  it('renders all cover images inside the hero carousel and hides dot/counter overlays for a single-cover place', async () => {
+  it('renders all scene images inside the hero carousel and hides dot/counter overlays for a single-scene place', async () => {
     const { wrapper } = mountPlaceDetailPage();
     await flushPromises();
 
     const carousel = wrapper.find('[data-testid="pd-hero-carousel"]');
     expect(carousel.exists()).toBe(true);
-    // fixture has exactly one cover URL — dots and counter must stay hidden so
+    // fixture has exactly one scene image — dots and counter must stay hidden so
     // a single-image place keeps the original visual.
     expect(carousel.findAll('img.hero-img').length).toBe(1);
     expect(wrapper.find('[data-testid="pd-hero-dots"]').exists()).toBe(false);
   });
 
-  it('renders one .hero-img + one .hero-dot per cover URL, marks dot 0 active when length > 1', async () => {
+  it('renders one .hero-img + one .hero-dot per scene, marks dot 0 active, and shows "1 / N" counter when length > 1', async () => {
+
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: [
+      sceneUrls: [
         'https://img/cover-0.jpg',
         'https://img/cover-1.jpg',
         'https://img/cover-2.jpg',
@@ -225,11 +248,11 @@ describe('PlaceDetailPage.vue', () => {
     expect(dots[1].classes()).not.toContain('active');
   });
 
-  it('auto-advances the hero carousel every 4s on a multi-cover place and wraps after the last slide', async () => {
+  it('auto-advances the hero carousel every 4s on a multi-scene place and wraps after the last slide', async () => {
     vi.useFakeTimers();
     try {
       const { wrapper } = mountPlaceDetailPage({
-        coverImageUrls: [
+        sceneUrls: [
           'https://img/cover-0.jpg',
           'https://img/cover-1.jpg',
           'https://img/cover-2.jpg',
@@ -264,7 +287,7 @@ describe('PlaceDetailPage.vue', () => {
     }
   });
 
-  it('does not start the auto-advance timer for a single-cover place', async () => {
+  it('does not start the auto-advance timer for a single-scene place', async () => {
     vi.useFakeTimers();
     try {
       const setIntervalSpy = vi.spyOn(global, 'setInterval');
@@ -285,7 +308,7 @@ describe('PlaceDetailPage.vue', () => {
     try {
       const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
       const { wrapper } = mountPlaceDetailPage({
-        coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
+        sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
       });
       await flushPromises();
 
@@ -301,7 +324,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('mouse drag past the threshold also advances the slide (desktop drag, not just touch swipe)', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: [
+      sceneUrls: [
         'https://img/cover-0.jpg',
         'https://img/cover-1.jpg',
         'https://img/cover-2.jpg',
@@ -345,7 +368,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('horizontal swipe past the threshold (15% of width) advances to the next slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: [
+      sceneUrls: [
         'https://img/cover-0.jpg',
         'https://img/cover-1.jpg',
         'https://img/cover-2.jpg',
@@ -373,7 +396,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('vertical pointer move (page-scroll intent) does not change the carousel slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg'],
     });
     await flushPromises();
 
@@ -392,7 +415,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('a small horizontal pointer move under the threshold snaps back without changing slide', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
 
@@ -410,7 +433,7 @@ describe('PlaceDetailPage.vue', () => {
     expect(dots[1].classes()).not.toContain('active');
   });
 
-  it('shows prev/next arrows for a multi-cover place and hides them for a single-cover one', async () => {
+  it('shows prev/next arrows for a multi-scene place and hides them for a single-scene one', async () => {
     const single = mountPlaceDetailPage();
     await flushPromises();
     expect(single.wrapper.find('[data-testid="pd-hero-prev"]').exists()).toBe(false);
@@ -418,7 +441,7 @@ describe('PlaceDetailPage.vue', () => {
     single.wrapper.unmount();
 
     const multi = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
     expect(multi.wrapper.find('[data-testid="pd-hero-prev"]').exists()).toBe(true);
@@ -427,7 +450,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('forward wrap on next: track transitions into the appended clone (rightward) before snapping to real index 0', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
 
@@ -453,7 +476,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('backward wrap on prev: track transitions into the prepended clone (leftward) before snapping to real index N-1', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
 
@@ -474,7 +497,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('next button advances to the following slide and wraps from the last back to the first', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
 
@@ -496,7 +519,7 @@ describe('PlaceDetailPage.vue', () => {
 
   it('prev button moves backward and wraps from the first back to the last', async () => {
     const { wrapper } = mountPlaceDetailPage({
-      coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+      sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
     });
     await flushPromises();
 
@@ -518,7 +541,7 @@ describe('PlaceDetailPage.vue', () => {
     vi.useFakeTimers();
     try {
       const { wrapper } = mountPlaceDetailPage({
-        coverImageUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
+        sceneUrls: ['https://img/a.jpg', 'https://img/b.jpg', 'https://img/c.jpg'],
       });
       await flushPromises();
 

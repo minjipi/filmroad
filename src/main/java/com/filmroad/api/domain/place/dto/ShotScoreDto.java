@@ -7,7 +7,7 @@ package com.filmroad.api.domain.place.dto;
  * `PhotoUploadResponse` / `PhotoDetailResponse` 가 평탄 필드(totalScore / similarityScore / gpsScore)
  * 로 노출.
  *
- * @param similarityScore 가이드 사진(Place.sceneImageUrl) 과 업로드 사진의 pHash 유사도 점수 0~100.
+ * @param similarityScore 가이드 사진(Place.sceneImages 의 대표 = primary) 과 업로드 사진의 pHash 유사도 점수 0~100.
  * @param gpsScore        Place 등록 좌표와 촬영 좌표(capturedLat/Lng) 의 Haversine 거리 점수 0~100.
  * @param totalScore      가중합 round(similarity * 0.6 + gps * 0.4), 0~100.
  */

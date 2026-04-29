@@ -19,6 +19,7 @@ public class PlaceDetailDto {
     private String workTitle;
     private String workEpisode;
     private List<String> coverImageUrls;
+    private String sceneImageUrl;
     private int photoCount;
     private int likeCount;
     private double rating;
@@ -38,8 +39,9 @@ public class PlaceDetailDto {
                 .longitude(place.getLongitude())
                 .workId(place.getWork().getId())
                 .workTitle(place.getWork().getTitle())
-                .workEpisode(null)
+                .workEpisode(place.getPrimaryWorkEpisode())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
+                .sceneImageUrl(place.getPrimarySceneImageUrl())
                 .photoCount(place.getPhotoCount())
                 .likeCount(place.getLikeCount())
                 .rating(place.getRating())

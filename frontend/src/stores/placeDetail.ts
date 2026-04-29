@@ -3,6 +3,21 @@ import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 
+/**
+ * 한 장의 작품 씬(scene) — 회차/타임스탬프/설명/이미지 URL 묶음. 백엔드의
+ * `PlaceSceneDto` 와 1:1 매핑이며, `orderIndex` ASC 로 정렬된 채로 내려온다.
+ * 0번이 대표(primary) — 요약 surface 의 평면 필드 폴백, ShotScoringService 의
+ * 비교 기준과 동일.
+ */
+export interface PlaceScene {
+  id: number;
+  imageUrl: string;
+  workEpisode: string | null;
+  sceneTimestamp: string | null;
+  sceneDescription: string | null;
+  orderIndex: number;
+}
+
 export interface PlaceDetailPlace {
   id: number;
   name: string;
@@ -13,10 +28,12 @@ export interface PlaceDetailPlace {
   coverImageUrls: string[];
   workId: number;
   workTitle: string;
-  workEpisode: string | null;
-  sceneTimestamp: string | null;
-  sceneImageUrl: string | null;
-  sceneDescription: string | null;
+  /**
+   * 작품 씬 목록 — `orderIndex` ASC. 0번이 대표(primary). 회차/타임스탬프/설명/
+   * 이미지 URL 4종은 모두 이 안에 들어간다 (place 평면 필드에서 제거됨).
+   * 등록된 씬이 없으면 빈 배열(null 아님).
+   */
+  scenes: PlaceScene[];
   rating: number;
   reviewCount: number;
   photoCount: number;
@@ -38,6 +55,7 @@ export interface RelatedPlace {
   id: number;
   name: string;
   coverImageUrls: string[];
+  sceneImageUrl: string | null;
   workEpisode: string | null;
   regionShort: string;
 }
