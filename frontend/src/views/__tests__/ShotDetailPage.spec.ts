@@ -214,59 +214,46 @@ describe('ShotDetailPage.vue', () => {
     expect(err.text()).toContain('Not Found');
   });
 
-  it('hero scene-meta + compare row render work title + episode + timestamp from store', async () => {
+  it('drama-badge 가 작품 회차 + scene timestamp 를 노출 (compare-wrap 위)', async () => {
+    // /feed/detail 통일 후엔 .scene-meta 가 아니라 .drama-badge 가 그 자리.
     const { wrapper } = mountPage();
     await flushPromises();
 
-    const sceneMeta = wrapper.find('.scene-meta').text();
-    expect(sceneMeta).toContain('도깨비');
-    expect(sceneMeta).toContain('1회');
-    expect(sceneMeta).toContain('00:15:24');
+    const badge = wrapper.find('.compare-wrap .drama-badge').text();
+    expect(badge).toContain('1회');
+    expect(badge).toContain('00:15:24');
 
-    // Compare row pulls the drama-scene image for the top layer + the user
-    // image for the bottom layer.
-    const imgs = wrapper.findAll('section.compare img');
+    // .post-head .loc 에 작품 제목 노출.
+    expect(wrapper.find('.post-head .loc').text()).toContain('도깨비');
+    expect(wrapper.find('.post-head .loc').text()).toContain('주문진 영진해변 방파제');
+
+    // compare-wrap 의 두 이미지 (드라마 원본 + 내 인증샷).
+    const imgs = wrapper.findAll('.compare-wrap img');
     expect(imgs.length).toBe(2);
     expect(imgs[0].attributes('src')).toBe('https://cdn/scene/77.jpg');
     expect(imgs[1].attributes('src')).toBe('https://cdn/p/77.jpg');
   });
 
-  it('renders the multi-image carousel when images.length > 1 (task #44/#45)', async () => {
-    const multi = {
-      ...fixture,
-      images: [
-        { id: 77, imageUrl: 'https://cdn/p/77.jpg', imageOrderIndex: 0 },
-        { id: 78, imageUrl: 'https://cdn/p/78.jpg', imageOrderIndex: 1 },
-        { id: 79, imageUrl: 'https://cdn/p/79.jpg', imageOrderIndex: 2 },
-      ],
-    };
-    mockApi.get.mockResolvedValueOnce({ data: multi });
+  // /feed/detail 마크업 통일로 multi-image carousel 은 제거됨 (첫 이미지만 노출).
+  // 향후 carousel 복원 시 별도 테스트로 다시 커버.
 
+  it('compare-wrap 또는 single-img 둘 중 하나가 렌더 (scenes 유무에 따라)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
-
-    // Carousel track + three slides + three dots.
-    expect(wrapper.find('[data-testid="sd-carousel"]').exists()).toBe(true);
-    expect(wrapper.findAll('[data-testid="sd-slide"]').length).toBe(3);
-    expect(wrapper.findAll('[data-testid="sd-dots"] .dot').length).toBe(3);
-    expect(wrapper.find('[data-testid="sd-count"]').text()).toContain('1 / 3');
+    // fixture 는 sceneImageUrl 가 있어 compare-wrap 사용.
+    expect(wrapper.find('.compare-wrap').exists()).toBe(true);
+    expect(wrapper.find('.single-img').exists()).toBe(false);
   });
 
-  it('renders the plain compare hero when images.length === 1 (single-image post)', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
-    expect(wrapper.find('[data-testid="sd-carousel"]').exists()).toBe(false);
-    expect(wrapper.find('section.compare').exists()).toBe(true);
-  });
-
-  it('user meta row shows author nickname + place + verified badge', async () => {
+  it('post-head 가 작성자 handle + verified + 작품·장소(.loc)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
-    const user = wrapper.find('.sd-user');
-    expect(user.text()).toContain('김소연');
-    expect(user.text()).toContain('주문진 영진해변 방파제');
-    expect(user.find('.verified').exists()).toBe(true);
+    const head = wrapper.find('.post-head');
+    expect(head.text()).toContain('soyeon_film'); // fixture handle
+    expect(head.find('.verified').exists()).toBe(true);
+    expect(head.find('.loc').text()).toContain('도깨비');
+    expect(head.find('.loc').text()).toContain('주문진 영진해변 방파제');
   });
 
   it('author-action button is hidden when shot.author.isMe (no self follow / placeholder)', async () => {
@@ -295,38 +282,25 @@ describe('ShotDetailPage.vue', () => {
     expect(btn.classes()).not.toContain('on');
   });
 
-  it('caption + tags render verbatim (no v-html; tags prefixed with #)', async () => {
+  it('post-caption 이 caption 을 handle 과 함께 노출 (tags 는 통일로 제거됨)', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
-    const caption = wrapper.find('.sd-caption .body');
+    const caption = wrapper.find('.post-caption .caption-text');
     expect(caption.text()).toContain('메밀꽃 한 다발 들고 기다렸어요');
-
-    const tags = wrapper.findAll('.sd-caption .tag');
-    expect(tags.map((t) => t.text())).toEqual(['#도깨비', '#주문진']);
+    expect(caption.find('b').text()).toBe('soyeon_film');
   });
 
-  it('inline preview shows at most 1 top comment + "모두 보기" link with full commentCount', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
+  // 댓글 inline preview 는 /feed/detail 통일로 제거됨. 댓글 진입은 액션 row 의
+  // 댓글 아이콘 → CommentSheet 모달.
 
-    // 인라인 preview 는 항상 1건만 노출 — 나머지는 "모두 보기" 로 모달 진입.
-    const comments = wrapper.findAll('[data-testid="sd-comment"]');
-    expect(comments.length).toBe(1);
-    expect(comments[0].find('.nm').text()).toBe('trip_hj');
-
-    // see-more 는 commentCount(89) 를 그대로 보여줌 — moreCommentsCount(85) 는
-    // backend 가 지금까지 잘라서 알려주는 값이지만, inline 은 1건만 보여주니
-    // "전체 N개" 가 사용자에게 더 직관적.
-    expect(wrapper.find('.see-more').text()).toContain('89');
-  });
-
-  it('like button reflects shot.liked and tap calls POST /api/photos/:id/like (task #39)', async () => {
+  it('like button reflects shot.liked and tap calls POST /api/photos/:id/like', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
 
     const btn = wrapper.find('[data-testid="sd-like-btn"]');
-    expect(btn.classes()).toContain('liked'); // fixture.liked = true
+    // /feed/detail 통일 후 .post-actions .a 의 active 클래스는 .on (was .liked).
+    expect(btn.classes()).toContain('on'); // fixture.liked = true
 
     mockApi.post.mockResolvedValueOnce({ data: { liked: false, likeCount: 1247 } });
     await btn.trigger('click');
@@ -361,17 +335,19 @@ describe('ShotDetailPage.vue', () => {
     expect(wrapper.find('.scene-card').exists()).toBe(false);
   });
 
-  it('clicking the sticky comment trigger opens the CommentSheet for this shot', async () => {
+  it('post-actions 의 댓글 아이콘 click → CommentSheet 가 이 shot 으로 열림', async () => {
+    // 통일 후 inline cmt-input 대신 액션 row 의 두 번째 .a (댓글) 가 트리거.
     const { wrapper } = mountPage();
     await flushPromises();
 
-    // Initially the sheet stays closed (open=false, photoId=null).
     let stub = wrapper.find('.comment-sheet-stub');
     expect(stub.exists()).toBe(true);
     expect(stub.attributes('data-open')).toBe('false');
     expect(stub.attributes('data-photo-id')).toBe('');
 
-    await wrapper.find('[data-testid="sd-cmt-trigger"]').trigger('click');
+    // post-actions: [0]=좋아요, [1]=댓글, [2]=공유, [3]=저장.
+    const actions = wrapper.find('[data-testid="sd-primary-card"]').findAll('.post-actions .a');
+    await actions[1].trigger('click');
     await flushPromises();
 
     stub = wrapper.find('.comment-sheet-stub');
@@ -379,35 +355,7 @@ describe('ShotDetailPage.vue', () => {
     expect(stub.attributes('data-photo-id')).toBe('77');
   });
 
-  it('compare hero toggles data-mode + aria-pressed + label on click (task #12)', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
-
-    const compare = wrapper.find('section.compare');
-    expect(compare.exists()).toBe(true);
-    // Default = "shot": user's photo on top, toggle aria-pressed=false.
-    expect(compare.attributes('data-mode')).toBe('shot');
-
-    const toggle = wrapper.find('[data-testid="sd-compare-toggle"]');
-    expect(toggle.exists()).toBe(true);
-    expect(toggle.attributes('aria-pressed')).toBe('false');
-    expect(toggle.text()).toContain('가이드 보기');
-
-    await toggle.trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('section.compare').attributes('data-mode')).toBe('guide');
-    const toggleAfter = wrapper.find('[data-testid="sd-compare-toggle"]');
-    expect(toggleAfter.attributes('aria-pressed')).toBe('true');
-    expect(toggleAfter.text()).toContain('원본으로');
-
-    // Tap again → returns to shot.
-    await toggleAfter.trigger('click');
-    await flushPromises();
-    expect(wrapper.find('section.compare').attributes('data-mode')).toBe('shot');
-  });
-
-  it('compare toggle is hidden when scenes is empty (no guide image to flip to)', async () => {
+  it('scenes 가 비어있으면 single-img + 좌상단 라벨 (compare-wrap 사용 X)', async () => {
     const noScene = { ...fixture, scenes: [] };
     mockApi.get.mockResolvedValueOnce({ data: noScene });
     const { wrapper } = mountWithStubs(ShotDetailPage, {
@@ -420,8 +368,8 @@ describe('ShotDetailPage.vue', () => {
     });
     await flushPromises();
 
-    expect(wrapper.find('section.compare').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="sd-compare-toggle"]').exists()).toBe(false);
+    expect(wrapper.find('.compare-wrap').exists()).toBe(false);
+    expect(wrapper.find('.single-img').exists()).toBe(true);
   });
 
   // task #15 — infinite scroll wiring. The page mounts an IntersectionObserver
@@ -710,9 +658,9 @@ describe('ShotDetailPage.vue', () => {
     expect(stub.attributes('data-photo-id')).toBe('76');
   });
 
-  // task #21 — avatar / sub(place) 클릭 라우팅. avatar 는 nm 와 동일 동작
-  // (작성자 프로필), sub 는 신규 동작 (/map?selectedId=<placeId>).
-  it('primary avatar click → router.push /user/:authorId (task #21)', async () => {
+  // /feed/detail 통일 후 primary 도 avatar / meta 가 작성자 프로필로 이동.
+  // sub(place) 클릭 → /map 진입은 제거됨 (feed-detail 패턴엔 없음).
+  it('primary avatar click → router.push /user/:authorId', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
     pushSpy.mockClear();
@@ -721,20 +669,6 @@ describe('ShotDetailPage.vue', () => {
     await flushPromises();
     // fixture.author.id = 1
     expect(pushSpy).toHaveBeenCalledWith('/user/1');
-  });
-
-  it('primary sub(place) click → router.push /map?selectedId=:placeId (task #21)', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
-    pushSpy.mockClear();
-
-    await wrapper.find('[data-testid="sd-place-link"]').trigger('click');
-    await flushPromises();
-    // fixture.place.id = 10 → query.selectedId = "10"
-    expect(pushSpy).toHaveBeenCalledWith({
-      path: '/map',
-      query: { selectedId: '10' },
-    });
   });
 
   it('appended card avatar click → router.push /user/:userId (task #21)', async () => {
@@ -825,17 +759,15 @@ describe('ShotDetailPage.vue', () => {
     expect(sticky.find('button[aria-label="more"]').exists()).toBe(false);
   });
 
-  it('primary card renders .card-more button at top-right with Korean aria-label (task #26)', async () => {
+  it('primary card 의 더보기 버튼은 .post-head 우측 .more (sd-card-more testid 유지)', async () => {
+    // /feed/detail 통일 후 더보기 버튼이 이미지 위 오버레이 → head 우측으로 이동.
     const { wrapper } = mountPage();
     await flushPromises();
 
-    const compare = wrapper.find('section.compare');
-    expect(compare.exists()).toBe(true);
-    const more = compare.find('[data-testid="sd-card-more"]');
+    const more = wrapper.find('[data-testid="sd-primary-card"] .post-head .more');
     expect(more.exists()).toBe(true);
-    expect(more.attributes('aria-label')).toBe('더보기');
-    // 기존 "내 인증샷" 라벨은 사라졌어야 함.
-    expect(compare.find('.lbl-chip.r').exists()).toBe(false);
+    expect(more.attributes('data-testid')).toBe('sd-card-more');
+    expect(more.attributes('aria-label')).toBe('more');
   });
 
   it('appended feed cards each render their own more button (/feed/detail 톤 통일)', async () => {

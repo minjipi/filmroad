@@ -33,305 +33,107 @@
         </div>
 
         <div v-else-if="shot" class="sd-loaded" data-testid="sd-loaded">
-        <!-- Multi-image post (task #44): horizontal carousel of all photos
-             in the upload group. Scene-compare overlay lives only on the
-             first slide; follow-up photos render as plain images. -->
-        <section
-          v-if="images.length > 1"
-          class="sd-carousel"
-          data-testid="sd-carousel"
-        >
-          <div
-            ref="carouselEl"
-            class="carousel-track no-scrollbar"
-            @scroll="onCarouselScroll"
-          >
-            <div class="carousel-slide" data-testid="sd-slide">
-              <div class="compare" :data-mode="compareMode">
-                <img
-                  v-if="sceneImageUrl"
-                  :src="sceneImageUrl"
-                  class="compare-img is-guide"
-                  alt="드라마 원본 장면"
-                />
-                <img
-                  :src="images[0].imageUrl"
-                  class="compare-img is-shot"
-                  :alt="shot.place.name"
-                />
-                <span v-if="sceneImageUrl" class="lbl-chip l">드라마 원본</span>
-                <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
-                <button
-                  type="button"
-                  class="card-more"
-                  data-testid="sd-card-more"
-                  aria-label="더보기"
-                  @click="onCardMore"
-                >
-                  <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
-                </button>
-                <div class="scene-meta">
-                  <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.content.title }}
-                  <template v-if="shot.content.episode"> · {{ shot.content.episode }}</template>
-                  <template v-if="shot.content.sceneTimestamp">
-                    <span class="sep" />
-                    <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.content.sceneTimestamp }}
-                  </template>
-                </div>
-                <button
-                  v-if="sceneImageUrl"
-                  type="button"
-                  class="compare-toggle"
-                  :aria-pressed="compareMode === 'guide'"
-                  data-testid="sd-compare-toggle"
-                  @click="onToggleCompare"
-                >
-                  <ion-icon :icon="eyeOutline" class="ic-16" />
-                  <span class="compare-toggle-lbl">{{ compareMode === 'guide' ? '원본으로' : '가이드 보기' }}</span>
-                </button>
-              </div>
-            </div>
+        <!-- Primary card — /feed/detail 와 동일한 .post 마크업. 디자인 통일을
+             위해 이전의 carousel / compare-toggle / inline cmt-input / comments
+             preview / labeled sd-stats 는 모두 제거. 다중 이미지 게시물은
+             첫 이미지만 노출됨에 주의 (multi-image 표시는 향후 별도 PR). -->
+        <article class="post" data-testid="sd-primary-card">
+          <div class="post-head">
             <div
-              v-for="p in images.slice(1)"
-              :key="p.id"
-              class="carousel-slide"
-              data-testid="sd-slide"
-            >
-              <img :src="p.imageUrl" :alt="shot.place.name" />
-            </div>
-          </div>
-          <div class="carousel-dots" data-testid="sd-dots">
-            <span
-              v-for="(_, i) in images"
-              :key="i"
-              :class="['dot', i === currentSlide ? 'active' : '']"
-            />
-          </div>
-          <span class="carousel-count" data-testid="sd-count">
-            {{ currentSlide + 1 }} / {{ images.length }}
-          </span>
-        </section>
-
-        <!-- Single-image post — task #12: clip-path split → toggle.
-             Two stacked images opacity-swap on data-mode; "가이드 보기"
-             button flips between drama-scene and user-shot. Mirrors the
-             pattern from design/pages/13-feed-detail.html. -->
-        <section v-else class="compare" :data-mode="compareMode">
-          <img
-            v-if="sceneImageUrl"
-            :src="sceneImageUrl"
-            class="compare-img is-guide"
-            alt="드라마 원본 장면"
-          />
-          <img
-            :src="shot.imageUrl"
-            class="compare-img is-shot"
-            :alt="shot.place.name"
-          />
-          <span v-if="sceneImageUrl" class="lbl-chip l">드라마 원본</span>
-          <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 -->
-          <button
-            type="button"
-            class="card-more"
-            data-testid="sd-card-more"
-            aria-label="더보기"
-            @click="onCardMore"
-          >
-            <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
-          </button>
-          <div class="scene-meta">
-            <ion-icon :icon="filmOutline" class="ic-16" />{{ shot.content.title }}
-            <template v-if="shot.content.episode"> · {{ shot.content.episode }}</template>
-            <template v-if="shot.content.sceneTimestamp">
-              <span class="sep" />
-              <ion-icon :icon="timeOutline" class="ic-16" />{{ shot.content.sceneTimestamp }}
-            </template>
-          </div>
-          <button
-            v-if="sceneImageUrl"
-            type="button"
-            class="compare-toggle"
-            :aria-pressed="compareMode === 'guide'"
-            data-testid="sd-compare-toggle"
-            @click="onToggleCompare"
-          >
-            <ion-icon :icon="eyeOutline" class="ic-16" />
-            <span class="compare-toggle-lbl">{{ compareMode === 'guide' ? '원본으로' : '가이드 보기' }}</span>
-          </button>
-        </section>
-
-        <section class="sd-user">
-          <button
-            type="button"
-            class="avatar"
-            data-testid="sd-avatar"
-            :disabled="shot.author.id == null"
-            :aria-label="`${shot.author.nickname} 프로필 보기`"
-            @click="onOpenAuthor"
-          >
-            <img
-              v-if="shot.author.avatarUrl"
-              :src="shot.author.avatarUrl"
-              :alt="shot.author.nickname"
-            />
-          </button>
-          <div class="meta">
-            <button
-              type="button"
-              class="nm"
-              data-testid="sd-author-nickname"
-              :disabled="shot.author.id == null"
+              :class="['avatar', shot.author.id != null ? 'clickable' : '']"
+              data-testid="sd-avatar"
               @click="onOpenAuthor"
             >
-              {{ shot.author.nickname }}
-              <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="verified" />
-            </button>
-            <button
-              type="button"
-              class="sub"
-              data-testid="sd-place-link"
-              :aria-label="`${shot.place.name} 지도에서 보기`"
-              @click="onOpenPlaceMap"
-            >
-              <ion-icon :icon="locationOutline" class="ic-16" />
-              {{ shot.place.name }} · {{ takenAtLabel }}
-            </button>
-          </div>
-          <!-- 작성자가 본인이면 팔로우 버튼은 의미 없으므로 숨김. 별도 "내 기록"
-               CTA 도 두지 않음 — /profile 이 사실상 그 역할을 대체한다. -->
-          <button
-            v-if="!shot.author.isMe"
-            type="button"
-            :class="['follow', shot.author.following ? 'on' : '']"
-            data-testid="sd-author-action"
-            @click="onAuthorAction"
-          >
-            {{ authorActionLabel }}
-          </button>
-        </section>
-
-        <section class="sd-stats">
-          <button
-            type="button"
-            :class="['sd-stat-btn', shot.liked ? 'liked' : '']"
-            data-testid="sd-like-btn"
-            @click="onToggleLike"
-          >
-            <span class="stat-inner">
-              <ion-icon :icon="shot.liked ? heart : heartOutline" class="ic-22" />
-              <span class="n">{{ formatCount(shot.likeCount) }}</span>
-              <span class="l">좋아요</span>
-            </span>
-          </button>
-          <button type="button" class="sd-stat-btn" @click="onOpenComments">
-            <span class="stat-inner">
-              <ion-icon :icon="chatbubbleOutline" class="ic-22" />
-              <span class="n">{{ formatCount(shot.commentCount) }}</span>
-              <span class="l">댓글</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            :class="['sd-stat-btn', placeSaved ? 'saved' : '']"
-            data-testid="sd-save-btn"
-            @click="onToggleBookmark"
-          >
-            <span class="stat-inner">
-              <ion-icon :icon="placeSaved ? bookmark : bookmarkOutline" class="ic-22" />
-              <span class="l">저장</span>
-            </span>
-          </button>
-          <button type="button" class="sd-stat-btn" @click="onShare">
-            <span class="stat-inner">
-              <ion-icon :icon="paperPlaneOutline" class="ic-22" />
-              <span class="l">공유</span>
-            </span>
-          </button>
-        </section>
-
-        <section class="sd-caption">
-          <p v-if="shot.caption" class="body">{{ shot.caption }}</p>
-          <div v-if="shot.tags.length > 0" class="tags">
-            <span v-for="t in shot.tags" :key="t" class="tag">#{{ t }}</span>
-          </div>
-          <div class="date">{{ takenAtFullLabel }}</div>
-        </section>
-
-        <!--
-          댓글 미리보기 — Instagram 패턴. caption 직후, cmt-input 직전에 위치해
-          사용자가 페이지를 스크롤하면서도 최근 댓글을 시야 안에 두게 한다.
-          backend 가 이미 topComments(상위 N개) + moreCommentsCount 로 자른
-          상태로 내려주므로 여기서는 그대로 렌더만 하고, "모두 보기" 또는
-          전체 영역 클릭으로 CommentSheet 모달을 열어 본격적인 리스트로 넘긴다.
-          댓글이 0개면 cmt-input 의 placeholder("댓글을 남겨보세요...") 가
-          진입을 유도하니 이 섹션은 통째로 숨김.
-        -->
-        <section
-          v-if="shot.commentCount > 0 || shot.topComments.length > 0"
-          class="comments inline"
-          ref="commentsRef"
-          data-testid="sd-comments-preview"
-        >
-          <h4>
-            댓글 <span class="cnt">{{ formatCount(shot.commentCount) }}개</span>
-          </h4>
-          <!-- inline preview 는 최대 1건만. 나머지는 "모두 보기" 로 모달 진입. -->
-          <div
-            v-for="c in shot.topComments.slice(0, 1)"
-            :key="c.id"
-            :class="['cmt', c.isReply ? 'is-reply' : '']"
-            data-testid="sd-comment"
-          >
-            <div class="av">
               <img
-                v-if="c.authorAvatarUrl"
-                :src="c.authorAvatarUrl"
-                :alt="c.authorHandle ?? ''"
+                v-if="shot.author.avatarUrl"
+                :src="shot.author.avatarUrl"
+                :alt="shot.author.nickname"
               />
             </div>
-            <div class="body">
-              <div class="top">
-                <span class="nm">{{ c.authorHandle }}</span>
-                <span class="dt">· {{ formatRelativeTime(c.createdAt) }}</span>
+            <div
+              :class="['meta', shot.author.id != null ? 'clickable' : '']"
+              @click="onOpenAuthor"
+            >
+              <div class="nm" data-testid="sd-author-nickname">
+                {{ shot.author.handle }}
+                <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
               </div>
-              <div class="txt">{{ c.content }}</div>
+              <div class="loc">
+                <span class="drama">{{ shot.content.title }}</span>·{{ shot.place.name }}
+              </div>
+            </div>
+            <button
+              v-if="!shot.author.isMe"
+              type="button"
+              :class="['author-follow', shot.author.following ? 'on' : '']"
+              data-testid="sd-author-action"
+              @click="onAuthorAction"
+            >{{ authorActionLabel }}</button>
+            <button
+              type="button"
+              class="more"
+              aria-label="more"
+              data-testid="sd-card-more"
+              @click="onCardMore"
+            >
+              <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
+            </button>
+          </div>
+
+          <div class="post-image">
+            <div v-if="sceneImageUrl" class="compare-wrap">
+              <img :src="sceneImageUrl" class="compare-top" alt="드라마 원본 장면" />
+              <img :src="shot.imageUrl" :alt="shot.place.name" />
+              <div class="compare-divider" />
+              <div class="compare-lbl-top">드라마 원본</div>
+              <div class="compare-lbl-bot">내 인증샷</div>
+              <div class="drama-badge">
+                <ion-icon :icon="filmOutline" class="ic-16" />
+                <template v-if="shot.content.episode">{{ shot.content.episode }}</template>
+                <template v-if="shot.content.sceneTimestamp"> {{ shot.content.sceneTimestamp }}</template>
+              </div>
+            </div>
+            <div v-else class="single-img">
+              <img :src="shot.imageUrl" :alt="shot.place.name" />
+              <div class="drama-badge dark">
+                <ion-icon :icon="locationOutline" class="ic-16" />{{ shot.place.regionLabel }}
+              </div>
             </div>
           </div>
-          <!-- inline 에는 1건만 보이므로 commentCount 가 그 이상이면 항상
-               "모두 보기" 링크 노출. 0~1 인 케이스는 스킵. -->
-          <button
-            v-if="shot.commentCount > 1 || shot.topComments.length === 0"
-            type="button"
-            class="see-more"
-            data-testid="sd-comments-open"
-            @click="onOpenComments"
-          >댓글 {{ formatCount(shot.commentCount) }}개 모두 보기 ›</button>
-        </section>
 
-        <button
-          type="button"
-          class="cmt-input-wrap"
-          data-testid="sd-cmt-trigger"
-          aria-label="댓글 작성"
-          @click="onOpenComments"
-        >
-          <span class="me-av">
-            <img
-              v-if="meAvatarUrl"
-              :src="meAvatarUrl"
-              alt="me"
-            />
-          </span>
-          <span class="box">댓글을 남겨보세요…</span>
-          <span class="send" aria-hidden="true">
-            <ion-icon :icon="paperPlaneOutline" class="ic-18" />
-          </span>
-        </button>
+          <div class="post-actions">
+            <span
+              :class="['a', shot.liked ? 'on' : '']"
+              data-testid="sd-like-btn"
+              @click="onToggleLike"
+            >
+              <ion-icon :icon="shot.liked ? heart : heartOutline" class="ic-22" />
+              {{ formatCount(shot.likeCount) }}
+            </span>
+            <span class="a" @click="onOpenComments">
+              <ion-icon :icon="chatbubbleOutline" class="ic-22" />
+              {{ formatCount(shot.commentCount) }}
+            </span>
+            <span class="a" data-testid="feed-share" @click="onShare">
+              <ion-icon :icon="paperPlaneOutline" class="ic-22" />
+            </span>
+            <span class="spacer" />
+            <span
+              class="a"
+              data-testid="sd-save-btn"
+              @click="onToggleBookmark"
+            >
+              <ion-icon :icon="placeSaved ? bookmark : bookmarkOutline" class="ic-22" />
+            </span>
+          </div>
 
-        <!-- task #13: loc-card / scene-card 두 섹션은 사용자 결정으로 제거.
-             장소 진입은 헤더의 sd-user 닉네임 / 추후 별도 진입점에서, 원본 장면
-             재생도 별도 기능으로 분리될 예정. compare 영역의 토글로 가이드
-             이미지를 즉석 확인할 수 있어 페이지 하단의 추가 카드는 잉여. -->
+          <div class="post-caption">
+            <div v-if="shot.caption" class="caption-text">
+              <b>{{ shot.author.handle }}</b> {{ shot.caption }}
+            </div>
+          </div>
+          <div class="post-time">{{ takenAtFullLabel }}</div>
+        </article>
 
         <!-- task #17: 무한 스크롤 피드 — 추가 카드는 primary shot 과 동일한
              5-section 구조 (compare → sd-user → sd-stats → sd-caption →
@@ -573,7 +375,6 @@ import {
   ellipsisHorizontal,
   checkmarkCircle,
   filmOutline,
-  timeOutline,
   locationOutline,
   heart,
   heartOutline,
@@ -581,7 +382,6 @@ import {
   bookmark,
   bookmarkOutline,
   paperPlaneOutline,
-  eyeOutline,
   closeOutline,
   createOutline,
   trashOutline,
@@ -594,10 +394,7 @@ import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
-import {
-  formatRelativeTime,
-  formatVisitDate,
-} from '@/utils/formatRelativeTime';
+import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const props = defineProps<{ id: string | number }>();
 
@@ -609,22 +406,10 @@ const uiStore = useUiStore();
 const authStore = useAuthStore();
 const { shot, loading, error, appendedShots, nextLoading, nextEndReached } = storeToRefs(shotStore);
 
-const commentsRef = ref<HTMLElement | null>(null);
-const carouselEl = ref<HTMLElement | null>(null);
-const currentSlide = ref(0);
 const commentSheetOpen = ref(false);
 // task #18: 댓글 시트가 어떤 post 의 댓글을 보여주는지 트래킹. primary 의
 // shot.id 또는 appendedShots 의 한 항목 id. null = 미오픈 / 미선택.
 const commentSheetPhotoId = ref<number | null>(null);
-
-// task #11/#12: compare hero swapped from a clip-path split view to a toggle.
-// Default = "shot" (user's photo). Tapping the floating "가이드 보기" button
-// flips to "guide" (drama scene). aria-pressed mirrors the boolean for SR.
-type CompareMode = 'shot' | 'guide';
-const compareMode = ref<CompareMode>('shot');
-function onToggleCompare(): void {
-  compareMode.value = compareMode.value === 'guide' ? 'shot' : 'guide';
-}
 
 // IntersectionObserver-driven infinite scroll. The sentinel sits below
 // the comment input; when it scrolls into view, ask the store for the
@@ -683,31 +468,11 @@ watch(
   },
 );
 
-// Always fall back to the lead frame as a length-1 list so the template can
-// treat `images` as non-empty regardless of how old the backend response is.
-// Pre-task-#44 responses (single PlacePhoto, no PlacePhotoImage rows yet)
-// still render as a single-image post via the fallback.
-const images = computed(() => {
-  if (!shot.value) return [] as { id: number; imageUrl: string; imageOrderIndex: number }[];
-  if (shot.value.images && shot.value.images.length > 0) {
-    return shot.value.images;
-  }
-  return [{ id: shot.value.id, imageUrl: shot.value.imageUrl, imageOrderIndex: 0 }];
-});
-
-// 드라마 원본 씬은 scenes[0] (primary). 비교 토글 / clip-path overlay / 라벨 chip
-// 모두 이 단일 URL 을 본다. ShotDetailPage 는 carousel 이 아니라 첫 씬만 사용 —
-// PlaceDetailPage 만 multi-scene 캐러셀로 노출.
+// 드라마 원본 씬은 scenes[0] (primary). compare-wrap 위 절반에 깔리는 이미지.
+// 다중 씬은 사용하지 않음 (PlaceDetailPage 의 multi-scene carousel 과 무관).
 const sceneImageUrl = computed<string | null>(
   () => shot.value?.scenes[0]?.imageUrl ?? null,
 );
-
-function onCarouselScroll(e: Event): void {
-  const el = e.target as HTMLElement;
-  if (el.clientWidth === 0) return;
-  const idx = Math.round(el.scrollLeft / el.clientWidth);
-  if (idx !== currentSlide.value) currentSlide.value = idx;
-}
 
 // Place-level save reuses the global savedStore contract so the bookmark
 // state stays in sync with every other bookmark site (Feed / Place detail /
@@ -716,8 +481,6 @@ const placeSaved = computed(() =>
   shot.value ? savedStore.isSaved(shot.value.place.id) : false,
 );
 
-const meAvatarUrl = computed(() => authStore.user?.avatarUrl ?? null);
-
 // 본인 사진일 땐 버튼 자체가 v-if 로 숨겨지므로 isMe 분기를 두지 않는다.
 const authorActionLabel = computed(() => {
   const a = shot.value?.author;
@@ -725,13 +488,7 @@ const authorActionLabel = computed(() => {
   return a.following ? '팔로잉' : '팔로우';
 });
 
-// Short "YYYY.MM.DD" for the user-meta line + a longer label for the caption
-// footer. Backend only ships `createdAt` (ISO); the design's "오후 6시 24분"
-// long form is dropped — showing the relative-time marker instead keeps the
-// copy short and consistent with FeedPage.
-const takenAtLabel = computed(() =>
-  shot.value ? formatVisitDate(shot.value.createdAt) : '',
-);
+// post-time 에 들어가는 상대 시간("45분 전", "어제" 등). feed-detail 카드와 동일.
 const takenAtFullLabel = computed(() =>
   shot.value ? formatRelativeTime(shot.value.createdAt) : '',
 );
@@ -1059,17 +816,6 @@ watch(
   },
 );
 
-// Reset the carousel to the first slide whenever a new shot lands, so
-// navigating between posts doesn't keep the old index. Also reset the
-// compare toggle to "shot" so each fresh primary post starts clean.
-watch(
-  () => shot.value?.id,
-  () => {
-    currentSlide.value = 0;
-    compareMode.value = 'shot';
-    if (carouselEl.value) carouselEl.value.scrollLeft = 0;
-  },
-);
 </script>
 
 <style scoped>
@@ -1123,497 +869,18 @@ ion-content.sd-content {
 }
 /* task #26: sticky header 우측 액션 영역 사라짐 — `.sd-top .right` 룰도 정리. */
 
-/* Multi-image carousel hero */
-.sd-carousel {
-  position: relative;
-  width: 100%;
-}
-.sd-carousel .carousel-track {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-}
-.sd-carousel .carousel-slide {
-  flex: 0 0 100%;
-  scroll-snap-align: start;
-  aspect-ratio: 4 / 5;
-  background: #000000;
-  position: relative;
-  overflow: hidden;
-}
-.sd-carousel .carousel-slide > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.sd-carousel .carousel-slide .compare {
-  width: 100%;
-  height: 100%;
-}
-.sd-carousel .carousel-dots {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 6px;
-  pointer-events: none;
-}
-.sd-carousel .carousel-dots .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-}
-.sd-carousel .carousel-dots .dot.active {
-  background: #ffffff;
-  width: 18px;
-  border-radius: 3px;
-}
-.sd-carousel .carousel-count {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 12px;
-  pointer-events: none;
-}
+/* primary 카드 전용 CSS (sd-carousel / compare data-mode toggle / lbl-chip /
+   card-more / compare-toggle / scene-meta) 는 /feed/detail 마크업 통일로
+   제거. 새 마크업은 .post 트리(.post-head/.post-image/.post-actions/
+   .post-caption/.post-time)만 사용. */
 
-/* Compare hero — task #12: clip-path split → toggle (mirrors design/pages/
-   13-feed-detail.html). Two stacked images opacity-swap on data-mode and
-   the floating "가이드 보기" button flips the active layer. */
-.compare {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  background: #000000;
-  overflow: hidden;
-}
-.compare .compare-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  opacity: 0;
-  transition: opacity 220ms ease-out;
-}
-.compare[data-mode="shot"] .compare-img.is-shot { opacity: 1; }
-.compare[data-mode="guide"] .compare-img.is-guide { opacity: 1; }
-
-.lbl-chip {
-  position: absolute;
-  z-index: 3;
-  font-size: 10.5px;
-  font-weight: 800;
-  padding: 5px 10px;
-  border-radius: 999px;
-  backdrop-filter: blur(8px);
-  letter-spacing: -0.01em;
-}
-/* task #16: sticky header now takes layout space, so labels no longer
-   need the safe-area + 60px offset — sit at the natural photo-top edge. */
-.lbl-chip.l {
-  top: 12px;
-  left: 14px;
-  background: rgba(0, 0, 0, 0.7);
-  color: #ffffff;
-}
-/* task #26: lbl-chip.r ("내 인증샷") 자리는 .card-more 버튼이 차지.
-   .lbl-chip.l ("드라마 원본") 만 mode-bind 로 노출/숨김. */
-.compare[data-mode="shot"] .lbl-chip.l { display: none; }
-
-/* task #26: 카드별 더보기 버튼 — primary + 추가 카드 우상단 공통.
-   primary blue chip 톤은 라벨에서 더이상 안 쓰므로 검정 반투명 ic-btn
-   톤으로 통일 (compare-toggle 과 같은 visual 무게). */
-.card-more {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  z-index: 4;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 160ms ease-out;
-}
-.card-more:hover { background: rgba(0, 0, 0, 0.72); }
-.card-more:active { transform: translateY(1px); }
-
-/* Floating "가이드 보기" / "원본으로" toggle — bottom-right above scene-meta. */
-.compare-toggle {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(0, 0, 0, 0.65);
-  color: #ffffff;
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  border: none;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: background-color 160ms ease-out;
-}
-.compare-toggle:hover { background: rgba(0, 0, 0, 0.78); }
-.compare-toggle:active { transform: translateY(1px); }
-.compare-toggle[aria-pressed="true"] { background: rgba(20, 188, 237, 0.92); }
-
-.scene-meta {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 3;
-  background: rgba(0, 0, 0, 0.65);
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 11.5px;
-  font-weight: 700;
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.scene-meta .sep {
-  width: 1px;
-  height: 10px;
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* User header */
-.sd-user {
-  padding: 16px 20px 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--fr-line-soft);
-}
-/* task #21: .avatar 는 이제 <button> — 클릭 시 작성자 프로필로 이동.
-   button native 스타일 (border/padding/background) 을 모두 reset 하고
-   기존 시각(원형 + 회색 placeholder) 유지. */
-.avatar {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #eeeeee;
-  flex-shrink: 0;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.avatar:disabled { cursor: default; }
-.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sd-user .meta { flex: 1; min-width: 0; }
-.sd-user .nm {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--fr-ink);
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font-family: inherit;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.sd-user .nm:disabled { cursor: default; }
-.sd-user .nm:hover:not(:disabled) { color: var(--fr-ink-2); }
-.sd-user .verified {
-  width: 14px;
-  height: 14px;
-  color: var(--fr-primary);
-}
-/* task #21: .sub 는 이제 <button> — 클릭 시 /map?selectedId 로 이동.
-   button native 스타일 reset 하고 기존 시각(작은 회색 텍스트 + location icon) 유지. */
-.sd-user .sub {
-  font-size: 11.5px;
-  color: var(--fr-ink-3);
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.sd-user .sub:hover { color: var(--fr-ink-2); }
-.sd-user .follow {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 10px;
-  background: var(--fr-primary-soft);
-  color: var(--fr-primary);
-  border: 1px solid transparent;
-  font-weight: 800;
-  font-size: 12px;
-  cursor: pointer;
-}
-/* 팔로잉 상태 — Instagram 의 "Following" 버튼처럼 약하게 표현해
-   언팔 가능한 토글임을 시각적으로 알림. 평상시(팔로우)는 강조 색. */
-.sd-user .follow.on {
-  background: #ffffff;
-  border-color: var(--fr-line);
-  color: var(--fr-ink-2);
-}
-
-/* Stats bar */
-.sd-stats {
-  display: flex;
-  gap: 6px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--fr-line-soft);
-}
-.sd-stat-btn {
-  flex: 1;
-  min-width: 0;
-  background: var(--fr-bg-muted);
-  border: none;
-  padding: 10px 4px;
-  border-radius: 12px;
-  color: var(--fr-ink);
-  cursor: pointer;
-  /* WebKit <button> elements can't reliably be flex containers, so the
-     vertical stack lives on the inner <span>. */
-  -webkit-appearance: none;
-  appearance: none;
-  font: inherit;
-}
-.sd-stat-btn .stat-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  line-height: 1.2;
-}
-.sd-stat-btn .stat-inner ion-icon {
-  display: block;
-  flex-shrink: 0;
-}
-.sd-stat-btn .n {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.sd-stat-btn .l {
-  font-size: 10.5px;
-  color: var(--fr-ink-3);
-  font-weight: 700;
-}
-.sd-stat-btn.liked {
-  background: #fff1f2;
-  color: var(--fr-coral);
-}
-.sd-stat-btn.liked .l { color: var(--fr-coral); }
-.sd-stat-btn.saved {
-  background: #fff7e6;
-  color: #d97706;
-}
-.sd-stat-btn.saved .l { color: #d97706; }
-
-/* Caption */
-.sd-caption {
-  padding: 16px 20px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--fr-ink);
-}
-.sd-caption .body { margin: 0; }
-.sd-caption .tags {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sd-caption .tag {
-  color: var(--fr-primary);
-  font-weight: 700;
-}
-.sd-caption .date {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--fr-ink-4);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Comments */
-.comments { padding: 0 20px 24px; }
-.comments h4 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--fr-ink);
-}
-.comments h4 .cnt {
-  color: var(--fr-ink-4);
-  font-weight: 700;
-  font-size: 12px;
-}
-.cmt { display: flex; gap: 10px; padding: 10px 0; }
-.cmt.is-reply { padding-left: 42px; }
-.cmt .av {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: #eeeeee;
-}
-.cmt .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cmt .body { flex: 1; min-width: 0; }
-.cmt .top {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-}
-.cmt .nm { font-weight: 800; color: var(--fr-ink); }
-.cmt .dt { color: var(--fr-ink-4); font-size: 10.5px; }
-.cmt .txt {
-  font-size: 13px;
-  color: var(--fr-ink);
-  margin-top: 3px;
-  line-height: 1.5;
-}
-.cmt .act-row {
-  margin-top: 6px;
-  display: flex;
-  gap: 14px;
-  font-size: 11px;
-  color: var(--fr-ink-3);
-  font-weight: 700;
-}
-.cmt .like-btn {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.cmt .like-btn.on { color: var(--fr-coral); }
-.see-more {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 0 0;
-  border: none;
-  background: transparent;
-  font-size: 12.5px;
-  color: var(--fr-ink-3);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-}
-.see-more:hover { color: var(--fr-ink-2); }
-
-/* Inline preview 모드 — caption 직후에 컴팩트하게 노출. h4 / 댓글 한 건의
-   여백을 살짝 줄여서 페이지 흐름을 끊지 않고 1-2개만 슬쩍 보여줌. 본격
-   리스트 + 답글은 CommentSheet 모달이 담당. */
-.comments.inline { padding: 0 20px 8px; }
-.comments.inline h4 { margin-bottom: 6px; }
-.comments.inline .cmt { padding: 6px 0; }
-.comments.inline .cmt .txt { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
-
-/* Inline comment-compose row — sd-caption 과 loc-card 사이에 끼어
-   사용자가 본문 읽은 직후 자연스럽게 댓글을 남기게. Instagram/Threads/YouTube
-   처럼 외곽 라운드/보더 없이, 위쪽 구분선만으로 섹션 분리. 안쪽 input 만
-   살짝 라운드(10px) 줘서 입력란임을 시각적으로 표시.
-   바 전체가 트리거 — 탭하면 CommentSheet 모달이 열린다 (FeedDetail/Gallery
-   와 동일 패턴). 그래서 <button> 으로 두고 button 기본 스타일은 reset. */
-.cmt-input-wrap {
-  width: 100%;
-  margin: 8px 0 0;
-  padding: 12px 16px;
-  background: #ffffff;
-  border: none;
-  border-top: 1px solid var(--fr-line);
-  border-bottom: 1px solid var(--fr-line);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  -webkit-appearance: none;
-  appearance: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.cmt-input-wrap .me-av {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #eeeeee;
-  flex-shrink: 0;
-}
-.cmt-input-wrap .me-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cmt-input-wrap .box {
-  flex: 1;
-  background: var(--fr-bg-muted);
-  border-radius: 10px;
-  padding: 9px 14px;
-  font-size: 13px;
-  color: var(--fr-ink-4);
-}
-.cmt-input-wrap .send {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--fr-primary);
-  color: #ffffff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-}
+/* legacy primary CSS (sd-user / sd-stats / sd-caption / comments / cmt /
+   cmt-input-wrap / standalone .avatar) 도 통일에 맞춰 모두 제거. .post 트리
+   하나로 일원화 — 뒤에 정의된 .post-* 룰이 primary + appended 모두 커버. */
 
 /* ====================================================================
-   Infinite-scroll feed (task #15/#17) — appended shot cards below the
-   primary post. task #17: cards now reuse primary's 5-section markup
-   (.compare / .sd-user / .sd-stats / .sd-caption / .cmt-input-wrap),
-   so the inner styles inherit from primary's rules. This block only
-   adds the outer separator + the read-only disabled-state look.
-   ==================================================================== */
-/* ====================================================================
-   Appended feed (task #17/#18) — /feed/detail 와 동일 카드 마크업.
-   primary 카드(.compare/.sd-user/.sd-stats/.sd-caption)와 분리된 .post
-   클래스 트리. 디자인 통일 후 추출 시 PostCard.vue 로 빼낼 자리.
+   .post 카드 — primary + appended 모두 같은 마크업 (/feed/detail 통일).
+   다음 단계는 PostCard.vue 컴포넌트 추출.
    ==================================================================== */
 .sd-feed {
   border-top: 8px solid var(--fr-line-soft);
