@@ -730,7 +730,7 @@ async function onOpenDetail(): Promise<void> {
 
 async function onOpenGallery(): Promise<void> {
   if (!selected.value) return;
-  await router.push(`/gallery/${selected.value.id}`);
+  await router.push(`/feed/detail?placeId=${selected.value.id}`);
 }
 
 async function onToggleLike(): Promise<void> {

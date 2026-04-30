@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 
 export type GallerySort = 'RECENT' | 'POPULAR' | 'SCENE_COMPARE';
 export type GalleryViewMode = 'FEED' | 'GRID';
@@ -27,6 +29,8 @@ export interface GalleryPhoto {
   commentCount: number;
   createdAt: string;
   sceneCompare: boolean;
+  /** 뷰어 기준 좋아요 여부. 비로그인은 항상 false (backend task #24). */
+  liked: boolean;
 }
 
 export interface GalleryResponse {
@@ -123,6 +127,32 @@ export const useGalleryStore = defineStore('gallery', {
       this.size = 20;
       this.loading = false;
       this.error = null;
+    },
+
+    /**
+     * 인증샷 좋아요 토글 — feedStore.toggleLikePost 의 동등 짝. place 모드의
+     * FeedDetailPage 가 galleryStore.photos 를 source 로 쓰는데, feedStore 의
+     * 토글은 자기 posts 만 갱신하므로 이 store 자체에 토글 액션이 필요하다.
+     * 비로그인이면 LoginPrompt 를 띄우고 noop. 응답의 {liked, likeCount} 로
+     * 해당 photo state 즉시 반영.
+     */
+    async toggleLike(photoId: number): Promise<void> {
+      if (!useAuthStore().isAuthenticated) {
+        useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.');
+        return;
+      }
+      try {
+        const { data } = await api.post<{ liked: boolean; likeCount: number }>(
+          `/api/photos/${photoId}/like`,
+        );
+        const photo = this.photos.find((p) => p.id === photoId);
+        if (photo) {
+          photo.liked = data.liked;
+          photo.likeCount = data.likeCount;
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Failed to toggle like';
+      }
     },
 
     /**

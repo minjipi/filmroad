@@ -526,7 +526,7 @@ function onShare(): void {
     title: `${s.author.nickname}의 인증샷`,
     description: `${s.content.title} · ${s.place.name}`,
     imageUrl: s.imageUrl,
-    url: `${origin}/shot/${s.id}`,
+    url: `${origin}/feed/detail?shotId=${s.id}`,
   });
 }
 
@@ -651,34 +651,33 @@ const appendedMoreTarget = ref<{
 } | null>(null);
 const appendedMoreIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
-  const t = appendedMoreTarget.value;
-  return myId != null && t != null && t.author.userId === myId;
-});
-
-function onAppendedCardMore(post: {
-  id: number;
-  author: { userId: number };
-}): void {
-  appendedMoreTarget.value = post;
-  appendedMoreOpen.value = true;
-}
-
-function onCloseAppendedMoreSheet(): void {
-  appendedMoreOpen.value = false;
-}
-
-async function onAppendedEditFromSheet(): Promise<void> {
-  const t = appendedMoreTarget.value;
-  appendedMoreOpen.value = false;
-  if (!t) return;
-  await router.push(`/shot/${t.id}`);
-}
-
-function onAppendedDeleteFromSheet(): void {
-  const t = appendedMoreTarget.value;
-  appendedMoreOpen.value = false;
-  if (!t) return;
-  void confirmDeleteAppended(t.id);
+  const isMe = myId != null && post.author.userId === myId;
+  if (!isMe) {
+    await showInfo('더보기 메뉴는 곧 공개됩니다');
+    return;
+  }
+  const sheet = await actionSheetController.create({
+    header: '인증샷',
+    buttons: [
+      {
+        text: '수정',
+        icon: createOutline,
+        handler: () => {
+          void router.push(`/feed/detail?shotId=${post.id}`);
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDeleteAppended(post.id);
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
 }
 
 async function confirmDeleteAppended(postId: number): Promise<void> {

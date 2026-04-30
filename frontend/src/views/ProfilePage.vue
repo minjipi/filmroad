@@ -2,6 +2,15 @@
   <ion-page>
     <ion-content :fullscreen="true" class="pf-content">
       <header class="top-bar">
+        <button
+          type="button"
+          class="back-btn"
+          aria-label="뒤로"
+          data-testid="profile-back-btn"
+          @click="onBack"
+        >
+          <ion-icon :icon="chevronBack" class="ic-22" />
+        </button>
         <h1>{{ handleLabel }}</h1>
         <div class="r">
           <button type="button" aria-label="menu" @click="onMenu">
@@ -303,6 +312,7 @@ import {
 import {
   shareSocialOutline,
   menuOutline,
+  chevronBack,
   checkmarkCircle,
   star,
   createOutline,
@@ -437,7 +447,7 @@ async function onOpenMap(): Promise<void> {
 }
 
 async function onOpenShot(id: number): Promise<void> {
-  await router.push(`/shot/${id}`);
+  await router.push(`/feed/detail?shotId=${id}`);
 }
 
 async function onEdit(): Promise<void> {
@@ -465,6 +475,15 @@ const menuOpen = ref(false);
 
 function onMenu(): void {
   menuOpen.value = true;
+}
+
+/**
+ * 뒤로 가기 — history 가 있으면 router.back, 없으면 home 으로 폴백.
+ * /home 탭에서 직접 진입한 케이스(스택 비어있음) 라도 무한 멈춤 X.
+ */
+function onBack(): void {
+  if (window.history.length > 1) router.back();
+  else void router.replace('/home');
 }
 
 function closeMenu(): void {
@@ -552,15 +571,27 @@ ion-content.pf-content {
 .top-bar {
   padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   display: flex;
-  justify-content: space-between;
+  /* back 버튼 + 제목 + 우측 메뉴 — 가운데(제목)가 flex:1 로 자리 차지하도록. */
   align-items: center;
+  gap: 4px;
   background: #ffffff;
 }
 .top-bar h1 {
   margin: 0;
+  flex: 1;
   font-size: 18px; font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--fr-ink);
+}
+.top-bar .back-btn {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fr-ink);
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 .top-bar .r { display: flex; gap: 4px; }
 .top-bar .r button {

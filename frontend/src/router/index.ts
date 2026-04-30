@@ -111,10 +111,14 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    // task #23 — `/feed/detail?placeId=...` 으로 통합. 옛 북마크/외부링크
+    // 호환을 위해 redirect 만 유지(컴포넌트 자체는 dead code 로 보존, 후속 패스에 제거).
     path: '/gallery/:placeId',
     name: 'Gallery',
-    component: () => import('../views/GalleryPage.vue'),
-    props: true,
+    redirect: (to) => ({
+      path: '/feed/detail',
+      query: { ...to.query, placeId: String(to.params.placeId) },
+    }),
   },
   {
     path: '/content/:id',
@@ -123,10 +127,14 @@ const routes: Array<RouteRecordRaw> = [
     props: true,
   },
   {
+    // task #23 — `/feed/detail?shotId=...` 으로 통합 (anchor scroll). 옛 링크
+    // 호환을 위해 redirect 만 유지. 컴포넌트는 dead code 로 보존, 후속 패스에 제거.
     path: '/shot/:id',
     name: 'ShotDetail',
-    component: () => import('../views/ShotDetailPage.vue'),
-    props: true,
+    redirect: (to) => ({
+      path: '/feed/detail',
+      query: { ...to.query, shotId: String(to.params.id) },
+    }),
   },
   {
     path: '/collection/:id',

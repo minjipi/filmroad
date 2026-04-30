@@ -1957,3 +1957,144 @@ visited 가 계속 false 면 GPS 미통과 가능성 — devtools Network 의 `/
 - (M) `frontend/src/views/TripRoutePage.vue`
 - (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
 - (M) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
+
+---
+
+# Task #23 — `/feed/detail` 단일 페이지로 `/shot/:id` + `/gallery/:placeId` 통합
+
+브랜치: **`feat/unify-feed-detail`** (main 에서 분기, 새로 생성).
+
+## 시맨틱 (team-lead 의 update 반영)
+| URL | 동작 |
+|---|---|
+| `/feed/detail` | 전체 feed (기존, feedStore.posts) |
+| `/feed/detail?placeId=71` | place 인증샷 (galleryStore.photos, GalleryPhoto→FeedPost 어댑터) |
+| `/feed/detail?shotId=8` | 위 두 모드 안에서 shot 8 카드 위치로 anchor scroll |
+| `/feed/detail?placeId=71&shotId=8` | 조합 가능 |
+
+`shotId` 는 isolation 이 아니라 **anchor**. 위/아래 스크롤로 다른 카드도 보임.
+
+## 변경 (15 파일)
+
+### 라우터 redirect (backward compat)
+- `frontend/src/router/index.ts`:
+  - `/shot/:id` 와 `/gallery/:placeId` 모두 component 대신 **redirect** 로 변경. params/query 보존하며 `/feed/detail` 로 변환. 옛 북마크/외부 링크 호환용 안전판 — 정상 흐름엔 trigger 안 됨.
+
+### FeedDetailPage.vue (모드 통합)
+- `useRoute` 로 `placeId`/`shotId` query 읽음. mode = `placeId != null ? 'place' : 'feed'`.
+- place 모드 헤더: 뒤로가기 + place 이름 (`<header class="place-head">`). feed 모드의 탐색 헤더/검색/탭은 hidden.
+- `galleryPhotoToPost(photo)` 어댑터 — GalleryPhoto + galleryStore.placeHeader → FeedPost 모양으로 변환. 단일 카드 템플릿 유지. liked/saved/visitedAt/dramaSceneImageUrl/following 등 GalleryPhoto 가 노출 안 하는 필드는 default. (place 모드에서 좋아요/저장 인터랙션은 시각만, 영속 X — 후속 패스에서 보강.)
+- `posts` computed → 모드별 source.
+- `fetchForCurrentMode()` 호출 + `scrollToAnchor(shotId)` (`data-post-id` 셀렉터 + `scrollEl.scrollTop = card.offsetTop` 즉시 이동).
+- `watch([placeId, shotId])` — query 변경 시 다시 fetch + anchor.
+- 카드 in-page 더보기 "수정" → 같은 페이지 query 만 갱신(replace, history 오염 X).
+- `onShare()` URL 도 새 형식 (`/feed/detail?shotId=...`).
+
+### `router.push` 마이그레이션 (10 사이트, 모두 새 형식)
+1. `FeedPage.vue:243` `\`/shot/${id}\`` → `\`/feed/detail?shotId=${id}\``
+2. `FeedDetailPage.vue:307` (in-page) → `router.replace({ path: '/feed/detail', query: { ...route.query, shotId } })`
+3. `MapPage.vue:733` → `\`/feed/detail?placeId=...\``
+4. `PlaceDetailPage.vue:825/831` → 새 형식 (placeId / shotId)
+5. `ProfilePage.vue:440` → 새 형식
+6. `UserProfilePage.vue:285` → 새 형식
+7. `UploadPage.vue:969` (replace) → 새 형식
+8. `GalleryPage.vue:299` (dead code, 보존된 컴포넌트 안의 push) → 새 형식
+9. `ShotDetailPage.vue:514, 656` (dead code) → 새 형식
+
+### Spec 갱신
+- `frontend/src/router/__tests__/redirects.spec.ts` (신규, 4 케이스): `/shot/7` / `/gallery/71` redirect + 기존 query 보존 회귀.
+- `frontend/src/views/__tests__/FeedDetailPage.spec.ts`:
+  - `useRoute` mock + `queryRef`.
+  - `apiGetSpy` 로 `/api/places/:id/photos` 응답 stub.
+  - 신규 5 케이스: place 모드 헤더 분기 / `/api/places/:id/photos` 호출 검증 / back 버튼 / shotId anchor 카드 매칭 / share URL `/feed/detail?shotId=` (`/shot/` 없음).
+- 다른 spec 들 (`FeedPage`, `MapPage`, `PlaceDetailPage`, `ProfilePage`, `UploadPage`, `UserProfilePage`) 의 push 기대값을 새 형식으로 일괄 갱신.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **57 files / 686 tests** (56 → 57, 666 → 686, 신규 9: FeedDetail 모드 5 + redirects 4).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.78s.
+- `cd frontend && npm run lint` — touched files 모두 클린. SavedPage.spec.ts (3건) + ShotDetailPage `onOpenPlaceMap`/`onOpenAppendedPlaceMap` (2건) 은 baseline (main) 에도 존재하던 사전 결함.
+- 브라우저 확인 항목 (사용자가 직접):
+  - `/feed/detail` 전체 feed.
+  - `/feed/detail?placeId=71` place 인증샷.
+  - `/feed/detail?shotId=8` shot 8 카드부터 노출 + 위/아래 자유 스크롤.
+  - `/shot/7` → 자동 redirect → 주소창 `/feed/detail?shotId=7`.
+  - `/gallery/71` → 자동 redirect → 주소창 `/feed/detail?placeId=71`.
+  - 카드 클릭 사이클 후 history 에 `/shot/` URL 안 남음.
+
+## 알려진 한계 (후속 task 후보)
+- ShotDetailPage 의 unique UI(편집 모달, "더보기" 등 일부 액션)는 FeedDetailPage 카드에 미이식 — `/shot/:id` redirect 로 페이지 자체가 사용되지 않으므로 일시 회귀. team-lead 가 brief 에서 "후속 task" 로 명시.
+- ShotDetailPage / GalleryPage 컴포넌트 자체는 dead code 로 보존(라우트는 redirect 만). 후속 패스에 안전 확인 후 제거 가능.
+- placeId 모드의 좋아요/저장 인터랙션은 GalleryPhoto 가 liked/saved 를 노출하지 않아 시각만 동작. 영속화는 별도 패스.
+
+## 변경 파일 (15건)
+- (M) `frontend/src/router/index.ts`
+- (M) `frontend/src/views/FeedDetailPage.vue`
+- (M) `frontend/src/views/FeedPage.vue`
+- (M) `frontend/src/views/MapPage.vue`
+- (M) `frontend/src/views/PlaceDetailPage.vue`
+- (M) `frontend/src/views/ProfilePage.vue`
+- (M) `frontend/src/views/UserProfilePage.vue`
+- (M) `frontend/src/views/UploadPage.vue`
+- (M) `frontend/src/views/GalleryPage.vue`
+- (M) `frontend/src/views/ShotDetailPage.vue`
+- (M) `frontend/src/views/__tests__/FeedDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/FeedPage.spec.ts`
+- (M) `frontend/src/views/__tests__/MapPage.spec.ts`
+- (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/ProfilePage.spec.ts`
+- (M) `frontend/src/views/__tests__/UploadPage.spec.ts`
+- (M) `frontend/src/views/__tests__/UserProfilePage.spec.ts`
+- (N) `frontend/src/router/__tests__/redirects.spec.ts`
+
+---
+
+# Task #25 — `/feed/detail?placeId=...` 좋아요 동작 fix
+
+## 증상
+place 모드에서 하트 클릭 시 `feedStore.toggleLikePost(id)` 가 호출됐으나 source 가 `galleryStore.photos` 라 시각 변화 없음 (백엔드는 토글되지만 프론트가 모름). 게다가 `GalleryPhoto` 인터페이스에 `liked` 필드 자체가 없어 페이지 재진입해도 false 그대로.
+
+## 변경 (3 production + 3 spec)
+
+### `frontend/src/stores/gallery.ts`
+- `GalleryPhoto.liked: boolean` 필드 추가 (backend #49 = task #24 가 응답에 포함).
+- 신규 action `toggleLike(photoId)`:
+  - 비로그인 → `useUiStore().showLoginPrompt('좋아요는 로그인 후 이용할 수 있어요.')` + noop.
+  - `POST /api/photos/${id}/like` → `{liked, likeCount}` 응답으로 자기 photos 의 해당 photo state mutate.
+  - catch → `store.error` 저장.
+  - feedStore.toggleLikePost 와 동등한 contract.
+
+### `frontend/src/views/FeedDetailPage.vue`
+- `galleryPhotoToPost`: `liked: false` → `liked: photo.liked`.
+- `onToggleLike` 모드 분기: place 모드면 `galleryStore.toggleLike(p.id)`, feed 모드면 기존 `feedStore.toggleLikePost(p.id)`. 두 store 가 각자 자기 source 만 mutate.
+
+### Spec
+- `frontend/src/stores/__tests__/gallery.spec.ts`:
+  - `mockApi` 에 `post: vi.fn()` 추가 + beforeEach reset.
+  - `makePhoto` 가 `liked: false` 기본값 + override 옵션.
+  - 신규 3 케이스: 비로그인 LoginPrompt + noop / 정상 토글 (`POST /api/photos/:id/like` + state 갱신) / 실패 시 error 저장 + photo 미변경.
+- `frontend/src/views/__tests__/GalleryPage.spec.ts`: makePhoto 에 `liked: false` 추가 (필수 필드).
+- `frontend/src/views/__tests__/FeedDetailPage.spec.ts`: 신규 1 케이스 — place 모드 하트 클릭 시 galleryStore.toggleLike(555) 호출 / feedStore.toggleLikePost 미호출 검증. apiGetSpy 를 `/api/places/71/photos` 로 fixture 시드.
+
+### Bonus 픽스 (build 회귀 정리)
+- `PlaceDetailPage.spec.ts` — onOpenShot 가 placeId 도 query 에 포함하도록 변경된 것에 맞춰 spec 기대값 갱신 (`/feed/detail?placeId=...&shotId=...`).
+- gallery.spec.ts auth.user fixture 를 ProfileUser 전체 필드로 보강.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **57 files / 690 tests** (686 → 690, 신규 4: gallery.toggleLike 3 + FeedDetailPage place 모드 like 1).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.43s.
+- `cd frontend && npm run lint` — touched files 클린. baseline 사전 결함 5건 그대로.
+- 브라우저 검증 항목 (사용자 직접):
+  - `/feed/detail?placeId=72&shotId=7` 하트 클릭 → 즉시 빨강 + likeCount +1 / 토글 정상.
+  - 페이지 재진입 후 liked 상태 유지.
+  - feed 모드 회귀 X.
+
+## 알려진 한계 / 후속
+- task #27 (= backend #50/#26 의존, 이미 backend 완료) 가 진행되면 `feedStore.fetch({placeId})` 기반으로 전환되어 `galleryStore.toggleLike` + `galleryPhotoToPost` 어댑터가 dead code 가 됨. team-lead 가 "제거 또는 보존 무관" 명시. 후속 패스에 정리 가능.
+
+## 변경 파일 (5건)
+- (M) `frontend/src/stores/gallery.ts`
+- (M) `frontend/src/views/FeedDetailPage.vue`
+- (M) `frontend/src/stores/__tests__/gallery.spec.ts`
+- (M) `frontend/src/views/__tests__/GalleryPage.spec.ts`
+- (M) `frontend/src/views/__tests__/FeedDetailPage.spec.ts`
+- (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`

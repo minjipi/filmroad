@@ -1,23 +1,30 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 
+const { apiGetSpy } = vi.hoisted(() => ({
+  apiGetSpy: vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/feed/recommended-users') return Promise.resolve({ data: [] });
+    if (url.startsWith('/api/places/') && url.includes('/photos')) {
+      return Promise.resolve({
+        data: { place: null, photos: [], total: 0, page: 1, size: 20, sort: 'RECENT' },
+      });
+    }
+    return Promise.resolve({ data: null });
+  }),
+}));
 vi.mock('@/services/api', () => ({
-  default: {
-    get: vi.fn().mockImplementation((url: string) => {
-      if (url === '/api/feed/recommended-users') return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: null });
-    }),
-    post: vi.fn(),
-  },
+  default: { get: apiGetSpy, post: vi.fn() },
 }));
 
-const { pushSpy, replaceSpy, backSpy } = vi.hoisted(() => ({
+const { pushSpy, replaceSpy, backSpy, queryRef } = vi.hoisted(() => ({
   pushSpy: vi.fn().mockResolvedValue(undefined),
   replaceSpy: vi.fn().mockResolvedValue(undefined),
   backSpy: vi.fn(),
+  queryRef: { value: {} as Record<string, string> },
 }));
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy, replace: replaceSpy, back: backSpy }),
+  useRoute: () => ({ query: queryRef.value, params: {} }),
 }));
 
 const { toastCreateSpy } = vi.hoisted(() => ({
@@ -124,6 +131,7 @@ describe('FeedDetailPage.vue', () => {
     pushSpy.mockClear();
     replaceSpy.mockClear();
     backSpy.mockClear();
+    queryRef.value = {};
   });
 
   it('tapping the search bar pushes /search', async () => {
@@ -363,5 +371,131 @@ describe('FeedDetailPage.vue', () => {
     const note = wrapper.find('.empty-note');
     expect(note.exists()).toBe(true);
     expect(note.text()).toContain('아직 팔로우한 사용자가 없어요');
+  });
+
+  // ── task #23: place / shotId anchor 모드 ──────────────────────────────
+  it('?placeId mode hides the explore header / search / tabs and renders place-head', async () => {
+    queryRef.value = { placeId: '71' };
+    const { wrapper } = mountFeed({ posts: [] });
+    await flushPromises();
+
+    expect(wrapper.find('.feed-head').exists()).toBe(false);
+    expect(wrapper.find('.search-row').exists()).toBe(false);
+    expect(wrapper.find('.feed-tabs').exists()).toBe(false);
+    expect(wrapper.find('.place-head').exists()).toBe(true);
+  });
+
+  it('?placeId mode hits the gallery endpoint (not the feed endpoint) on mount', async () => {
+    queryRef.value = { placeId: '71' };
+    apiGetSpy.mockClear();
+    mountFeed({ posts: [] });
+    await flushPromises();
+
+    const calledUrls = apiGetSpy.mock.calls.map((c: unknown[]) => c[0] as string);
+    expect(calledUrls.some((u) => u.startsWith('/api/places/71/photos'))).toBe(true);
+    // place 모드에선 feed/recommended-users 등 feed 전용 엔드포인트는 호출 X.
+    expect(calledUrls.some((u) => u === '/api/feed/recommended-users')).toBe(false);
+  });
+
+  it('back button on place-head calls router.back', async () => {
+    queryRef.value = { placeId: '71' };
+    const { wrapper } = mountFeed({ posts: [] });
+    await flushPromises();
+
+    await wrapper.find('[data-testid="feed-detail-back"]').trigger('click');
+    expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shotId anchor scrolls the matching card into view (scrollTop = card.offsetTop)', async () => {
+    queryRef.value = { shotId: '2' };
+    const { wrapper } = mountFeed();
+    await flushPromises();
+
+    // jsdom 의 article 들에 data-post-id 가 박혔는지 + 컨테이너 scrollTop 가 변동했는지.
+    // jsdom 은 offsetTop 을 0 으로 보고하는 경우가 많아 정확한 값 단언은 회피하고
+    // 셀렉터 매칭만 검증.
+    const card = wrapper.find('[data-post-id="2"]');
+    expect(card.exists()).toBe(true);
+    expect(wrapper.find('.feed-scroll').exists()).toBe(true);
+  });
+
+  // ── task #25: place 모드 좋아요는 galleryStore.toggleLike 로 라우팅 ───
+  it('place mode like routes through galleryStore.toggleLike (not feedStore.toggleLikePost)', async () => {
+    queryRef.value = { placeId: '71' };
+    // 페이지의 onMounted 가 galleryStore.fetch(71) 을 호출하면 store 의 photos 를
+    // 응답으로 갈아끼우므로, 여기서는 apiGet 모킹으로 시드 데이터를 그대로 돌려준다.
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url === '/api/feed/recommended-users') return Promise.resolve({ data: [] });
+      if (url.startsWith('/api/places/71/photos')) {
+        return Promise.resolve({
+          data: {
+            place: {
+              placeId: 71,
+              name: '주문진 영진해변 방파제',
+              contentTitle: '도깨비',
+              contentEpisode: null,
+              totalPhotoCount: 1,
+              contentId: 1,
+            },
+            photos: [
+              {
+                id: 555,
+                imageUrl: 'https://cdn/p/555.jpg',
+                caption: 'p555',
+                authorUserId: 7,
+                authorNickname: 'me',
+                authorHandle: 'me',
+                authorAvatarUrl: null,
+                authorVerified: false,
+                likeCount: 100,
+                commentCount: 0,
+                createdAt: '2026-04-22T00:00:00Z',
+                sceneCompare: false,
+                liked: false,
+              },
+            ],
+            total: 1,
+            page: 0,
+            size: 20,
+            sort: 'RECENT',
+          },
+        });
+      }
+      return Promise.resolve({ data: null });
+    });
+    const { wrapper } = mountFeed({ posts: [] });
+    await flushPromises();
+
+    const { useGalleryStore } = await import('@/stores/gallery');
+    const { useFeedStore } = await import('@/stores/feed');
+    const gallery = useGalleryStore();
+    const feed = useFeedStore();
+    const galleryToggleSpy = vi.spyOn(gallery, 'toggleLike').mockResolvedValue();
+    const feedToggleSpy = vi.spyOn(feed, 'toggleLikePost').mockResolvedValue();
+
+    const heart = wrapper.find('.post-actions .a');
+    expect(heart.exists()).toBe(true);
+    await heart.trigger('click');
+    await flushPromises();
+
+    expect(galleryToggleSpy).toHaveBeenCalledWith(555);
+    expect(feedToggleSpy).not.toHaveBeenCalled();
+  });
+
+  it('share sheet receives /feed/detail?shotId=N URL (legacy /shot/N format gone)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountFeed();
+    await flushPromises();
+    const ui = useUiStore();
+    const openSheetSpy = vi.spyOn(ui, 'openShareSheet').mockImplementation(() => {});
+
+    const posts = wrapper.findAll('.post');
+    const shareIcon = posts[0].find('[data-testid="feed-share"]');
+    await shareIcon.trigger('click');
+
+    expect(openSheetSpy).toHaveBeenCalled();
+    const arg = openSheetSpy.mock.calls[0][0];
+    expect(arg.url).toContain('/feed/detail?shotId=1');
+    expect(arg.url).not.toContain('/shot/');
   });
 });

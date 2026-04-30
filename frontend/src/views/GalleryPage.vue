@@ -302,22 +302,33 @@ function onCloseMoreSheet(): void {
 
 const moreSheetIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
-  const t = moreSheetTarget.value;
-  return myId != null && t != null && t.authorUserId === myId;
-});
-
-async function onEditFromSheet(): Promise<void> {
-  const t = moreSheetTarget.value;
-  moreSheetOpen.value = false;
-  if (!t) return;
-  await router.push(`/shot/${t.id}`);
-}
-
-function onDeleteFromSheet(): void {
-  const t = moreSheetTarget.value;
-  moreSheetOpen.value = false;
-  if (!t) return;
-  void confirmDelete(t.id);
+  const isMe = myId != null && p.authorUserId === myId;
+  if (!isMe) {
+    await showInfo('더보기 메뉴는 곧 공개됩니다');
+    return;
+  }
+  const sheet = await actionSheetController.create({
+    header: '인증샷',
+    buttons: [
+      {
+        text: '수정',
+        icon: createOutline,
+        handler: () => {
+          void router.push(`/feed/detail?shotId=${p.id}`);
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDelete(p.id);
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
 }
 
 async function confirmDelete(photoId: number): Promise<void> {

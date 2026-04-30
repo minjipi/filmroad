@@ -24,12 +24,13 @@ public class FeedController {
     public BaseResponse<FeedResponse> getFeed(
             @RequestParam(required = false, defaultValue = "RECENT") FeedTab tab,
             @RequestParam(required = false) Long contentId,
+            @RequestParam(required = false) Long placeId,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Long cursor,
             @RequestParam(required = false, defaultValue = "5") int limit
     ) {
-        return BaseResponse.success(feedService.getFeed(tab, contentId, lat, lng, cursor, limit));
+        return BaseResponse.success(feedService.getFeed(tab, contentId, placeId, lat, lng, cursor, limit));
     }
 
     @GetMapping("/recommended-users")

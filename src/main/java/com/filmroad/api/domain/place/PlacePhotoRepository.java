@@ -153,6 +153,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
             JOIN FETCH pl.content w
             LEFT JOIN FETCH p.user u
             WHERE (:contentId IS NULL OR w.id = :contentId)
+              AND (:placeId IS NULL OR pl.id = :placeId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND (
                 p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
@@ -164,6 +165,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
             ORDER BY p.likeCount DESC, p.id DESC
             """)
     List<PlacePhoto> findFeedPopular(@Param("contentId") Long contentId,
+                                     @Param("placeId") Long placeId,
                                      @Param("cursor") Long cursor,
                                      @Param("viewerId") Long viewerId,
                                      Pageable pageable);
@@ -174,6 +176,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
             JOIN FETCH pl.content w
             LEFT JOIN FETCH p.user u
             WHERE (:contentId IS NULL OR w.id = :contentId)
+              AND (:placeId IS NULL OR pl.id = :placeId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND (
                 p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
@@ -185,6 +188,7 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
             ORDER BY p.id DESC
             """)
     List<PlacePhoto> findFeedRecent(@Param("contentId") Long contentId,
+                                    @Param("placeId") Long placeId,
                                     @Param("cursor") Long cursor,
                                     @Param("viewerId") Long viewerId,
                                     Pageable pageable);
@@ -200,12 +204,14 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
             LEFT JOIN FETCH p.user u
             WHERE p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :followerId)
               AND (:contentId IS NULL OR w.id = :contentId)
+              AND (:placeId IS NULL OR pl.id = :placeId)
               AND (:cursor IS NULL OR p.id < :cursor)
               AND p.visibility <> com.filmroad.api.domain.place.PhotoVisibility.PRIVATE
             ORDER BY p.id DESC
             """)
     List<PlacePhoto> findFeedByFollowedUsers(@Param("followerId") Long followerId,
                                              @Param("contentId") Long contentId,
+                                             @Param("placeId") Long placeId,
                                              @Param("cursor") Long cursor,
                                              Pageable pageable);
 }

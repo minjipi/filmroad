@@ -511,8 +511,8 @@ describe('UploadPage.vue', () => {
       await flushPromises();
 
       expect(resetSpy).toHaveBeenCalledTimes(1);
-      // 사용자가 방금 인증한 성지(placeId=10)의 갤러리로 이동.
-      expect(replaceSpy).toHaveBeenCalledWith('/gallery/10');
+      // 사용자가 방금 인증한 성지(placeId=10)의 갤러리로 이동. task #23 통합 후 새 형식.
+      expect(replaceSpy).toHaveBeenCalledWith('/feed/detail?placeId=10');
     } finally {
       vi.useRealTimers();
     }

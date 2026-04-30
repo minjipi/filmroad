@@ -50,19 +50,21 @@ public class FeedService {
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
-    public FeedResponse getFeed(FeedTab tab, Long contentId, Double lat, Double lng, Long cursor, int limit) {
+    public FeedResponse getFeed(FeedTab tab, Long contentId, Long placeId, Double lat, Double lng, Long cursor, int limit) {
         FeedTab effectiveTab = tab == null ? FeedTab.RECENT : tab;
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         int fetchSize = safeLimit + 1;
 
         Long viewerId = currentUser.currentUserId();
         Long effectiveContentId = (effectiveTab == FeedTab.BY_CONTENT) ? contentId : null;
+        // placeId 는 tab 과 직교한 추가 필터. RECENT + placeId 면 그 place 의 photos 만 최신순,
+        // POPULAR + placeId 면 그 place 의 photos 만 like_count DESC. null 이면 전체 흐름 그대로.
         List<PlacePhoto> fetched = switch (effectiveTab) {
-            case RECENT -> placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize));
-            case POPULAR -> placePhotoRepository.findFeedPopular(null, cursor, viewerId, PageRequest.of(0, fetchSize));
-            case FOLLOWING -> placePhotoRepository.findFeedByFollowedUsers(viewerId, null, cursor, PageRequest.of(0, fetchSize));
-            case BY_CONTENT -> placePhotoRepository.findFeedPopular(effectiveContentId, cursor, viewerId, PageRequest.of(0, fetchSize));
-            case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng, viewerId);
+            case RECENT -> placePhotoRepository.findFeedRecent(null, placeId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case POPULAR -> placePhotoRepository.findFeedPopular(null, placeId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case FOLLOWING -> placePhotoRepository.findFeedByFollowedUsers(viewerId, null, placeId, cursor, PageRequest.of(0, fetchSize));
+            case BY_CONTENT -> placePhotoRepository.findFeedPopular(effectiveContentId, placeId, cursor, viewerId, PageRequest.of(0, fetchSize));
+            case NEARBY -> fetchNearby(cursor, fetchSize, lat, lng, viewerId, placeId);
         };
 
         boolean hasMore = fetched.size() > safeLimit;
@@ -137,8 +139,8 @@ public class FeedService {
         return result;
     }
 
-    private List<PlacePhoto> fetchNearby(Long cursor, int fetchSize, Double lat, Double lng, Long viewerId) {
-        List<PlacePhoto> recent = placePhotoRepository.findFeedRecent(null, cursor, viewerId, PageRequest.of(0, fetchSize * 3));
+    private List<PlacePhoto> fetchNearby(Long cursor, int fetchSize, Double lat, Double lng, Long viewerId, Long placeId) {
+        List<PlacePhoto> recent = placePhotoRepository.findFeedRecent(null, placeId, cursor, viewerId, PageRequest.of(0, fetchSize * 3));
         if (lat == null || lng == null) {
             return recent.size() > fetchSize ? recent.subList(0, fetchSize) : recent;
         }

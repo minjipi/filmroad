@@ -202,7 +202,7 @@ describe('UserProfilePage.vue (task #42)', () => {
     const cells = wrapper.findAll('[data-testid="up-cell"]');
     expect(cells.length).toBe(2);
     await cells[1].trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith('/shot/2');
+    expect(pushSpy).toHaveBeenCalledWith('/feed/detail?shotId=2');
   });
 
   it('empty topPhotos renders the up-photos-empty placeholder', async () => {
