@@ -2,13 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), delete: vi.fn() },
 }));
 
 import api from '@/services/api';
 import { useGalleryStore, type GalleryResponse } from '@/stores/gallery';
 
-const mockApi = api as unknown as { get: ReturnType<typeof vi.fn> };
+const mockApi = api as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+};
 
 function makePhoto(id: number) {
   return {
@@ -131,5 +134,39 @@ describe('gallery store', () => {
     await store.loadMore();
     expect(mockApi.get).not.toHaveBeenCalled();
     expect(store.photos.length).toBe(pagePhotos.length);
+  });
+
+  it('deletePhoto: DELETE /api/photos/:id 후 photos splice + total/totalPhotoCount 감소', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: page0Fixture });
+    const store = useGalleryStore();
+    await store.fetch(10);
+    const before = store.photos.length;
+    const beforeTotal = store.total;
+    const beforeHeaderCount = store.placeHeader!.totalPhotoCount;
+    const targetId = store.photos[0].id;
+
+    mockApi.delete.mockResolvedValueOnce({ data: null });
+    const ok = await store.deletePhoto(targetId);
+
+    expect(ok).toBe(true);
+    expect(mockApi.delete).toHaveBeenCalledWith(`/api/photos/${targetId}`);
+    expect(store.photos.length).toBe(before - 1);
+    expect(store.total).toBe(beforeTotal - 1);
+    expect(store.placeHeader!.totalPhotoCount).toBe(beforeHeaderCount - 1);
+    expect(store.photos.find((p) => p.id === targetId)).toBeUndefined();
+  });
+
+  it('deletePhoto: 실패 시 error 저장 + photos 그대로', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: page0Fixture });
+    const store = useGalleryStore();
+    await store.fetch(10);
+    const before = store.photos.length;
+
+    mockApi.delete.mockRejectedValueOnce(new Error('서버 오류'));
+    const ok = await store.deletePhoto(store.photos[0].id);
+
+    expect(ok).toBe(false);
+    expect(store.error).toBe('서버 오류');
+    expect(store.photos.length).toBe(before);
   });
 });
