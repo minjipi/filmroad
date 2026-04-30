@@ -55,7 +55,7 @@
               @click="onOpenAuthor"
             >
               <div class="nm" data-testid="sd-author-nickname">
-                {{ shot.author.handle }}
+                <span class="nm-text">{{ shot.author.handle }}</span>
                 <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
               </div>
               <div class="loc">
@@ -167,7 +167,7 @@
               </div>
               <div class="meta clickable" @click="onOpenAppendedAuthor(s)">
                 <div class="nm">
-                  {{ s.author.handle }}
+                  <span class="nm-text">{{ s.author.handle }}</span>
                   <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div class="loc">
@@ -916,8 +916,17 @@ ion-content.sd-content {
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  min-width: 0;
 }
-.post-head .verified { color: var(--fr-primary); }
+/* 자동 생성 OAuth handle (예: @ghdalswl9833-b189d4) 처럼 긴 핸들이 카드
+   레이아웃을 밀어내지 않도록 ellipsis. 인증 아이콘은 flex-shrink:0 으로 유지. */
+.post-head .nm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.post-head .verified { color: var(--fr-primary); flex-shrink: 0; }
 .post-head .loc {
   display: flex;
   align-items: center;

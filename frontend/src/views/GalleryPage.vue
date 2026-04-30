@@ -67,7 +67,7 @@
                 @click="onOpenAuthor(p.authorUserId)"
               >
                 <div class="nm">
-                  {{ p.authorHandle }}
+                  <span class="nm-text">{{ p.authorHandle }}</span>
                   <ion-icon v-if="p.authorVerified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div v-if="placeHeader" class="loc">
@@ -490,8 +490,17 @@ ion-content.gl-content {
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  min-width: 0;
 }
-.post-head .verified { color: var(--fr-primary); }
+/* 자동 생성 OAuth handle (예: @ghdalswl9833-b189d4) 처럼 긴 핸들이 카드
+   레이아웃을 밀어내지 않도록 ellipsis. 인증 아이콘은 flex-shrink:0 으로 유지. */
+.post-head .nm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.post-head .verified { color: var(--fr-primary); flex-shrink: 0; }
 .post-head .loc {
   display: flex;
   align-items: center;
