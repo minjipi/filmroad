@@ -34,10 +34,42 @@
         돌아 `loading` 이 false. 기존 `v-if="loading && !user"` 는 그 첫 1
         tick 동안 false 가 되어 페이지가 빈 상태(헤더만)로 깜빡임. 조건을
         `!user && !error` 로 넓혀, 데이터/에러가 도착하기 전 모든 시점을
-        loading placeholder 가 흐름 끊김 없이 덮도록 수정.
+        skeleton 이 흐름 끊김 없이 덮도록 수정. 텍스트 placeholder 대신
+        실제 페이지 레이아웃(cover/avatar/stats/grid)을 모방한 IonSkeletonText
+        조각으로 채워 도착 시 시각적 점프를 최소화.
       -->
-      <div v-if="!user && !error" class="up-placeholder" data-testid="up-loading">
-        불러오는 중…
+      <div v-if="!user && !error" class="up-skeleton" data-testid="up-loading">
+        <ion-skeleton-text :animated="true" class="sk-cover" />
+        <section class="up-head">
+          <ion-skeleton-text :animated="true" class="sk-avatar" />
+          <div class="sk-nm-row">
+            <ion-skeleton-text :animated="true" class="sk-nm" />
+            <ion-skeleton-text :animated="true" class="sk-badge" />
+          </div>
+          <ion-skeleton-text :animated="true" class="sk-handle" />
+          <ion-skeleton-text :animated="true" class="sk-bio" />
+        </section>
+        <section class="up-stats sk-stats">
+          <div v-for="n in 4" :key="`up-st-${n}`" class="up-stat">
+            <ion-skeleton-text :animated="true" class="sk-stat-n" />
+            <ion-skeleton-text :animated="true" class="sk-stat-l" />
+          </div>
+          <ion-skeleton-text :animated="true" class="sk-follow-btn" />
+        </section>
+        <nav class="up-tabs sk-tabs">
+          <div v-for="n in 3" :key="`up-tab-${n}`" class="t">
+            <ion-skeleton-text :animated="true" class="sk-tab" />
+          </div>
+        </nav>
+        <div class="grid">
+          <div
+            v-for="n in 9"
+            :key="`up-cell-${n}`"
+            class="cell cell--skeleton"
+          >
+            <ion-skeleton-text :animated="true" class="sk-cell" />
+          </div>
+        </div>
       </div>
       <div v-else-if="!user && error" class="up-placeholder error" data-testid="up-error">
         {{ error }}
@@ -205,7 +237,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
-import { IonPage, IonContent, IonIcon, onIonViewWillEnter } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText, onIonViewWillEnter } from '@ionic/vue';
 import {
   chevronBackOutline,
   ellipsisHorizontal,
@@ -646,6 +678,106 @@ ion-content.up-content {
   text-align: center;
   color: var(--fr-ink-3);
   font-size: 14px;
+}
+
+/* ---------- Skeleton ---------- */
+.up-skeleton {
+  overflow-y: auto;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+.up-skeleton .sk-cover {
+  width: 100%;
+  height: 170px;
+  margin: 0;
+  border-radius: 0;
+}
+.up-skeleton .up-head {
+  padding: 0 20px;
+  margin-top: -44px;
+  position: relative;
+  z-index: 5;
+}
+.up-skeleton .sk-avatar {
+  width: 88px;
+  height: 88px;
+  margin: 0;
+  border-radius: 50%;
+  border: 4px solid #ffffff;
+  box-sizing: border-box;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.up-skeleton .sk-nm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.up-skeleton .sk-nm {
+  width: 40%;
+  height: 22px;
+  margin: 0;
+  border-radius: 6px;
+}
+.up-skeleton .sk-badge {
+  width: 80px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+}
+.up-skeleton .sk-handle {
+  width: 25%;
+  height: 12px;
+  margin: 6px 0 0;
+  border-radius: 4px;
+}
+.up-skeleton .sk-bio {
+  width: 70%;
+  height: 13px;
+  margin: 10px 0 0;
+  border-radius: 4px;
+}
+.up-skeleton .sk-stats .up-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.up-skeleton .sk-stat-n {
+  width: 32px;
+  height: 16px;
+  margin: 0;
+  border-radius: 4px;
+}
+.up-skeleton .sk-stat-l {
+  width: 40px;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+.up-skeleton .sk-follow-btn {
+  margin-left: auto;
+  width: 88px;
+  height: 32px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.up-skeleton .sk-tabs .t {
+  cursor: default;
+}
+.up-skeleton .sk-tab {
+  width: 50%;
+  height: 14px;
+  margin: 0 auto;
+  border-radius: 4px;
+}
+.up-skeleton .grid .cell--skeleton {
+  cursor: default;
+}
+.up-skeleton .grid .cell--skeleton .sk-cell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 .up-placeholder.error {
   color: var(--fr-coral);
