@@ -51,9 +51,36 @@
           <p>찾고 싶은 작품이나 장소를 입력해 주세요</p>
         </div>
 
-        <div v-else-if="loading && !hasResults" class="sr-empty">
-          <p>검색 중...</p>
-        </div>
+        <template v-else-if="loading && !hasResults">
+          <section class="sr-section sr-section--skeleton">
+            <ion-skeleton-text :animated="true" class="sk-section-h" />
+            <div class="contents-list">
+              <div
+                v-for="n in 3"
+                :key="`sr-co-sk-${n}`"
+                class="content-card content-card--skeleton"
+              >
+                <ion-skeleton-text :animated="true" class="sk-thumb" />
+                <div class="meta">
+                  <ion-skeleton-text :animated="true" class="sk-t" />
+                  <ion-skeleton-text :animated="true" class="sk-s" />
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="sr-section sr-section--skeleton">
+            <ion-skeleton-text :animated="true" class="sk-section-h" />
+            <div class="places-grid">
+              <div
+                v-for="n in 4"
+                :key="`sr-pl-sk-${n}`"
+                class="place-card place-card--skeleton"
+              >
+                <ion-skeleton-text :animated="true" class="sk-cover" />
+              </div>
+            </div>
+          </section>
+        </template>
 
         <div v-else-if="!hasResults" class="sr-empty">
           <p>검색 결과가 없어요</p>
@@ -121,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   chevronBackOutline,
   chevronForwardOutline,
@@ -424,6 +451,52 @@ ion-content.sr-content {
 }
 .content-card .chev {
   color: var(--fr-ink-4);
+}
+
+.sr-section--skeleton {
+  pointer-events: none;
+}
+.sr-section--skeleton .sk-section-h {
+  width: 28%;
+  height: 16px;
+  margin: 0 0 10px;
+  border-radius: 4px;
+}
+.content-card--skeleton {
+  cursor: default;
+}
+.content-card--skeleton .sk-thumb {
+  width: 48px;
+  height: 64px;
+  margin: 0;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.content-card--skeleton .meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.content-card--skeleton .sk-t {
+  width: 60%;
+  height: 14px;
+  margin: 0;
+  border-radius: 4px;
+}
+.content-card--skeleton .sk-s {
+  width: 35%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+.place-card--skeleton {
+  cursor: default;
+}
+.place-card--skeleton .sk-cover {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  margin: 0;
+  border-radius: 14px;
 }
 
 .places-grid {

@@ -172,6 +172,29 @@
           </section>
         </template>
 
+        <template v-if="posts.length === 0 && loading">
+          <article
+            v-for="n in 3"
+            :key="`fd-sk-${n}`"
+            class="post post--skeleton"
+            data-testid="feed-detail-post-skeleton"
+          >
+            <div class="post-head">
+              <ion-skeleton-text :animated="true" class="sk-avatar" />
+              <div class="meta">
+                <ion-skeleton-text :animated="true" class="sk-nm" />
+                <ion-skeleton-text :animated="true" class="sk-loc" />
+              </div>
+            </div>
+            <ion-skeleton-text :animated="true" class="sk-image" />
+            <div class="sk-actions-row">
+              <ion-skeleton-text :animated="true" class="sk-action" />
+              <ion-skeleton-text :animated="true" class="sk-action" />
+              <ion-skeleton-text :animated="true" class="sk-action" />
+            </div>
+          </article>
+        </template>
+
         <p v-if="posts.length === 0 && !loading && tab === 'FOLLOWING'" class="empty-note">
           아직 팔로우한 사용자가 없어요<br />추천에서 팔로우해보세요
         </p>
@@ -214,6 +237,7 @@ import {
   IonIcon,
   IonInfiniteScroll,
   IonInfiniteScrollContent,
+  IonSkeletonText,
   alertController,
 } from '@ionic/vue';
 import {
@@ -753,6 +777,47 @@ ion-content.feed-content {
 .post {
   padding: 18px 0 16px;
   border-bottom: 8px solid var(--fr-line-soft);
+}
+.post--skeleton .sk-avatar {
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.post--skeleton .meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.post--skeleton .sk-nm {
+  width: 35%;
+  height: 13px;
+  margin: 0;
+  border-radius: 4px;
+}
+.post--skeleton .sk-loc {
+  width: 60%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+.post--skeleton .sk-image {
+  width: 100%;
+  height: 380px;
+  margin: 0;
+  border-radius: 0;
+}
+.post--skeleton .sk-actions-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 20px 0;
+}
+.post--skeleton .sk-action {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border-radius: 6px;
 }
 .post-head {
   display: flex;

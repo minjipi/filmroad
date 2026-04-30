@@ -28,7 +28,15 @@
           <h1>{{ hero.title }}</h1>
           <div class="sub">{{ hero.subtitle }}</div>
         </section>
-        <section v-else-if="loading" class="home-hero home-hero--skeleton" />
+        <section
+          v-else-if="loading"
+          class="home-hero home-hero--skeleton"
+          data-testid="home-hero-skeleton"
+        >
+          <ion-skeleton-text :animated="true" class="sk-label" />
+          <ion-skeleton-text :animated="true" class="sk-title" />
+          <ion-skeleton-text :animated="true" class="sk-sub" />
+        </section>
 
         <nav class="home-tabs">
           <div
@@ -96,7 +104,20 @@
               </div>
             </div>
           </div>
-          <p v-if="popularContents.length === 0" class="empty-note">
+          <template v-if="loading && popularContents.length === 0">
+            <div
+              v-for="n in 6"
+              :key="`pc-sk-${n}`"
+              class="photo-card photo-card--skeleton"
+              data-testid="content-card-skeleton"
+            >
+              <ion-skeleton-text :animated="true" class="sk-cover" />
+            </div>
+          </template>
+          <p
+            v-else-if="popularContents.length === 0"
+            class="empty-note"
+          >
             인기 작품 데이터가 없어요
           </p>
         </div>
@@ -155,6 +176,16 @@
           </div>
 
           <div class="home-grid">
+            <template v-if="loading && places.length === 0">
+              <div
+                v-for="n in 6"
+                :key="`pl-sk-${n}`"
+                class="photo-card photo-card--skeleton"
+                data-testid="place-card-skeleton"
+              >
+                <ion-skeleton-text :animated="true" class="sk-cover" />
+              </div>
+            </template>
             <div
               v-for="p in places"
               :key="p.id"
@@ -256,7 +287,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   locationOutline,
   searchOutline,
@@ -572,6 +603,44 @@ ion-content {
   min-height: 110px;
   background: linear-gradient(135deg, #cbe8f2 0%, #b8dbe8 100%);
   opacity: 0.6;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.home-hero--skeleton .sk-label {
+  width: 32%;
+  height: 11px;
+  border-radius: 4px;
+  --background: rgba(255, 255, 255, 0.55);
+  --background-rgb: 255, 255, 255;
+}
+.home-hero--skeleton .sk-title {
+  width: 80%;
+  height: 22px;
+  border-radius: 6px;
+  --background: rgba(255, 255, 255, 0.6);
+  --background-rgb: 255, 255, 255;
+}
+.home-hero--skeleton .sk-sub {
+  width: 50%;
+  height: 13px;
+  border-radius: 5px;
+  --background: rgba(255, 255, 255, 0.5);
+  --background-rgb: 255, 255, 255;
+}
+
+.photo-card--skeleton {
+  background: var(--fr-bg-muted);
+  cursor: default;
+}
+.photo-card--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 16px;
 }
 
 .home-tabs {

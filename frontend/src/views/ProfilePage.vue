@@ -33,12 +33,34 @@
             </span>
           </div>
         </section>
+        <section
+          v-else
+          class="profile-card profile-card--skeleton"
+          data-testid="profile-card-skeleton"
+        >
+          <ion-skeleton-text :animated="true" class="sk-avatar" />
+          <div class="me-info">
+            <ion-skeleton-text :animated="true" class="sk-name" />
+            <ion-skeleton-text :animated="true" class="sk-bio" />
+            <ion-skeleton-text :animated="true" class="sk-level" />
+          </div>
+        </section>
 
         <section v-if="stats" class="stats">
           <div class="stat"><div class="n">{{ formatCount(stats.visitedCount) }}</div><div class="l">방문 성지</div></div>
           <div class="stat"><div class="n">{{ formatCount(stats.photoCount) }}</div><div class="l">인증샷</div></div>
           <div class="stat clickable" data-testid="profile-followers-stat" @click="onOpenFollowers"><div class="n">{{ formatCount(stats.followersCount) }}</div><div class="l">팔로워</div></div>
           <div class="stat clickable" data-testid="profile-following-stat" @click="onOpenFollowing"><div class="n">{{ formatCount(stats.followingCount) }}</div><div class="l">팔로잉</div></div>
+        </section>
+        <section
+          v-else
+          class="stats stats--skeleton"
+          data-testid="profile-stats-skeleton"
+        >
+          <div v-for="n in 4" :key="`pf-st-${n}`" class="stat">
+            <ion-skeleton-text :animated="true" class="sk-stat-n" />
+            <ion-skeleton-text :animated="true" class="sk-stat-l" />
+          </div>
         </section>
 
         <VisitMap :pins="miniMapPins" @open="onOpenMap" />
@@ -83,13 +105,19 @@
           >
             아직 인증샷이 없어요
           </p>
-          <p
+          <div
             v-else-if="myPhotosLoading"
-            class="empty-note"
+            class="grid3"
             data-testid="photos-loading"
           >
-            불러오는 중…
-          </p>
+            <div
+              v-for="n in 9"
+              :key="`pf-ph-sk-${n}`"
+              class="c c--skeleton"
+            >
+              <ion-skeleton-text :animated="true" class="sk-cover" />
+            </div>
+          </div>
         </div>
 
         <!-- 수집 중인 작품 목록 -->
@@ -307,6 +335,7 @@ import {
   IonPage,
   IonContent,
   IonIcon,
+  IonSkeletonText,
   onIonViewWillEnter,
 } from '@ionic/vue';
 import {
@@ -658,6 +687,59 @@ ion-content.pf-content {
 .stat .n { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--fr-ink); }
 .stat .l { font-size: 11.5px; color: var(--fr-ink-3); margin-top: 2px; }
 .stat + .stat { border-left: 1px solid var(--fr-line); }
+
+.profile-card--skeleton .sk-avatar {
+  width: 72px;
+  height: 72px;
+  margin: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.profile-card--skeleton .me-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.profile-card--skeleton .sk-name {
+  width: 50%;
+  height: 18px;
+  margin: 0;
+  border-radius: 5px;
+}
+.profile-card--skeleton .sk-bio {
+  width: 70%;
+  height: 12px;
+  margin: 0;
+  border-radius: 4px;
+}
+.profile-card--skeleton .sk-level {
+  width: 40%;
+  height: 18px;
+  margin: 4px 0 0;
+  border-radius: 999px;
+}
+.stats--skeleton .sk-stat-n {
+  width: 60%;
+  height: 19px;
+  margin: 0 auto 4px;
+  border-radius: 5px;
+}
+.stats--skeleton .sk-stat-l {
+  width: 70%;
+  height: 11px;
+  margin: 0 auto;
+  border-radius: 4px;
+}
+.grid3 .c--skeleton {
+  cursor: default;
+}
+.grid3 .c--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
 
 /* .cta (편집/공유) 는 PR #42 에서 우상단 menu 시트로 이전됐고, .mini-map /
    .mini-pin / .map-overlay 의 가짜 지도 스타일은 VisitMap 컴포넌트로 이전돼

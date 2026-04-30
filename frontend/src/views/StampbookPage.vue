@@ -30,6 +30,19 @@
             </div>
           </div>
         </section>
+        <section
+          v-else-if="loading"
+          class="hero hero--skeleton"
+          data-testid="sb-hero-skeleton"
+        >
+          <ion-skeleton-text :animated="true" class="sk-label" />
+          <ion-skeleton-text :animated="true" class="sk-h2" />
+          <div class="meter">
+            <div v-for="n in 3" :key="`sb-hero-sk-${n}`" class="d">
+              <ion-skeleton-text :animated="true" class="sk-meter" />
+            </div>
+          </div>
+        </section>
 
         <nav class="filter-tabs no-scrollbar">
           <div
@@ -70,7 +83,23 @@
               </div>
             </div>
           </div>
-          <p v-if="visibleContents.length === 0" class="empty-note">표시할 작품이 없습니다</p>
+          <template v-if="loading && visibleContents.length === 0">
+            <div
+              v-for="n in 3"
+              :key="`sb-dr-sk-${n}`"
+              class="drama-card drama-card--skeleton"
+              data-testid="sb-drama-skeleton"
+            >
+              <ion-skeleton-text :animated="true" class="sk-poster" />
+              <div class="drama-mid">
+                <ion-skeleton-text :animated="true" class="sk-t" />
+                <ion-skeleton-text :animated="true" class="sk-s" />
+                <ion-skeleton-text :animated="true" class="sk-bar" />
+                <ion-skeleton-text :animated="true" class="sk-meta" />
+              </div>
+            </div>
+          </template>
+          <p v-if="!loading && visibleContents.length === 0" class="empty-note">표시할 작품이 없습니다</p>
         </div>
 
         <div v-if="showBadgesSection" class="section-title" :class="{ 'gap-top': showContentsSection }">
@@ -100,7 +129,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   chevronBack,
   shareSocialOutline,
@@ -124,7 +153,7 @@ import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
 const stampbookStore = useStampbookStore();
-const { hero, recentBadges, filter, error } = storeToRefs(stampbookStore);
+const { hero, recentBadges, filter, error, loading } = storeToRefs(stampbookStore);
 const { showError, showInfo } = useToast();
 
 const visibleContents = computed(() => stampbookStore.visibleContents);
@@ -252,6 +281,31 @@ ion-content.sb-content {
 .m-amber { color: #f5a524; }
 .m-violet { color: #7c3aed; }
 
+.hero--skeleton .sk-label {
+  width: 30%;
+  height: 11px;
+  margin: 0 0 4px;
+  border-radius: 4px;
+  --background: rgba(255, 255, 255, 0.18);
+  --background-rgb: 255, 255, 255;
+}
+.hero--skeleton .sk-h2 {
+  width: 80%;
+  height: 24px;
+  margin: 4px 0 10px;
+  border-radius: 6px;
+  --background: rgba(255, 255, 255, 0.22);
+  --background-rgb: 255, 255, 255;
+}
+.hero--skeleton .sk-meter {
+  width: 56px;
+  height: 16px;
+  margin: 0;
+  border-radius: 4px;
+  --background: rgba(255, 255, 255, 0.18);
+  --background-rgb: 255, 255, 255;
+}
+
 .filter-tabs {
   display: flex;
   gap: 8px;
@@ -316,6 +370,46 @@ ion-content.sb-content {
   background: #eef2f6;
 }
 .drama-poster img { width: 100%; height: 100%; object-fit: cover; }
+
+.drama-card--skeleton {
+  cursor: default;
+}
+.drama-card--skeleton .sk-poster {
+  width: 56px;
+  height: 76px;
+  margin: 0;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.drama-card--skeleton .drama-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drama-card--skeleton .sk-t {
+  width: 60%;
+  height: 15px;
+  margin: 0;
+  border-radius: 4px;
+}
+.drama-card--skeleton .sk-s {
+  width: 25%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+.drama-card--skeleton .sk-bar {
+  width: 100%;
+  height: 6px;
+  margin: 4px 0 0;
+  border-radius: 999px;
+}
+.drama-card--skeleton .sk-meta {
+  width: 80%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
 .drama-mid { flex: 1; }
 .drama-mid .t { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; color: var(--fr-ink); }
 .drama-mid .s { font-size: 11.5px; color: var(--fr-ink-3); margin: 2px 0 8px; }
