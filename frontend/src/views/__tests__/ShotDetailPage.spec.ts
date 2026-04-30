@@ -529,9 +529,11 @@ describe('ShotDetailPage.vue', () => {
     expect(card.find('[data-testid="feed-share"]').exists()).toBe(true);
     expect(card.find('[data-testid="feed-save"]').exists()).toBe(true);
 
-    // post-caption: caption-text wrapping handle + caption.
+    // post-caption: caption-text wrapping handle + caption. 백엔드가 handle 을
+    // 이미 "@xxx" 형태로 저장하므로 프론트가 prefix 추가하지 않음. fixture
+    // handle 은 raw 'trip_hj' (운영 데이터는 '@xxx' 형태로 들어옴).
     expect(card.find('.caption-text').text()).toContain('안목해변에서');
-    expect(card.find('.caption-text b').text()).toBe('@trip_hj');
+    expect(card.find('.caption-text b').text()).toBe('trip_hj');
   });
 
   // task #18 — appended-card interaction wiring.

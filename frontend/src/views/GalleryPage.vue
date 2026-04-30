@@ -67,7 +67,7 @@
                 @click="onOpenAuthor(p.authorUserId)"
               >
                 <div class="nm">
-                  @{{ p.authorHandle }}
+                  {{ p.authorHandle }}
                   <ion-icon v-if="p.authorVerified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div v-if="placeHeader" class="loc">
@@ -115,7 +115,7 @@
             </div>
             <div class="post-caption">
               <div v-if="p.caption" class="caption-text">
-                <b>@{{ p.authorHandle }}</b> {{ p.caption }}
+                <b>{{ p.authorHandle }}</b> {{ p.caption }}
               </div>
             </div>
             <div class="post-time">{{ formatRelative(p.createdAt) }}</div>

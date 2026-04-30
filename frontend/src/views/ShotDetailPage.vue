@@ -167,7 +167,7 @@
               </div>
               <div class="meta clickable" @click="onOpenAppendedAuthor(s)">
                 <div class="nm">
-                  @{{ s.author.handle }}
+                  {{ s.author.handle }}
                   <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div class="loc">
@@ -241,7 +241,7 @@
 
             <div class="post-caption">
               <div v-if="s.caption" class="caption-text">
-                <b>@{{ s.author.handle }}</b> {{ s.caption }}
+                <b>{{ s.author.handle }}</b> {{ s.caption }}
               </div>
             </div>
             <div class="post-time">{{ formatRelativeTime(s.createdAt) }}</div>
