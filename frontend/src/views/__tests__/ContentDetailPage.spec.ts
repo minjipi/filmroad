@@ -53,6 +53,8 @@ const contentDetailState = {
       placeId: 10,
       name: '주문진 영진해변 방파제',
       regionShort: '주문진',
+      regionLabel: '강원 강릉시 주문진읍',
+      address: '강원 강릉시 주문진읍 영진리 1',
       coverImageUrls: ['https://img/s10.jpg'],
       scenes: [
         {
@@ -72,6 +74,8 @@ const contentDetailState = {
       placeId: 11,
       name: '덕수궁 돌담길',
       regionShort: '정동',
+      regionLabel: '서울 중구 정동',
+      address: '서울 중구 세종대로 99',
       coverImageUrls: ['https://img/s11.jpg'],
       scenes: [
         {

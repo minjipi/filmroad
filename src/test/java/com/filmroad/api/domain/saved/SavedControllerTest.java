@@ -72,8 +72,9 @@ class SavedControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/saved/collections 유효 name → 201 + count=0 + id 존재")
+    @DisplayName("POST /api/saved/collections 유효 name → 201 + CollectionDetailResponse(빈 컬렉션) 반환")
     void createCollection_validName_returns201() throws Exception {
+        // task #6: create 응답이 mutate 시 다른 endpoint 와 동일하게 CollectionDetailResponse 통째로 내려옴.
         String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
             put("name", "제주 힐링 코스");
         }});
@@ -86,8 +87,12 @@ class SavedControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.results.id", notNullValue()))
                 .andExpect(jsonPath("$.results.name", is("제주 힐링 코스")))
-                .andExpect(jsonPath("$.results.count", is(0)))
-                .andExpect(jsonPath("$.results.coverImageUrls").value(nullValue()));
+                .andExpect(jsonPath("$.results.totalPlaces", is(0)))
+                .andExpect(jsonPath("$.results.upcomingPlaces", hasSize(0)))
+                .andExpect(jsonPath("$.results.visitedPlacesList", hasSize(0)))
+                .andExpect(jsonPath("$.results.coverImageUrl").value(nullValue()))
+                .andExpect(jsonPath("$.results.owner.id", is(1)))
+                .andExpect(jsonPath("$.results.owner.isMe", is(true)));
     }
 
     @Test
@@ -381,5 +386,129 @@ class SavedControllerTest {
                         .cookie(demoAccessCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.saved", is(false)));
+    }
+
+    // -----------------------------------------------------------------
+    // task #6 — 트립 루트 backend (5 신규 케이스)
+    // -----------------------------------------------------------------
+
+    @Test
+    @DisplayName("[#6] POST /api/saved/collections placeIds 동봉 → 201 + 입력 순서대로 orderIndex 0..N-1")
+    void createCollection_withPlaceIds_assignsOrderInInputOrder() throws Exception {
+        // user=1 의 새 트립 컬렉션 생성. place 12, 15 를 입력 순서대로 add.
+        // 시드상 user 1 은 place 10~17 모두 stamp 보유 → 두 place 모두 visited 처리되어 visitedPlacesList 로 떨어짐.
+        // 입력 순서 [12, 15] 가 orderIndex 1, 2 (1-based) 로 그대로 노출되는지가 핵심.
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("name", "강원 1박2일");
+            put("description", "춘천부터 강릉까지");
+            put("placeIds", java.util.List.of(12L, 15L));
+        }});
+
+        mockMvc.perform(post("/api/saved/collections")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.results.totalPlaces", is(2)))
+                .andExpect(jsonPath("$.results.subtitle", is("춘천부터 강릉까지")))
+                .andExpect(jsonPath("$.results.upcomingPlaces", hasSize(0)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].id", is(12)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].orderIndex", is(1)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[1].id", is(15)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[1].orderIndex", is(2)));
+    }
+
+    @Test
+    @DisplayName("[#6] POST /api/saved/collections/{id}/places → 컬렉션 끝에 append + userNote 반영")
+    void addPlaceToCollection_appendsAtEnd_withUserNote() throws Exception {
+        // 시드 collection 1 — 안에 place 10 (orderIndex=0). place 12 를 메모와 함께 추가.
+        // place 12 도 visited (시드 stamp) → visitedPlacesList 끝에 추가되어 orderIndex 1-based=2.
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("placeId", 12L);
+            put("userNote", "맛집 골목 점심");
+        }});
+
+        mockMvc.perform(post("/api/saved/collections/1/places")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.totalPlaces", is(2)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[?(@.id == 12)].userNote",
+                        contains("맛집 골목 점심")))
+                .andExpect(jsonPath("$.results.visitedPlacesList[?(@.id == 12)].orderIndex",
+                        contains(2)));
+    }
+
+    @Test
+    @DisplayName("[#6] DELETE /api/saved/collections/{id}/places/{placeId} → 해당 SavedPlace 만 제거")
+    void removePlaceFromCollection_deletesOnlyTarget() throws Exception {
+        // 사전: collection 1 에 place 12 추가 → 안에 place 10 (visited) + place 12 (upcoming) = 2개.
+        addPlaceForSetup(1L, 12L, null);
+
+        mockMvc.perform(delete("/api/saved/collections/1/places/12")
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.totalPlaces", is(1)))
+                // 제거된 place 12 는 양쪽 리스트 모두에서 사라져야 함.
+                .andExpect(jsonPath("$.results.upcomingPlaces[?(@.id == 12)]", hasSize(0)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[?(@.id == 12)]", hasSize(0)))
+                // 원래 있던 place 10 은 그대로 남아 visited 리스트에 유지.
+                .andExpect(jsonPath("$.results.visitedPlacesList[?(@.id == 10)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("[#6] PATCH /api/saved/collections/{id}/order → 입력 순서대로 orderIndex 갱신")
+    void reorderCollection_appliesNewOrder() throws Exception {
+        // 사전: collection 1 에 place 12 추가 → place 10, 12 (둘 다 user=1 시드 stamp 로 visited).
+        addPlaceForSetup(1L, 12L, null);
+
+        // 순서 뒤집어서 [12, 10] 으로 reorder → visitedPlacesList 가 [12, 10] 으로 재배치, orderIndex 1, 2.
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("placeIds", java.util.List.of(12L, 10L));
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.totalPlaces", is(2)))
+                .andExpect(jsonPath("$.results.upcomingPlaces", hasSize(0)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].id", is(12)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[0].orderIndex", is(1)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[1].id", is(10)))
+                .andExpect(jsonPath("$.results.visitedPlacesList[1].orderIndex", is(2)));
+    }
+
+    @Test
+    @DisplayName("[#6] PATCH /api/saved/collections/{id}/places/{placeId}/note → userNote 갱신")
+    void updatePlaceNote_appliesNewNote() throws Exception {
+        // 사전: collection 1 의 place 10 (visited 상태) 메모를 새 값으로 갱신.
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("userNote", "방파제 일출 — 빨간 목도리 필수");
+        }});
+
+        mockMvc.perform(patch("/api/saved/collections/1/places/10/note")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                // place 10 은 visited 상태 → visitedPlacesList 에 위치.
+                .andExpect(jsonPath("$.results.visitedPlacesList[?(@.id == 10)].userNote",
+                        contains("방파제 일출 — 빨간 목도리 필수")));
+    }
+
+    /** task #6 신규 케이스 공통 setup — collection 에 place 1건을 추가해 두는 헬퍼. */
+    private void addPlaceForSetup(Long collectionId, Long placeId, String userNote) throws Exception {
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("placeId", placeId);
+            if (userNote != null) put("userNote", userNote);
+        }});
+        mockMvc.perform(post("/api/saved/collections/" + collectionId + "/places")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .cookie(demoAccessCookie()))
+                .andExpect(status().isOk());
     }
 }

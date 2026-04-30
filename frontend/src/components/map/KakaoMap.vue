@@ -31,6 +31,13 @@ const props = defineProps<{
   visitedIds: number[];
   routePath?: LatLng[];
   /**
+   * leg(origin→via1, via1→via2, ...) 별 좌표. 같은 도로를 두 번 지나가는 코스에서
+   * 각 leg 를 별도 polyline + perpendicular offset 으로 그려 두 라인이 모두 보이게
+   * 한다. 비었거나 없으면 routePath 1개로 폴백. backend 가 빈 leg 는 skip 하므로
+   * 길이가 항상 waypoints+1 은 아님 — 받은 그대로 iterate.
+   */
+  routeSections?: LatLng[][] | null;
+  /**
    * task #27: Optional list of points the map should auto-fit to. When
    * provided and non-empty, the map calls Kakao's `setBounds()` so all
    * points are visible at once. Single point → setCenter + a moderate
@@ -71,7 +78,8 @@ let kakao: AnyObj | null = null;
 let mapInstance: AnyObj | null = null;
 let overlays: AnyObj[] = [];
 let meOverlay: AnyObj | null = null;
-let routePolyline: AnyObj | null = null;
+let routePolylines: AnyObj[] = [];
+let routeArrows: AnyObj[] = [];
 
 // Pre-computed renderables (pins + clusters). Recomputed whenever markers,
 // zoom, or selectedId change so the clusterer stays in sync with the view.
@@ -97,12 +105,21 @@ function buildPinContent(m: MapMarker, isVisited: boolean, isActive: boolean): H
   const classes = ['pin'];
   if (isVisited) classes.push('visited');
   if (isActive) classes.push('active');
+  if (m.orderIndex != null) classes.push('numbered');
   root.className = classes.join(' ');
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   const dot = document.createElement('span');
   dot.className = 'dot';
-  dot.textContent = isVisited ? '✓' : '●';
+  // 우선순위: visited(✓) > orderIndex(숫자) > 기본 `●`. visited 인 코스 마커는
+  // "방문 완료" 가 더 강한 시각 신호라 번호보다 체크를 우선.
+  if (isVisited) {
+    dot.textContent = '✓';
+  } else if (m.orderIndex != null) {
+    dot.textContent = String(m.orderIndex);
+  } else {
+    dot.textContent = '●';
+  }
   bubble.appendChild(dot);
   const label = document.createTextNode(m.name);
   bubble.appendChild(label);
@@ -149,12 +166,19 @@ function renderOverlays(): void {
     if (r.kind === 'pin') {
       const m = r.marker;
       const position = new k.maps.LatLng(m.latitude, m.longitude);
-      const content = buildPinContent(m, visitedSet.has(m.id), props.selectedId === m.id);
+      const isActive = props.selectedId === m.id;
+      const isVisited = visitedSet.has(m.id);
+      const content = buildPinContent(m, isVisited, isActive);
+      // CustomOverlay 끼리 stacking — 카카오 기본은 생성 순서라 늦게 그려진 마커가
+      // 활성 마커를 가린다. 명시적 zIndex 로 활성(100) > 클러스터(2) > 방문(5) > 일반(1)
+      // 순서로 고정. CSS `.pin.active { z-index: 5 }` 는 같은 overlay 내부 .bubble/.dot
+      // 간 stacking 보강용으로 그대로 둔다(overlay 끼리에는 영향 없음).
       const overlay = new k.maps.CustomOverlay({
         position,
         content,
         yAnchor: 1,
         clickable: true,
+        zIndex: isActive ? 100 : isVisited ? 5 : 1,
       });
       const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
       setMap.call(overlay, mapInstance);
@@ -162,7 +186,7 @@ function renderOverlays(): void {
       return;
     }
 
-    // Cluster overlay
+    // Cluster overlay — 활성 마커(100) 보다 뒤로.
     const position = new k.maps.LatLng(r.latitude, r.longitude);
     const content = buildClusterContent(r.count, () => {
       emit('clusterClick', {
@@ -177,6 +201,7 @@ function renderOverlays(): void {
       yAnchor: 0.5,
       xAnchor: 0.5,
       clickable: true,
+      zIndex: 2,
     });
     const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
     setMap.call(overlay, mapInstance);
@@ -255,6 +280,8 @@ async function init(): Promise<void> {
     const level = (mapInstance as unknown as { getLevel: () => number }).getLevel();
     emit('zoomChange', level);
     emitBounds();
+    // chevron 간격이 화면 픽셀 기준이라 zoom 이 바뀌면 재배치 필요.
+    renderRoute();
   });
   renderOverlays();
   renderRoute();
@@ -292,28 +319,200 @@ function applyFit(): void {
   (mapInstance as unknown as { setBounds: (v: unknown) => void }).setBounds(bounds);
 }
 
+/**
+ * 두 점 사이의 진북 기준 bearing(deg, 0=북, 시계방향). chevron SVG 가 기본 북향
+ * (▲) 이라 이 값을 그대로 `transform: rotate(${bearing}deg)` 에 꽂으면 진행
+ * 방향을 가리킨다.
+ */
+function computeBearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (v: number): number => (v * Math.PI) / 180;
+  const toDeg = (v: number): number => (v * 180) / Math.PI;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function buildArrowContent(bearing: number): HTMLDivElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'route-arrow';
+  wrap.style.transform = `rotate(${bearing}deg)`;
+  // viewBox 8x8 안에 base=6 / height=5.2 정삼각형(북향). strokeWeight=8 라인의
+  // 외접원 지름 8 안에 어떤 회전 각도에서도 안전(외접원 ~6.93). 흰 반투명 78%,
+  // stroke 없음.
+  wrap.innerHTML =
+    '<svg viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">' +
+    '<path d="M4 1.4 L7 6.6 L1 6.6 Z" fill="rgba(255,255,255,0.78)"/>' +
+    '</svg>';
+  return wrap;
+}
+
+/**
+ * 한 leg 의 좌표 path 를 픽셀 공간에서 perpendicular 으로 offsetPx 만큼 밀어
+ * 다시 lat/lng 로 복원. 각 vertex 에서 prev→next 방향(끝점은 현재 segment)
+ * 의 90도 회전 단위벡터 × offsetPx 만큼 이동. proj 없으면 원본 그대로 반환.
+ */
+function shiftPathPerpendicular(
+  coords: LatLng[],
+  offsetPx: number,
+  proj: {
+    containerPointFromCoords: (ll: unknown) => { x: number; y: number };
+    coordsFromContainerPoint: (pt: unknown) => { getLat: () => number; getLng: () => number };
+  } | null,
+  k: {
+    maps: {
+      LatLng: new (lat: number, lng: number) => unknown;
+      Point: new (x: number, y: number) => unknown;
+    };
+  },
+): LatLng[] {
+  if (!proj || offsetPx === 0 || coords.length < 2) return coords;
+  const pxs = coords.map((c) =>
+    proj.containerPointFromCoords(new k.maps.LatLng(c.lat, c.lng)),
+  );
+  return coords.map((_, i) => {
+    // 각 vertex 의 진행 방향 — 양 끝은 인접 segment, 중간은 prev→next 평균.
+    const prev = pxs[Math.max(0, i - 1)];
+    const next = pxs[Math.min(pxs.length - 1, i + 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // 90도 회전 단위벡터 (시계방향 +offset → 우측으로 밀림).
+    const nx = -dy / len;
+    const ny = dx / len;
+    // Kakao SDK 의 coordsFromContainerPoint 는 plain {x,y} 가 아닌 kakao.maps.Point
+    // 인스턴스를 요구한다(plain object 면 내부 getter 호출 시 "b.e is not a function").
+    const shiftedPt = new k.maps.Point(
+      pxs[i].x + nx * offsetPx,
+      pxs[i].y + ny * offsetPx,
+    );
+    const ll = proj.coordsFromContainerPoint(shiftedPt);
+    return { lat: ll.getLat(), lng: ll.getLng() };
+  });
+}
+
 function renderRoute(): void {
-  if (routePolyline) {
-    (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(null);
-    routePolyline = null;
-  }
+  // polyline + chevron 모두 교체 — 둘 다 path 에 종속이라 함께 lifetime 관리.
+  routePolylines.forEach((p) => {
+    (p as unknown as { setMap: (m: unknown) => void }).setMap(null);
+  });
+  routePolylines = [];
+  routeArrows.forEach((a) => {
+    (a as unknown as { setMap: (m: unknown) => void }).setMap(null);
+  });
+  routeArrows = [];
+
   if (!kakao || !mapInstance) return;
   const path = props.routePath ?? [];
   if (path.length < 2) return;
   const k = kakao as unknown as {
     maps: {
       LatLng: new (lat: number, lng: number) => unknown;
+      Point: new (x: number, y: number) => unknown;
       Polyline: new (opts: unknown) => AnyObj;
+      CustomOverlay: new (opts: unknown) => AnyObj;
     };
   };
-  routePolyline = new k.maps.Polyline({
-    path: path.map((pt) => new k.maps.LatLng(pt.lat, pt.lng)),
-    strokeWeight: 4,
-    strokeColor: '#14BCED',
-    strokeOpacity: 0.85,
-    strokeStyle: 'shortdash',
-  });
-  (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(mapInstance);
+
+  const proj = (mapInstance as unknown as {
+    getProjection?: () => {
+      containerPointFromCoords: (ll: unknown) => { x: number; y: number };
+      coordsFromContainerPoint: (pt: unknown) => { getLat: () => number; getLng: () => number };
+    };
+  }).getProjection?.() ?? null;
+
+  // sections 가 비었거나 1개면 path 단일 list 폴백 (offset 0). 여러 leg 이면
+  // 각 leg 를 별도 polyline 으로 그리되 가운데 0 기준 ±양쪽 4px 씩 분배해
+  // 같은 도로 위 두 leg 가 겹치지 않게.
+  const rawSections = props.routeSections && props.routeSections.length >= 1
+    ? props.routeSections.filter((s) => s.length >= 2)
+    : [path];
+  const sections = rawSections.length >= 1 ? rawSections : [path];
+  const n = sections.length;
+  const OFFSET_STEP_PX = 4;
+  // chevron 픽셀 간격 — 8px chevron 1.5개 크기. 이전(arrow×3=18px) 보다 촘촘하게.
+  const INTERVAL_PX = 12;
+
+  for (let i = 0; i < n; i++) {
+    const section = sections[i];
+    const offsetPx = (i - (n - 1) / 2) * OFFSET_STEP_PX;
+    const shifted = shiftPathPerpendicular(section, offsetPx, proj, k);
+    const polyline = new k.maps.Polyline({
+      path: shifted.map((pt) => new k.maps.LatLng(pt.lat, pt.lng)),
+      strokeWeight: 8,
+      strokeColor: '#14BCED',
+      strokeOpacity: 0.9,
+      strokeStyle: 'solid',
+    });
+    (polyline as unknown as { setMap: (m: unknown) => void }).setMap(mapInstance);
+    routePolylines.push(polyline);
+
+    // chevron 을 EACH section 의 shifted path 위에 직접 배치.
+    // 가운데 flat path 에 한 번만 그리면 perpendicular offset 적용된 polyline
+    // 들 사이 중간에 떠서 어느 line 에도 안 붙은 것처럼 보였다(특히 두 leg 가
+    // 겹칠 때 한쪽으로 치우쳐 보이는 증상). 각 leg 마다 자기 폴리라인 위에
+    // 진행 방향 chevron 이 있어야 자연스럽다.
+    if (proj) drawChevronsOnPath(shifted, proj, k, INTERVAL_PX);
+  }
+}
+
+/**
+ * 한 path 위에 화면 픽셀 기준 일정 간격으로 chevron CustomOverlay 들을 배치.
+ * segment 단위로 walk 하면서 누적 픽셀 거리(acc) 를 INTERVAL 마다 끊어 좌표
+ * 보간(t) 으로 segment 중간에도 정확한 간격에 떨어지게 한다.
+ *
+ * coords 는 이미 perpendicular offset 이 적용된 좌표 — bearing 도 그 좌표
+ * 에서 계산해 회전된 라인의 진행 방향과 일치시킨다.
+ */
+function drawChevronsOnPath(
+  coords: LatLng[],
+  proj: {
+    containerPointFromCoords: (ll: unknown) => { x: number; y: number };
+    coordsFromContainerPoint: (pt: unknown) => { getLat: () => number; getLng: () => number };
+  },
+  k: {
+    maps: {
+      LatLng: new (lat: number, lng: number) => unknown;
+      Point: new (x: number, y: number) => unknown;
+      CustomOverlay: new (opts: unknown) => AnyObj;
+    };
+  },
+  intervalPx: number,
+): void {
+  if (coords.length < 2) return;
+  let acc = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const aPx = proj.containerPointFromCoords(new k.maps.LatLng(a.lat, a.lng));
+    const bPx = proj.containerPointFromCoords(new k.maps.LatLng(b.lat, b.lng));
+    const dx = bPx.x - aPx.x;
+    const dy = bPx.y - aPx.y;
+    const segLen = Math.hypot(dx, dy);
+    if (segLen === 0) continue;
+    const bearing = computeBearing(a.lat, a.lng, b.lat, b.lng);
+
+    let cursor = intervalPx - acc;
+    while (cursor < segLen) {
+      const t = cursor / segLen;
+      const lat = a.lat + (b.lat - a.lat) * t;
+      const lng = a.lng + (b.lng - a.lng) * t;
+      const overlay = new k.maps.CustomOverlay({
+        position: new k.maps.LatLng(lat, lng),
+        content: buildArrowContent(bearing),
+        yAnchor: 0.5,
+        xAnchor: 0.5,
+        zIndex: 3,
+        clickable: false,
+      });
+      (overlay as unknown as { setMap: (m: unknown) => void }).setMap(mapInstance);
+      routeArrows.push(overlay);
+      cursor += intervalPx;
+    }
+    acc = (acc + segLen) % intervalPx;
+  }
 }
 
 watch(renderables, () => renderOverlays(), { deep: true });
@@ -322,6 +521,7 @@ watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
 // 시 overlays 를 다시 그려 me 점을 갱신/제거한다. deep 으로 좌표 값 추적.
 watch(() => props.userLocation, () => renderOverlays(), { deep: true });
 watch(() => props.routePath, () => renderRoute(), { deep: true });
+watch(() => props.routeSections, () => renderRoute(), { deep: true });
 // task #27: fitTo 가 비동기로 바뀌는 경우(부모에서 markers fetch 후 채움) 도
 // 자동 fit. deep 으로 좌표 값까지 추적.
 watch(() => props.fitTo, () => applyFit(), { deep: true });
@@ -346,10 +546,14 @@ watch(
 onMounted(init);
 onBeforeUnmount(() => {
   clearOverlays();
-  if (routePolyline) {
-    (routePolyline as unknown as { setMap: (m: unknown) => void }).setMap(null);
-    routePolyline = null;
-  }
+  routePolylines.forEach((p) => {
+    (p as unknown as { setMap: (m: unknown) => void }).setMap(null);
+  });
+  routePolylines = [];
+  routeArrows.forEach((a) => {
+    (a as unknown as { setMap: (m: unknown) => void }).setMap(null);
+  });
+  routeArrows = [];
   mapInstance = null;
   kakao = null;
 });
@@ -410,16 +614,19 @@ onBeforeUnmount(() => {
   box-shadow: 1px 1px 0 rgba(15, 23, 42, 0.06);
 }
 .kakao-map .pin .dot {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--fr-primary);
-  color: #ffffff;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* min-width 로 1자리 숫자/`●` 는 18px 원, 2자리는 가로로 살짝 늘어나는 pill. */
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--fr-primary);
+  color: #ffffff;
   font-size: 10px;
   font-weight: 800;
+  line-height: 1;
 }
 .kakao-map .pin.visited .dot { background: var(--fr-mint); }
 .kakao-map .pin.active { z-index: 5; }
@@ -452,6 +659,20 @@ onBeforeUnmount(() => {
     0 4px 12px rgba(15, 23, 42, 0.18);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+/* 코스 polyline(strokeWeight=8) 위에 12px 픽셀 간격으로 흩뿌리는 진행 방향
+   chevron. SVG ▲ 가 기본 북향이라 인라인 transform: rotate(bearing) 으로
+   진행 방향 가리킴. wrapper 8×8 + 내부 삼각형 6×5.2(외접원 ~6.93) → 어떤
+   bearing 으로 회전해도 8px 라인 안에 들어감. 흰 반투명이라 별도 drop-shadow
+   불필요(노이즈만 더함). pointer-events:none — 마커 클릭과 간섭 X. */
+.kakao-map .route-arrow {
+  width: 8px;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .kakao-map .kakao-me {

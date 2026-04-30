@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -126,7 +127,7 @@ public class SavedService {
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.COLLECTION_NOT_FOUND));
 
         List<SavedPlace> savedPlaces = savedPlaceRepository
-                .findByCollectionIdOrderByCreatedAtAsc(collectionId);
+                .findByCollectionIdOrderedForRoute(collectionId);
         List<Long> placeIds = savedPlaces.stream().map(sp -> sp.getPlace().getId()).toList();
 
         Map<Long, Date> visitedAtByPlace = new HashMap<>();
@@ -176,6 +177,7 @@ public class SavedService {
                     .visited(visitedAt != null)
                     .visitedAt(visitedAt)
                     .certified(certifiedPlaceIds.contains(p.getId()))
+                    .userNote(sp.getUserNote())
                     .build());
         }
 
@@ -249,8 +251,15 @@ public class SavedService {
         return hasEp ? episode : timestamp;
     }
 
+    /**
+     * 컬렉션 생성. description / placeIds 옵셔널 — 트립 루트(#6) 시 N 개 장소를 한 번에 추가하는 경로.
+     * 응답은 모든 mutate endpoint 와 동일하게 `CollectionDetailResponse` 통째 (프론트 추가 GET 없음).
+     *
+     * placeIds 처리 정책: 입력 순서가 곧 orderIndex(0..N-1). 동일 user 가 이미 다른 컬렉션에 같은 place 를
+     * 저장해뒀다면 새 컬렉션으로 이동(이전 컬렉션에서 빠짐). 미저장 place 는 새 SavedPlace 생성.
+     */
     @Transactional
-    public CollectionSummaryDto createCollection(String rawName) {
+    public CollectionDetailResponse createCollection(String rawName, String description, List<Long> placeIds) {
         String name = normalizeName(rawName);
         Long userId = currentUser.currentUserId();
         User user = userRepository.findById(userId)
@@ -259,16 +268,143 @@ public class SavedService {
         Collection saved = collectionRepository.save(Collection.builder()
                 .user(user)
                 .name(name)
+                .description(normalizeDescription(description))
                 .build());
 
-        // 새 컬렉션은 항상 saved place 0개 — count 쿼리 없이 바로 0 으로 내려보낸다.
-        return CollectionSummaryDto.builder()
-                .id(saved.getId())
-                .name(saved.getName())
-                .count(0L)
-                .coverImageUrls(null)
-                .gradient(saved.getGradient())
-                .build();
+        if (placeIds != null && !placeIds.isEmpty()) {
+            attachPlacesToCollection(user, saved, placeIds);
+        }
+        return getCollectionDetail(saved.getId(), null, null);
+    }
+
+    /**
+     * 장소 1건 컬렉션 추가. orderIndex 는 max(현재) + 1 로 끝에 append.
+     * 동일 user 가 이미 다른 컬렉션에 같은 place 를 저장한 경우 새 컬렉션으로 이동(SavedPlace.collection 갱신).
+     * 미저장 place 면 SavedPlace 새로 만든다. userNote 는 옵셔널.
+     */
+    @Transactional
+    public CollectionDetailResponse addPlaceToCollection(Long collectionId, Long placeId, String userNote) {
+        Long userId = currentUser.currentUserId();
+        Collection collection = resolveOwnedCollection(collectionId, userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.RESPONSE_NULL_ERROR));
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+
+        int nextOrder = nextOrderIndex(collection.getId());
+        Optional<SavedPlace> existing = savedPlaceRepository.findByUserIdAndPlaceId(userId, placeId);
+        if (existing.isPresent()) {
+            SavedPlace sp = existing.get();
+            sp.moveToCollection(collection, nextOrder);
+            if (userNote != null) sp.updateUserNote(userNote);
+        } else {
+            savedPlaceRepository.save(SavedPlace.builder()
+                    .user(user)
+                    .place(place)
+                    .collection(collection)
+                    .orderIndex(nextOrder)
+                    .userNote(userNote)
+                    .build());
+        }
+        return getCollectionDetail(collectionId, null, null);
+    }
+
+    /**
+     * 장소 컬렉션에서 제거. SavedPlace 행 자체 삭제 (저장 해제). 다른 곳에서 다시 저장하려면 toggle 다시 호출.
+     * 잔여 SavedPlace 의 orderIndex 는 dense 하지 않을 수 있지만 정렬은 ASC 라 유지에 문제 없음.
+     */
+    @Transactional
+    public CollectionDetailResponse removePlaceFromCollection(Long collectionId, Long placeId) {
+        Long userId = currentUser.currentUserId();
+        resolveOwnedCollection(collectionId, userId);
+
+        SavedPlace sp = savedPlaceRepository.findByUserIdAndPlaceId(userId, placeId)
+                .filter(s -> s.getCollection() != null && s.getCollection().getId().equals(collectionId))
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+        savedPlaceRepository.delete(sp);
+        return getCollectionDetail(collectionId, null, null);
+    }
+
+    /**
+     * 컬렉션 일괄 reorder. 입력 placeIds 의 set 이 컬렉션의 현재 place set 과 정확히 같아야 한다 (누락/추가/중복 거부).
+     * 매칭되면 입력 순서대로 0..N-1 로 orderIndex 갱신 (dense, gap 없음).
+     */
+    @Transactional
+    public CollectionDetailResponse reorderCollection(Long collectionId, List<Long> placeIds) {
+        Long userId = currentUser.currentUserId();
+        resolveOwnedCollection(collectionId, userId);
+
+        // 중복 입력 거부 — set 변환 후 length 비교.
+        Set<Long> inputSet = new HashSet<>(placeIds);
+        if (inputSet.size() != placeIds.size()) {
+            throw new BaseException(BaseResponseStatus.REQUEST_ERROR, "placeIds 에 중복이 있습니다.");
+        }
+        Set<Long> currentSet = new HashSet<>(savedPlaceRepository.findPlaceIdsByCollectionId(collectionId));
+        if (!currentSet.equals(inputSet)) {
+            throw new BaseException(BaseResponseStatus.REQUEST_ERROR,
+                    "placeIds 가 컬렉션의 현재 장소 집합과 일치하지 않습니다.");
+        }
+
+        // 한 번에 SELECT 후 placeId → SavedPlace 맵으로 매핑, 입력 순서로 orderIndex 0..N-1 부여.
+        List<SavedPlace> currentRows = savedPlaceRepository.findByCollectionIdOrderedForRoute(collectionId);
+        Map<Long, SavedPlace> byPlaceId = new HashMap<>();
+        for (SavedPlace sp : currentRows) {
+            byPlaceId.put(sp.getPlace().getId(), sp);
+        }
+        for (int i = 0; i < placeIds.size(); i++) {
+            byPlaceId.get(placeIds.get(i)).assignOrderIndex(i);
+        }
+        return getCollectionDetail(collectionId, null, null);
+    }
+
+    /**
+     * 장소별 메모 PATCH. null/빈 문자열 모두 허용 (clear 효과). 길이 검증은 @Valid 단계에서 끝남.
+     */
+    @Transactional
+    public CollectionDetailResponse updatePlaceNote(Long collectionId, Long placeId, String userNote) {
+        Long userId = currentUser.currentUserId();
+        resolveOwnedCollection(collectionId, userId);
+
+        SavedPlace sp = savedPlaceRepository.findByUserIdAndPlaceId(userId, placeId)
+                .filter(s -> s.getCollection() != null && s.getCollection().getId().equals(collectionId))
+                .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+        sp.updateUserNote(userNote);
+        return getCollectionDetail(collectionId, null, null);
+    }
+
+    /**
+     * createCollection 의 placeIds 처리. 같은 user 의 SavedPlace 가 이미 있으면 collection/orderIndex 갱신,
+     * 없으면 새로 save. 입력 순서가 그대로 orderIndex (0..N-1).
+     */
+    private void attachPlacesToCollection(User user, Collection collection, List<Long> placeIds) {
+        for (int i = 0; i < placeIds.size(); i++) {
+            Long pid = placeIds.get(i);
+            int order = i;
+            Optional<SavedPlace> existing = savedPlaceRepository.findByUserIdAndPlaceId(user.getId(), pid);
+            if (existing.isPresent()) {
+                existing.get().moveToCollection(collection, order);
+            } else {
+                Place place = placeRepository.findById(pid)
+                        .orElseThrow(() -> BaseException.of(BaseResponseStatus.PLACE_NOT_FOUND));
+                savedPlaceRepository.save(SavedPlace.builder()
+                        .user(user)
+                        .place(place)
+                        .collection(collection)
+                        .orderIndex(order)
+                        .build());
+            }
+        }
+    }
+
+    private int nextOrderIndex(Long collectionId) {
+        Integer max = savedPlaceRepository.findMaxOrderIndexByCollectionId(collectionId);
+        return max == null ? 0 : max + 1;
+    }
+
+    private static String normalizeDescription(String raw) {
+        if (raw == null) return null;
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional

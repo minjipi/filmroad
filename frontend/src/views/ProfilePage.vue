@@ -244,6 +244,17 @@
             <button
               type="button"
               class="pf-sheet-row"
+              data-testid="profile-menu-saved-routes"
+              @click="onSavedRoutesAndClose"
+            >
+              <span class="pf-sheet-ico">
+                <ion-icon :icon="mapOutline" class="ic-20" />
+              </span>
+              <span class="pf-sheet-label">내 코스</span>
+            </button>
+            <button
+              type="button"
+              class="pf-sheet-row"
               data-testid="profile-menu-edit"
               @click="onEditAndClose"
             >
@@ -300,6 +311,7 @@ import {
   ribbonOutline,
   bookmarkOutline,
   heartOutline,
+  mapOutline,
   logOutOutline,
   trophyOutline,
   addOutline,
@@ -464,6 +476,11 @@ function closeMenu(): void {
 async function onLikedPlacesAndClose(): Promise<void> {
   closeMenu();
   await router.push('/profile/likes');
+}
+
+async function onSavedRoutesAndClose(): Promise<void> {
+  closeMenu();
+  await router.push('/profile/routes');
 }
 
 async function onEditAndClose(): Promise<void> {

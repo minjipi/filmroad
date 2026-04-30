@@ -73,6 +73,10 @@ public enum BaseResponseStatus {
     COLLECTION_NOT_FOUND(false, 40090, "컬렉션을 찾을 수 없습니다."),
     UNAUTHORIZED_COMMENT(false, 40370, "댓글 삭제 권한이 없습니다."),
 
+    ROUTE_NOT_FOUND(false, 40100, "코스를 찾을 수 없습니다."),
+    ROUTE_FORBIDDEN(false, 40101, "코스에 접근할 권한이 없습니다."),
+    ROUTE_INVALID_ITEMS(false, 30100, "코스 항목이 잘못되었습니다."),
+
     /**
      * 50000 : Database 오류
      */

@@ -1179,3 +1179,666 @@ KakaoMap 에 신규 `fitTo: LatLng[]` 옵션 prop 추가. WorkDetailPage 가 마
 - (M) `frontend/src/views/PlaceDetailPage.vue`
 - (M) `frontend/src/views/__tests__/PlaceDetailPage.spec.ts`
 - (참고) `frontend/src/components/place/` 디렉터리 자체도 사라짐.
+
+---
+
+# Task #7 — feat/trip-route-frontend (루트 짜기 프론트 포팅)
+
+## 컨텍스트
+- `design/Trip Route.html` + 5개 jsx 파일을 Ionic Vue + KakaoMap 으로 포팅.
+- 백엔드(task #6) 미완 — store 는 **로컬 state + mock 시드** 로만 동작. 백엔드 contract 들어오면 `tripRouteStore.seedFromContent` 의 mock 채우기 부분만 axios fetch 로 교체.
+- 진입점 이미 와이어업: `ContentDetailPage` "루트 짜기" 버튼 → `/route?contentId&contentTitle`. router 의 `/route/:collectionId?` stub 페이지를 본 컴포넌트로 교체.
+- 디자인의 emoji/category color/tweak panel 은 모두 **우리 톤**(scene 이미지 thumb + content chip + `var(--fr-primary)`)로 치환. 라인은 dashed 만.
+
+## 신규 파일
+
+### Pinia store
+- (N) `frontend/src/stores/tripRoute.ts`
+  - `TripPlace` 인터페이스(id/name/regionLabel/lat/lng/contentId/contentTitle/cover&sceneImage/durationMin + optional address/openHours/price/rating).
+  - State: `name / placeIds / placesById / notes / activeId / startTime / seedContentId / seedContentTitle / loading / error`.
+  - Mock seed: 강원도 춘천 5곳(남이섬·강촌 레일파크·명동 닭갈비 골목·소양강 스카이워크·구봉산 전망대) + 추천 3곳. 좌표는 실제 lat/lng 근사.
+  - Actions: `seedFromContent` (같은 시드 재호출은 noop → 사용자 손길 보존) / `setActive` / `setName` / `setStartTime` / `addPlace` / `removePlace` / `reorder(fromIdx, toIdx)` / `updateNote` / `reset`.
+  - Getters: `orderedPlaces` / `totalDurationMin` / `totalDistanceKm` (haversine 합 1자리 라운드) / `searchSuggestions` (이미 코스에 든 것 제외).
+
+### Components (`frontend/src/components/route/`)
+- (N) `RouteMapLayer.vue` — `KakaoMap` 얇은 wrapper. `markers` (id/name/lat/lng/contentId/contentTitle/regionLabel + null distanceKm) / `routePath` (lat,lng[]) / `fitTo` 자동 fitBounds / `selectedId`. KakaoMap 의 `routePath` 는 이미 `strokeStyle: 'shortdash'` 로 dashed 렌더 — 우리 톤 일치(✓).
+- (N) `RouteTimelineSheet.vue` — 디자인의 TimelineSheet. grabber + 헤더(이름·메타·편집 버튼) + 가로 스크롤 카드(scroll-snap-x) + 추가 dashed 카드. 카드 자동 scrollTo on activeId 변경 + 스크롤 끝의 가운데 카드 → emit('activate'). 출발/경유/도착 컬러는 `var(--fr-primary)` / `var(--fr-coral)` / `#fdb022` 토큰. arrivalTime 은 startTime + 누적 체류 + 이동 30분(고정).
+- (N) `SearchPlaceModal.vue` — 전체화면 검색. 카테고리 chip(필터는 mock 단계 UI 만) + 최근 검색(sessionStorage 5건 cap) + 추천(`tripRouteStore.searchSuggestions`) + 검색결과(`searchStore.search` 220ms 디바운스). 결과는 좌표 있는 항목만 → `TripPlace` 어댑팅 후 `emit('select', place)`.
+- (N) `SearchPlaceRow.vue` — 검색/추천 한 줄. scene > cover > fallback 우선순위 thumb + content chip 톤.
+- (N) `RouteEditorModal.vue` — 88% bottom sheet. 출발 시간 카드(클릭 시 prompt picker) + 드래그 가능 리스트. **HTML5 DnD 대신 pointerdown/move/up 직접 구현** — 인접 카드 절반 넘기면 `emit('reorder')` 한 칸씩 즉시 이동 (모바일 webview 호환). 삭제 버튼 emit('remove').
+- (N) `RoutePlaceDetailModal.vue` — 82% bottom sheet. 사진 hero(scene > cover > 그라데이션 fallback) + tab(정보/내 메모). 메모는 blur 시 자동저장(emit('save-note')). "길찾기 시작" 은 카카오맵 deeplink (`https://map.kakao.com/link/to/...`) — PlaceDetailPage 의 onKakaoNavigate 패턴 차용.
+- (N) `RoutePlaceInfoRow.vue` — 정보 탭의 한 줄(emoji + label/value). 디자인 InfoRow 와 동일.
+- (N) `RouteShareSheet.vue` — 작은 bottom sheet. "내 여행에 저장" CTA + 4-grid (링크 복사 / 카카오톡 / 시스템 공유 / PDF 비활성). `useShare` 의 `shareToKakao` / `copyLink` / `shareSystem` 재사용. 저장은 mock — "내 여행에 저장했어요 (베타)" 토스트 후 닫힘.
+
+### View
+- (R) `frontend/src/views/TripRoutePage.vue` — stub 통째로 교체. `<ion-page>` + 절대 레이어 stage 안에 `RouteMapLayer` + topbar(검색바 + 작품 chip) + FAB 스택(현재위치/공유) + `RouteTimelineSheet` + 4개 모달 슬롯. onMount 에 query(`contentId`/`contentTitle`) 읽고 `seedFromContent` 호출. unmount 시 모달만 닫고 store 는 보존(같은 작품 재진입 시 사용자 변경 유지).
+
+### Tests
+- (N) `frontend/src/stores/__tests__/tripRoute.spec.ts` — 10 케이스: seed/한 시드 noop/시드 변경 시 재시드/addPlace 중복 가드/removePlace 폴백 active/reorder clamp/updateNote 빈 값 정리/totalDistanceKm 양수+round/searchSuggestions 제외/reset 전체 비움.
+- (N) `frontend/src/views/__tests__/TripRoutePage.spec.ts` — 6 케이스: query 시드 후 5카드 + KakaoMap props (markers/routePath/selectedId)/검색 모달 토글/마커 emit → activeId 동기화/편집 모달 토글/공유 시트 토글/back 버튼.
+- KakaoMap 은 jsdom 에서 SDK 못 띄우므로 `vi.mock('@/components/map/KakaoMap.vue')` 로 데이터 흐름만 노출하는 stub 으로 대체.
+
+## 검증
+- `cd frontend && node_modules/.bin/vue-tsc --noEmit` ✓ exit 0.
+- `cd frontend && node_modules/.bin/vitest run src/stores/__tests__/tripRoute.spec.ts src/views/__tests__/TripRoutePage.spec.ts` ✓ **2 files / 16 tests passed**.
+- `cd frontend && node_modules/.bin/vitest run` (전체) ✓ **55 files / 640 tests passed** — 회귀 없음.
+- `cd frontend && npm run build` ✓ vite 빌드 성공. TripRoutePage 청크 28.42 kB / gzip 9.95 kB.
+- ESLint: 본 task 가 만진 신규 9 파일 모두 클린.
+
+## 변경 파일 (10건)
+- (N) `frontend/src/stores/tripRoute.ts`
+- (N) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- (N) `frontend/src/components/route/RouteMapLayer.vue`
+- (N) `frontend/src/components/route/RouteTimelineSheet.vue`
+- (N) `frontend/src/components/route/SearchPlaceModal.vue`
+- (N) `frontend/src/components/route/SearchPlaceRow.vue`
+- (N) `frontend/src/components/route/RouteEditorModal.vue`
+- (N) `frontend/src/components/route/RoutePlaceDetailModal.vue`
+- (N) `frontend/src/components/route/RoutePlaceInfoRow.vue`
+- (N) `frontend/src/components/route/RouteShareSheet.vue`
+- (R) `frontend/src/views/TripRoutePage.vue` (stub → 본 페이지로 교체)
+- (N) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
+
+---
+
+# Task #2 + #3 — feat/trip-route-frontend 후속 (real /api/contents fetch + map-controls)
+
+## 완료 항목
+
+### Task #2: TripRoute store 가 실제 `/api/contents/{id}` 를 fetch
+- `frontend/src/stores/contentDetail.ts`
+  - `ContentSpotDto` 백엔드 확장에 맞춰 `ContentDetailSpot` 에 `regionLabel: string`, `address: string | null` 필드 추가.
+- `frontend/src/stores/tripRoute.ts`
+  - `MOCK_PLACES` 5개 상수 **완전 제거**.
+  - `MOCK_SEARCH_SUGGESTIONS` 는 검색 contract 미정이라 유지 + TODO 주석 추가 (별도 후속 task 로 분리하기로 함).
+  - `seedFromContent(contentId, contentTitle)` → `async`. 같은 시드 noop guard 유지. 새 시드면 시드 컨텍스트만 먼저 갱신 후 `api.get<ContentDetailResponse>('/api/contents/:id')` 호출. 응답 `spots` 를 `orderIndex` ASC 정렬 + 좌표 누락 spot 필터 → `spotToTripPlace` 로 매핑.
+  - `contentTitle` 시드가 비어 있으면 응답의 `content.title` 폴백.
+  - 에러는 `store.error` 에 흡수, `placeIds` 빈 채로 노출 — 호출부가 토스트.
+- `frontend/src/views/TripRoutePage.vue`
+  - `onMounted` 가 `await tripRouteStore.seedFromContent(...)` 후 `store.error` 확인하여 토스트.
+
+### Task #3: TripRoute FAB → MapPage 와 동일한 map-controls
+- `frontend/src/components/route/RouteMapLayer.vue`
+  - `zoom` (default 7), `center: LatLng | null` (default null), `userLocation: LatLng | null` 을 prop 으로 승격.
+  - `effectiveCenter` computed: `props.center` → `places[0]` → 한국 중심 폴백. `effectiveZoom` = `props.zoom`.
+  - KakaoMap 에 `:user-location` 패스스루 추가.
+- `frontend/src/components/route/RouteTimelineSheet.vue`
+  - 헤더 edit 버튼 옆에 `rt-share-btn` 추가, `(e: 'share'): void` emit.
+  - `.rt-head-actions` 컨테이너로 두 버튼 묶음, share 버튼은 primary 톤.
+- `frontend/src/views/TripRoutePage.vue`
+  - `tr-fabs` 블록 + `onLocate` mock 핸들러 + `tr-fab*` 스타일 제거.
+  - 우측 세로 스택 `<div class="map-controls">` 추가 — `tr-zoom-in` / `tr-zoom-out` / `tr-locate` 3버튼 (MapPage 와 동일한 마크업/스타일).
+  - 페이지 로컬 ref: `zoom = ref(7)`, `viewportCenter`, `userLocation`, `locating`. mapStore 결합 X (페이지 lifecycle 로 격리).
+  - `onZoomIn/Out` 1..14 클램프, `onLocateMe` → `requestLocation()` + `DETAIL_ZOOM` 적용. 실패 사유별 한국어 토스트 3종 (denied/timeout/unavailable).
+  - share 버튼은 RouteTimelineSheet 의 `@share` 로 받아 `shareOpen = true`.
+
+### Spec 갱신
+- `frontend/src/stores/__tests__/tripRoute.spec.ts` — axios mock(`vi.mock('@/services/api')`) 으로 갈아끼움. 14 케이스 (기존 9 + 신규 5: 필드 매핑 / 좌표 필터 / fetch 에러 / null contentId 처리 등).
+- `frontend/src/views/__tests__/TripRoutePage.spec.ts` — `vi.hoisted` 로 ContentDetailResponse 픽스처 정의 후 axios mock. KakaoMap stub 에 `userLocation`/`zoom` props 추가, `data-zoom` attribute 노출. `tr-fab-share` selector → `rt-share-btn` 으로 교체 + `tr-zoom-in/out` 줌 동작 회귀 케이스 추가.
+- `frontend/src/stores/__tests__/contentDetail.spec.ts`, `frontend/src/views/__tests__/ContentDetailPage.spec.ts` — 픽스처 spot 2건에 `regionLabel`/`address` 보강 (필수 필드 추가에 따른 타입 보정).
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 645 tests passed** (직전 640 → 645, 신규 5건).
+- `cd frontend && npm run build` ✓ vue-tsc 통과 + vite 빌드 42.63s. TripRoutePage 청크 29.48 kB / gzip 10.35 kB.
+- `cd frontend && npm run lint` — 본 task 신규 수정 파일은 모두 클린. `SavedPage.spec.ts` 의 3건 unused-vars 는 사전 존재(Work→Content 리네이밍 commit 이후 잔존), 본 패스 미터치.
+
+## 변경 파일 (8건)
+- (M) `frontend/src/stores/contentDetail.ts`
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/components/route/RouteMapLayer.vue`
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- (M) `frontend/src/stores/__tests__/contentDetail.spec.ts`
+- (M) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
+- (M) `frontend/src/views/__tests__/ContentDetailPage.spec.ts`
+
+---
+
+# Task #4 — Remove rt-grabber + drag-scroll for rt-cards (RouteTimelineSheet)
+
+## 완료 항목
+
+### `frontend/src/components/route/RouteTimelineSheet.vue` (단일 파일)
+- **rt-grabber 제거**
+  - 템플릿 `<span class="rt-grabber" />` 삭제.
+  - `.rt-grabber` 스타일 블록 삭제.
+  - `.rt-sheet` 에 `padding-top: 16px` 추가 — 기존 grabber 가 차지하던 8+5+12=25px 시각 여백을 단일 패딩으로 대체. 헤더가 모서리에 붙지 않게 보존.
+
+- **rt-cards 마우스 드래그 좌우 스크롤**
+  - `<div ref="scrollEl">` 에 `@pointerdown / @pointermove / @pointerup / @pointercancel` 4종 추가, `:class` 에 `is-dragging` 토글 바인딩.
+  - 스크립트 — `isDragging`/`dragMoved` ref + `dragStartX`/`dragStartScroll`/`dragPointerId` 모듈 변수.
+  - `onPointerDown`: `e.pointerType === 'mouse'` 만 가로채고 (touch/pen 은 브라우저 기본). `setPointerCapture` 로 카드 영역 밖으로 빠르게 이동해도 move/up 이 계속 들어오게 보장. jsdom/미지원 환경 try/catch.
+  - `onPointerMove`: `scrollLeft = startScroll - dx`. `|dx| > 5px` 면 `dragMoved = true`.
+  - `onPointerUp/Cancel` → `endDrag` 공통: `releasePointerCapture` + `isDragging = false`. dragMoved 는 직후 click 핸들러에서 한 번 무시 후 reset.
+  - `onCardClick(id)` / `onAddClick()` 가드 — `dragMoved` 면 emit 생략 후 reset, 아니면 평소대로 `openDetail` / `addPlace`.
+  - 기존 `onScroll` activeId 동기화는 `scrollLeft` 변경에 그대로 반응 — 추가 변경 없음.
+- **CSS**
+  - `.rt-cards { cursor: grab; }`
+  - `.rt-cards.is-dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; user-select: none; }` — drag 중엔 snap 풀어 자유로이 끌리고 드롭 시 클래스가 빠지면서 mandatory snap 으로 복귀.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run TripRoutePage.spec.ts` ✓ 7/7. RouteTimelineSheet 를 마운트하는 회귀 케이스 모두 그린 (`.rt-card` / `[data-testid="rt-card-*"]` / `[data-testid="rt-add-card"]` selector 그대로 유효).
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 645 tests** — 회귀 0.
+- `cd frontend && npm run build` ✓ vue-tsc 통과 + vite 빌드 28.42s. TripRoutePage 청크 30.13 kB / gzip 10.57 kB (+0.65 kB / +0.22 kB).
+- `cd frontend && npm run lint` — 본 task 신규 수정 파일 클린. SavedPage.spec.ts 의 unused-vars 3건은 사전 결함 그대로(미터치).
+- 브라우저 골든패스(`/route?contentId=5`) 는 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+
+---
+
+# Task #5 — Fix: drag stuck on active card (RouteTimelineSheet watcher fight)
+
+## 증상
+데스크톱 마우스 드래그 검증 중 "특정 장소가 고정돼서 넘어가지지 않는" 자석 효과 — `onScroll` 의 closest 카드 활성화 emit 이 부모 → `activeId` prop 갱신 → `watch(props.activeId)` 의 `scrollTo({ behavior: 'smooth' })` 가 사용자 손과 싸우면서 활성 카드에 붙어버림.
+
+## 변경 (단일 파일)
+### `frontend/src/components/route/RouteTimelineSheet.vue`
+- 출처 구분 ref 추가: `const internalActivate = ref(false);`
+- `onScroll` 의 emit 직전: `internalActivate.value = true; emit('activate', id);` — 내부 발 변경임을 watcher 에 알림.
+- `watch(() => props.activeId, ...)` 콜백 시작에 가드 3종:
+  - `if (next == null) return;` (기존 유지)
+  - `if (isDragging.value) return;` — 드래그 중 watcher 무력화
+  - `if (internalActivate.value) { internalActivate.value = false; return; }` — onScroll self-trigger 한 번 NOP
+- `scrollTo` 타겟 보정: `card.offsetLeft - 16` → `card.offsetLeft + card.offsetWidth/2 - container.clientWidth/2` (Math.max(0, ...) 클램프). `scroll-snap-align: center` 와 정합 → 드롭 후 튐 현상 정리.
+
+## 외부(마커 클릭) activeId 변경 동작 보존
+부모(TripRoutePage)가 `setActive` 로 갱신하는 외부 발 변경은 `internalActivate` 가 false 라 그대로 watcher 가 실행 → viewport 중앙으로 smooth 스크롤. 기존 의도 손상 없음.
+
+## 검증
+- `cd frontend && npm run build` ✓ vue-tsc 통과 + vite 빌드 28.19s. (`isDragging` 가 watch 보다 아래 선언이지만 closure lazy 참조라 TS/런타임 모두 정상.)
+- `cd frontend && npm run test:unit -- --run TripRoutePage.spec.ts` ✓ 7/7.
+- `cd frontend && npm run lint` — 본 task 수정 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(`/route?contentId=5`) 데스크톱 마우스 드래그 자유 이동은 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+
+---
+
+# Task #6 — Fix: first card not active at left edge (RouteTimelineSheet onScroll)
+
+## 증상
+와이드 뷰포트(데스크톱) 에서 좌측 끝까지 드래그해도 첫 카드가 active 되지 않음. 카드 폭(200) + gap(10) + padding-left(16) 합이 컨테이너 폭보다 작아지는 시점부터 `scrollLeft=0` 인데 closest-to-center 로직이 두번째 카드를 더 가깝게 판정. mandatory snap 의 자연 위치(`offsetLeft+w/2 − cw/2`) 가 음수라 0 으로 clamp 되면서 시각적으론 좌측에 첫 카드가 붙어 있는데 active 는 다른 카드에 머무는 모순.
+
+## 변경 (단일 파일)
+### `frontend/src/components/route/RouteTimelineSheet.vue` `onScroll`
+- `places.length === 0` 가드 추가.
+- 기존 closest-to-center 루프 앞에 boundary 분기 추가:
+  - `scrollLeft <= 4px` → 첫 카드 (`chosenIdx = 0`)
+  - `scrollLeft >= scrollWidth − clientWidth − 4px` → 마지막 place 카드 (`+` 추가 카드 직전)
+  - 그 외 → 기존 closest-to-center 루프 그대로 (변수 이름만 `closestIdx` → `chosenIdx` 통일).
+- task #5 의 `internalActivate.value = true` 표식 + activeId diff 가드 그대로 유지.
+
+## 검증
+- `cd frontend && npm run build` ✓ vue-tsc + vite 28.98s.
+- `cd frontend && npm run test:unit -- --run TripRoutePage.spec.ts` ✓ 7/7.
+- `cd frontend && npm run lint` — 본 fix 가 만진 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(좌측 끝 / 우측 끝 / 중간 / 외부 마커 클릭) 4시나리오는 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+
+---
+
+# Task #7 — Active marker zIndex fix (KakaoMap)
+
+## 증상
+TripRoute 카드 active 전환 시 활성 마커가 인접한 일반 마커에 가려지는 stacking 결손. `CSS .pin.active { z-index: 5 }` 는 같은 overlay 내부 stacking(.bubble/.dot 간)만 잡고, CustomOverlay 끼리에는 영향 없음. 카카오는 옵션 미지정 시 생성 순서로 쌓아 늦게 그려진 마커가 위로 올라감.
+
+## 변경 (단일 파일)
+### `frontend/src/components/map/KakaoMap.vue` (renderOverlays 의 pin/cluster 생성부)
+- pin overlay 생성 시 `zIndex` 명시: 활성 100 / 방문 5 / 일반 1.
+  - `isActive`/`isVisited` 변수를 buildPinContent 호출 위로 끌어올려 한 번 계산 후 두 번 사용.
+- cluster overlay 도 `zIndex: 2` 명시 — 활성 마커(100) 뒤, 일반 마커(1) 앞.
+- me overlay `zIndex: 1` 기존 그대로 유지 (활성 100 보다 뒤).
+- CSS `.pin.active { z-index: 5 }` 는 overlay 내부 stacking 보강용으로 그대로 보존.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 645 tests** — 회귀 0.
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.48s.
+- `cd frontend && npm run lint` — 본 fix 가 만진 파일 클린. SavedPage.spec.ts 3건 사전 결함 미터치.
+- 브라우저: `/route?contentId=5` 카드 드래그 시 활성 마커 항상 최상단 / `/map` 회귀 / 클러스터 overlay 가 활성 마커 가리지 않는지 — 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/map/KakaoMap.vue`
+
+---
+
+# Task #9 — 도로 경로 polyline 연동 (Kakao Mobility 프록시)
+
+## 완료 항목
+
+### 신규 service
+- `frontend/src/services/route.ts`
+  - `LatLng`, `DirectionsRequest`, `DirectionsResponse` 타입 export.
+  - `fetchDirections({origin, destination, waypoints})` — `POST /api/route/directions` 래퍼. envelope unwrap 인터셉터 그대로 활용.
+
+### `frontend/src/stores/tripRoute.ts`
+- state 추가: `routePath: LatLng[]`, `routeDistanceMeters: number|null`, `routeDurationSec: number|null`, race 가드용 `routeRequestSig: string|null`.
+- 신규 action `refreshRoutePath()`:
+  - `placeIds.length < 2` → path/거리/시간 즉시 클리어 (직선 폴백).
+  - `placeIds.join(',')` 를 sig 로 캡처 → fetch 후 sig 일치할 때만 결과 반영(race 가드).
+  - `points[0]` = origin / `points[N-1]` = destination / 가운데 = waypoints 로 분리해서 호출.
+  - `available && path.length >= 2` 만 채택. 그 외/throw 모두 빈 path 폴백 — 사용자에게 별도 토스트 X (보조 정보).
+- mutating 액션 끝에 fire-and-forget: `seedFromContent` 성공 후 / `addPlace` / `removePlace` / `reorder` 모두 `void this.refreshRoutePath()`.
+- `reset()` 에서 routePath/거리/시간/sig 모두 클리어 추가.
+
+### `frontend/src/components/route/RouteMapLayer.vue`
+- `routePath?: LatLng[] | null` prop 추가 (default null).
+- `routePath` computed → `effectiveRoutePath` 로 이름 변경, prop ≥ 2 면 그 값 사용 / 아니면 places 좌표로 직선 폴백.
+
+### `frontend/src/views/TripRoutePage.vue`
+- `storeToRefs` 에 `routePath` 추가, `<RouteMapLayer :route-path="routePath" />` 로 흘림.
+
+### Spec 갱신 — `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- `vi.mock('@/services/route')` 추가 + `mockFetchDirections` 핸들. beforeEach 에서 reset + 빈 응답 default.
+- 신규 4 케이스:
+  1. `refreshRoutePath fetches directions and stores path/distance/duration when ≥ 2 places` — origin/destination/waypoints 분리 + 응답 매핑 검증.
+  2. `falls back (empty path) when response.available is false`.
+  3. `addPlace / removePlace / reorder each retriggers refreshRoutePath` — 4회 호출 카운트.
+  4. `skips fetch and clears path when fewer than 2 places` — 1점 → 미호출, 2점 → 호출, 다시 1점 → 즉시 클리어 + 미호출.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 649 tests passed** (직전 645 → 649, 신규 4건).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 31.92s.
+- `cd frontend && npm run lint` — 본 task 가 만진 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(`/route?contentId=5` 에서 직선 → 도로 경로) 는 사용자가 직접 검증 예정.
+
+## 변경 파일 (5건)
+- (N) `frontend/src/services/route.ts`
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/components/route/RouteMapLayer.vue`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+
+---
+
+# Task #13 — 코스 polyline 실선화 + 마커 dot 안 순서 번호
+
+## 변경
+
+### `frontend/src/components/map/KakaoMap.vue`
+- `strokeStyle: 'shortdash'` → `'solid'` (line ~322). 도로 경로 polyline 이 직선 dashed 보다 자연스러움.
+- `buildPinContent`: 우선순위 visited(`✓`) > orderIndex(숫자) > 기본(`●`). orderIndex 가 있으면 `numbered` 클래스도 추가(CSS 분기용).
+- `.kakao-map .pin .dot` CSS 보강:
+  - `display: inline-flex`, `min-width: 18px`, `height: 18px`, `padding: 0 4px`, `border-radius: 999px`, `line-height: 1`.
+  - 1자리 숫자/`●` 는 18px 원, 2자리 숫자(예: 10, 11) 는 가로로 살짝 늘어나는 pill 모양.
+  - 기존 색상/배경(`var(--fr-primary)` / `#ffffff`) 그대로 유지.
+
+### `frontend/src/stores/map.ts`
+- `MapMarker` 인터페이스에 `orderIndex?: number` 추가 — 옵셔널이라 일반 `/map` 마커는 미지정 → 기본 `●` 폴백.
+
+### `frontend/src/components/route/RouteMapLayer.vue`
+- `markers` computed:
+  - 기존 `name: "01 · " + p.name` prefix 제거 → `name: p.name` (dot 안에 번호가 들어가니 라벨 prefix 와 중복).
+  - 신규 `orderIndex: i + 1` (1-based) 필드 추가 → KakaoMap dot 텍스트로 흘러감.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 649 tests** — 회귀 0. KakaoMap / RouteMapLayer 전용 spec 은 없음(view spec 들은 KakaoMap stub 으로 우회) — dot 텍스트 검증 추가 불필요.
+- `cd frontend && npm run build` ✓ vue-tsc + vite 31.23s.
+- `cd frontend && npm run lint` — 본 task 수정 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저: `/route?contentId=2` 폴리라인 실선 + 마커 dot 1/2/3/4 / `/map` 일반 마커 `●` 그대로 / `✓` 방문 마커 회귀 — 사용자가 직접 검증 예정.
+
+## 변경 파일 (3건)
+- (M) `frontend/src/components/map/KakaoMap.vue`
+- (M) `frontend/src/stores/map.ts`
+- (M) `frontend/src/components/route/RouteMapLayer.vue`
+
+---
+
+# Task #14 — Route editor: drag card follows cursor
+
+## 증상
+루트 편집 시트의 핸들 드래그 reorder 가 순서만 툭툭 바뀌고 카드 자체는 손가락/커서를 따라오지 않음. step swap 만 emit 하고 원본 카드는 정지된 상태에서 새 위치로 그냥 점프.
+
+## 변경 (단일 파일: `frontend/src/components/route/RouteEditorModal.vue`)
+- **state 추가**: `const dragOffsetY = ref(0)` — 드래그 중 카드의 inline `translateY` 픽셀.
+- **`onHandleDown`**: `dragOffsetY.value = 0` 초기화 추가.
+- **`onHandleMove` 재작성**:
+  - `dragOffsetY.value = e.clientY - dragStartY` — 손가락 따라가기 (즉시 반영).
+  - `stepH = (item.offsetHeight || 64) + 8` (gap 8px 포함, jsdom 폴백).
+  - `didSwap` 루프로 한 번의 큰 move 에 여러 칸 누적 swap. swap 직후 `dragStartY += stepH; dragOffsetY -= stepH` 로 anchor 재조정 → 카드는 손가락 아래 유지.
+  - eslint `no-constant-condition` 회피: `let didSwap = true; while (didSwap) { didSwap = false; ... }` 패턴.
+- **`onHandleUp`**: `dragOffsetY.value = 0` 추가 — 드롭 시점에 inline transform 제거되며 base transition 으로 자연 settle.
+- **템플릿 li**: `:style="draggingId === p.id ? { transform: 'translateY(...px)', zIndex: 10 } : undefined"` 인라인 스타일 바인딩 추가.
+- **CSS**:
+  - `.rt-editor-item` `position: relative` + transition 에 `box-shadow 160ms` 추가 (transform 도 포함, 드롭 시 settle).
+  - `.rt-editor-item.is-dragging` 의 기존 `transform: scale(0.98)` **제거** (인라인 translateY 와 충돌). 대신 lift 느낌은 `box-shadow: 0 12px 32px rgba(15,23,42,0.18)` 로 표현. opacity `0.5 → 0.95`. transition 에서 transform 제외 → drag 중 즉시 반응.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 649 tests** — 회귀 0. (RouteEditorModal 전용 spec 없음, TripRoutePage spec 의 editor open/close 7건 그대로 통과.)
+- `cd frontend && npm run build` ✓ vue-tsc + vite 32.75s.
+- `cd frontend && npm run lint` — 본 task 수정 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 `/route?contentId=2` 루트 편집(부드러운 follow-cursor / 절반 지나 swap / 빠른 다중 칸 누적 / 드롭 후 0 settle / 모바일+데스크톱) — 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/route/RouteEditorModal.vue`
+
+---
+
+# Task #15 — Polyline 굵기 + 진행 방향 chevron
+
+## 변경 (단일 파일: `frontend/src/components/map/KakaoMap.vue`)
+
+### Polyline 굵기
+- `strokeWeight: 4 → 6 → 8` (사용자 후속 요청으로 8 까지), `strokeOpacity: 0.85 → 0.9`.
+
+### 방향 chevron
+- 모듈 state `let routeArrows: AnyObj[] = []` 추가.
+- 헬퍼 함수 추가:
+  - `computeBearing(lat1, lng1, lat2, lng2)` — 표준 진북 기준 bearing(0..360°). `Math.atan2` + 위도/경도 라디안 변환.
+  - `buildArrowContent(bearing)` — `.route-arrow` 래퍼 + `transform: rotate(${bearing}deg)` + 인라인 SVG (8×8 viewBox 안에 **북향 삼각형 base 6 / height 5.2** — 외접원 ~6.93). 흰 반투명 78%. 라인(strokeWeight=8) 안에 어떤 회전 각도에서도 들어가는 사이즈.
+- `renderRoute()` 보강:
+  - 시작에 routePolyline + routeArrows 둘 다 setMap(null) + 비우기.
+  - polyline 생성 후, **화면 픽셀 기준 일정 간격(`INTERVAL_PX = 12px` — 8px chevron 의 1.5개 크기)으로 chevron 배치**. `mapInstance.getProjection().containerPointFromCoords()` 로 segment 별 픽셀 길이 계산 → segment 단위로 cursor 를 누적하며 12px 마다 보간 좌표(`a + (b-a) * t`) 로 CustomOverlay 추가. 잔여(`acc`) 는 다음 segment 로 이월. vertex 카운트 기반(이전: `step = path.length / 11`)이 도로 회전 지점에 vertex 가 몰려 chevron 도 거기 클러스터링되던 문제 해결.
+  - **zoom_changed 리스너에 `renderRoute()` 추가** — 픽셀 매핑이 zoom 에 종속이라 줌인/줌아웃 시 18px 간격 유지하며 재배치.
+  - zIndex 3 (active 100 > visited 5 > chevron 3 > cluster 2 > 일반 1) — 일반/방문 마커보다 위, active 보다 아래.
+- `clearOverlays()` 에는 routeArrows 정리를 **넣지 않음** (clearOverlays 가 marker 재렌더 시마다 호출돼 chevron 까지 매번 사라지는 부작용 회피). `renderRoute` 의 redraw 와 `onBeforeUnmount` 의 unmount cleanup 두 곳에서만 정리.
+- `onBeforeUnmount`: routeArrows.forEach(setMap(null)) + 배열 비우기 추가.
+
+### CSS
+```css
+.kakao-map .route-arrow {
+  width: 8px;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+```
+- 흰 반투명 삼각형이라 drop-shadow 제거(노이즈 회피). `pointer-events: none` — 마커 클릭과 간섭 X. wrapper 8×8 + 내부 삼각형 6×5.2(외접원 ~6.93) → 어떤 bearing 회전에도 8px 라인 안에 안전.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 649 tests** — 회귀 0. (KakaoMap 전용 spec 없음, view spec 들의 KakaoMap stub 은 routePath/strokeWeight 검증 안 함.)
+- `cd frontend && npm run build` ✓ vue-tsc + vite 43.31s.
+- `cd frontend && npm run lint` — 본 task 수정 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저: `/route?contentId=2&contentTitle=도깨비` 에서 6px 실선 + ~10개 chevron 진행 방향 / reorder/remove 후 chevron 갱신 / `/map` 회귀 X — 사용자가 직접 검증 예정.
+
+## 변경 파일 (1건)
+- (M) `frontend/src/components/map/KakaoMap.vue`
+
+---
+
+# Task #17 — 겹치는 leg 안 겹치게 표시 (sections 별 polyline + perpendicular offset)
+
+## 변경
+
+### `frontend/src/services/route.ts`
+- `DirectionsResponse` 에 `sections: LatLng[][]` 필드 추가 (backend task #16/#47 contract).
+
+### `frontend/src/stores/tripRoute.ts`
+- state `routeSections: LatLng[][]` 추가.
+- `state()` 초기값 `routeSections: []`.
+- `reset()` 에 `this.routeSections = []` 추가.
+- `refreshRoutePath` 의 4개 클리어 시점(<2 places / points<2 / available:false / catch) 모두 `routeSections = []` 동기화.
+- success 매핑에서 `this.routeSections = res.sections ?? []` (backend 가 sections 누락하면 안전한 default).
+
+### `frontend/src/components/route/RouteMapLayer.vue`
+- `routeSections?: LatLng[][] | null` prop 추가 (default null), `<KakaoMap :route-sections="routeSections" />` 패스스루.
+
+### `frontend/src/views/TripRoutePage.vue`
+- `storeToRefs` 에 `routeSections` 추가, `<RouteMapLayer :route-sections="routeSections" />` 흘림.
+
+### `frontend/src/components/map/KakaoMap.vue`
+- props 에 `routeSections?: LatLng[][] | null` 추가.
+- 모듈 state `let routePolyline` 단일 → `let routePolylines: AnyObj[] = []` 배열로 전환.
+- 신규 헬퍼 `shiftPathPerpendicular(coords, offsetPx, proj, k)`:
+  - 각 vertex 의 prev→next 픽셀 방향(끝점은 인접 segment) 의 90도 회전 단위벡터 × `offsetPx` 만큼 픽셀 공간 이동.
+  - `proj.coordsFromContainerPoint(...)` 가 반환하는 `LatLng` 의 `.getLat()/.getLng()` 로 lat/lng 복원 (카카오 v3 SDK 표준 동작).
+  - proj 없거나 `offsetPx=0` 이면 원본 그대로 반환.
+- `renderRoute()` 재구성:
+  - 시작에 `routePolylines.forEach(setMap(null))` + `routeArrows.forEach(setMap(null))` 정리.
+  - sections normalize: `props.routeSections` 가 ≥1 leg(각 leg ≥2점) 있으면 그것을, 아니면 `[path]` 1개 list 폴백.
+  - n = sections.length, 각 section i 에 `offsetPx = (i − (n − 1)/2) × 4` 분배 → 가운데 0 기준 ±양쪽. shifted path 로 별도 Polyline (`strokeWeight: 8`, `strokeColor: '#14BCED'`, `strokeOpacity: 0.9`, `solid`) 생성, `routePolylines` 에 push.
+  - chevron 은 **offset 없는 가운데 path**(`props.routePath`) 위에 12px 픽셀 간격 — task #15 의 segment 보간 로직 그대로. leg 분리 여부와 무관하게 진행 방향만 일관 안내.
+  - proj 없으면 chevron 생략(polyline 만 노출, offset 없이) — 회귀 안전.
+- watch 추가: `watch(() => props.routeSections, () => renderRoute(), { deep: true })`. zoom_changed 의 renderRoute 재호출은 task #15 에서 이미 적용 → offset 자동 재계산.
+- onBeforeUnmount: 단일 routePolyline cleanup 을 routePolylines 배열 forEach 로 교체.
+
+### Spec 갱신 — `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- `mockFetchDirections` 의 default 응답에 `sections: []` 필드 추가.
+- 기존 happy 케이스에 `sections` 매핑 검증 (`length === 2`, leg 좌표 카운트).
+- 기존 available:false 케이스에 `routeSections: []` 검증.
+- 신규: `refreshRoutePath defaults routeSections to [] when backend omits the field` — backend 가 sections 누락한 응답에도 `routeSections === []` 안전.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **55 files / 650 tests** (649 → 650, 신규 1건).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.15s. TripRoutePage 청크 32.24 kB / gzip 11.11 kB.
+- `cd frontend && npm run lint` — 본 task 수정 파일 모두 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 검증(같은 도로 두 번 leg 4px offset / 일자 구간 자연스러움 / 줌 변경 시 offset 픽셀 일정 / chevron 가운데 path 위 균일 / sections=1 폴백) — 사용자가 직접 진행 예정.
+
+## 변경 파일 (5건)
+- (M) `frontend/src/services/route.ts`
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/components/route/RouteMapLayer.vue`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/components/map/KakaoMap.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+
+---
+
+# Task #11 — RouteController init 교체 + save/load UX
+
+## 완료 항목
+
+### `frontend/src/services/route.ts` (확장)
+- 기존 `fetchDirections` + `DirectionsResponse.sections` 그대로.
+- 신규 타입: `RouteInitContent`, `RouteInitPlace`, `RouteInitResponse`, `RouteItemPayload`, `SaveRouteRequest`, `SavedRouteDetail`, `SavedRouteItem`, `SavedRouteSummary`.
+- 신규 함수 6개:
+  - `fetchRouteInit(contentId)` → `GET /api/route/init?contentId=...`
+  - `saveRoute(req)` → `POST /api/route`
+  - `updateRoute(id, req)` → `PUT /api/route/{id}`
+  - `listMyRoutes()` → `GET /api/route/me`
+  - `loadRoute(id)` → `GET /api/route/{id}` (hydrated items)
+  - `deleteRoute(id)` → `DELETE /api/route/{id}`
+
+### `frontend/src/stores/tripRoute.ts`
+- imports: `@/services/api` 직접 사용 제거, `@/services/route` 의 6개 함수 + 타입 import.
+- 변환 헬퍼:
+  - 기존 `spotToTripPlace(ContentDetailSpot, ...)` 제거.
+  - `initPlaceToTripPlace(RouteInitPlace, contentId, contentTitle)` — backend 가 정제된 좌표/이미지/평점 보내므로 추가 가드 없이 매핑.
+  - `savedItemToTripPlace(SavedRouteItem, contentId, contentTitle)` — 저장된 코스 hydrated item → TripPlace.
+- state 추가: `currentSavedRouteId: number | null` — POST(신규) vs PUT(갱신) 분기. `state()` 초기 null, `reset()` 도 null.
+- `seedFromContent` 변경:
+  - `api.get<ContentDetailResponse>('/api/contents/...')` → `fetchRouteInit(contentId)`.
+  - 응답 `data.places` 를 `initPlaceToTripPlace` 로 매핑(좌표는 backend 가 보장).
+  - `data.suggestedName` 우선 → 코스 이름 / `data.suggestedStartTime` → startTime 적용.
+  - 시드 변경 시 `currentSavedRouteId = null` 리셋, noop guard 도 같은 시드 + null 일 때만.
+- 신규 액션:
+  - `seedFromSavedRoute(routeId)` — `loadRoute(id)` 호출 후 hydrated items + notes + name + startTime + content 컨텍스트 + `currentSavedRouteId` 갱신. fire-and-forget `refreshRoutePath()`. 같은 routeId 재호출 noop.
+  - `saveCurrentRoute()` — 현재 placeIds/notes/durationMin 으로 `SaveRouteRequest` 빌드. `currentSavedRouteId == null` → POST, 있으면 PUT. 응답의 id 로 `currentSavedRouteId` 갱신, full `SavedRouteDetail` 반환.
+  - `removeSavedRoute(routeId)` — `deleteRoute(id)` + 현재 들고 있는 코스가 같으면 `currentSavedRouteId = null`.
+
+### `frontend/src/views/TripRoutePage.vue`
+- `readSeed()` 가 `routeId` 도 파싱(우선) — `/route?routeId=42` 진입 흐름 지원.
+- `onMounted`: `routeId` 있으면 `seedFromSavedRoute`, 아니면 기존 `seedFromContent`.
+- `onSaveTrip` mock 토스트 → 실제 `tripRouteStore.saveCurrentRoute()` 호출. 신규/갱신 분기 토스트 ("내 여행에 저장했어요" / "코스를 갱신했어요"). 401 등 실패는 axios 인터셉터가 LoginPromptModal 처리, 그 외 일반 에러는 토스트.
+
+### `frontend/src/views/SavedRoutesPage.vue` (신규)
+- `/profile/routes` 페이지. `listMyRoutes()` 로드 → 카드 그리드.
+- 카드 탭 → `/route?routeId=<id>` push.
+- 휴지통 버튼 → `window.confirm` → `deleteRoute(id)` + 인플레이스 제거 + 토스트.
+- 빈 상태 + CTA(`/home` 으로 이동), 로딩 placeholder.
+
+### `frontend/src/router/index.ts`
+- 신규 라우트 `{ path: '/profile/routes', name: 'ProfileRoutes', component: () => import('../views/SavedRoutesPage.vue'), meta: { requiresAuth: true } }`. 기존 `/profile/likes` 패턴과 동일.
+
+### `frontend/src/views/ProfilePage.vue`
+- 메뉴 시트에 "내 코스" row 1줄 추가 (`mapOutline` 아이콘, `data-testid="profile-menu-saved-routes"`).
+- 핸들러 `onSavedRoutesAndClose()` — 시트 닫고 `/profile/routes` push.
+
+### Spec 갱신
+- `frontend/src/stores/__tests__/tripRoute.spec.ts` — **재작성**.
+  - `vi.mock('@/services/route')` 로 6+1개 함수 모두 mock.
+  - 기존 init/지각 매핑 케이스를 `RouteInitResponse` 픽스처 기준으로 갱신.
+  - 신규 케이스:
+    - `seedFromSavedRoute` hydration / 같은 routeId noop
+    - `saveCurrentRoute` POST(no id) / PUT(id 있음) 분기 + 응답 id 반영
+    - `saveCurrentRoute` items 페이로드에 note 정확히 embedding
+    - `removeSavedRoute` 매칭 시 currentSavedRouteId 비움 / 다른 id 면 보존
+  - 총 25 테스트 (직전 19 + 신규 6).
+- `frontend/src/views/__tests__/TripRoutePage.spec.ts` — `vi.mock('@/services/route')` 로 갈아끼움. 픽스처를 `routeInitFixture` (`RouteInitResponse` shape) 로 교체. 7 테스트 그대로 통과.
+- `frontend/src/views/__tests__/SavedRoutesPage.spec.ts` (신규) — listMyRoutes happy / empty + CTA / 카드 탭 → push / 삭제 confirm true / 삭제 confirm false noop / back. 6 테스트.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 662 tests** (55 → 56 / 650 → 662, 신규 12: tripRoute spec +6, SavedRoutesPage +6).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 26.99s.
+- `cd frontend && npm run lint` — 본 task 가 만진 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(`/route?contentId=5` init 호출 / 저장 토스트 / `/profile/routes` 카드 / 카드 → `/route?routeId=...` 복원 / 변경 후 PUT / 삭제 / 401 LoginPromptModal) — 사용자가 직접 검증 예정.
+
+## Contract 정합 후속 patch (team-lead 가 명시한 정확한 shape 반영)
+- `saveRoute` / `updateRoute` 응답 타입: `SavedRouteDetail` 전체 → **`SaveRouteResponse { id }`** 만. (POST/PUT 둘 다 동일.)
+- `SavedRouteSummary` 필드 정정: `thumbnailUrl/startTime/contentId` 제거 → contract `{ id, name, contentTitle, placeCount, updatedAt, coverImageUrl }`.
+- `SavedRouteDetail.posterUrl` 제거 (contract 미명시).
+- `SavedRoutesPage.vue` 카드 메타: `🕘 startTime` → `formatRelativeTime(updatedAt) + " 갱신"`. 썸네일 src `thumbnailUrl` → `coverImageUrl`.
+- `saveCurrentRoute` 가 `placeIds.length === 0` 이면 throw — spec 케이스 추가.
+
+`SavedRouteDetail.items` 가 hydrated place data(name/regionLabel/address/lat/lng/coverImageUrl/sceneImageUrl/rating) 를 inline 으로 포함한다는 가정은 유지 (`/route?routeId=...` 직진입 시 별도 fetch 없이 카드/지도 즉시 렌더). 다르면 매퍼(`savedItemToTripPlace`) 한 곳만 수정.
+
+검증 (정합 후): `npm run test:unit -- --run` ✓ **56 files / 663 tests** (662 → 663, +1 신규: saveCurrentRoute throws on empty). build ✓ 28.63s. lint touched files clean.
+
+## 변경 파일 (총 8건)
+- (M) `frontend/src/services/route.ts`
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (N) `frontend/src/views/SavedRoutesPage.vue`
+- (M) `frontend/src/router/index.ts`
+- (M) `frontend/src/views/ProfilePage.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- (M) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
+- (N) `frontend/src/views/__tests__/SavedRoutesPage.spec.ts`
+
+---
+
+# Task #18 — `/route?routeId=X` hardening (debug/방어)
+
+## 증상
+사용자가 `/route?routeId=1` 진입 시 "경로가 사라지고 각종 버튼이 클릭 안 됨" 보고. 가능 원인: 401 → LoginPromptModal stuck / loading 미해제 / 응답 shape mismatch.
+
+## 변경 (2 파일)
+
+### `frontend/src/stores/tripRoute.ts` `seedFromSavedRoute`
+- 응답 방어:
+  - `data?.items` 가 누락/비배열로 와도 `[]` 로 처리해 페이지가 죽지 않게.
+  - 좌표 누락(`latitude/longitude` non-number) item 은 skip — 다른 item 은 정상 매핑.
+- 필드 누락 폴백:
+  - `name` → `'나의 여행 코스'`
+  - `startTime` → `'09:00'`
+  - `contentId / contentTitle` → `null`
+  - `id` → 호출 인자 `routeId` (응답에 id 누락 시)
+
+### `frontend/src/views/TripRoutePage.vue` `onMounted`
+- `try/catch/finally` 구조 정리:
+  - `finally` 에서 `tripRouteStore.loading` 이 true 로 남아 있으면 `$patch({ loading: false })` 강제 해제. 어떤 경로로 reject 되더라도 컨트롤이 disabled 로 stuck 되지 않게.
+  - `store.error` 검사를 finally 밖으로 이동 — 어떤 종료 경로에서도 토스트가 떠야 함.
+- 페이지 자체는 빈 코스 상태로 살아있어 사용자가 검색/뒤로/+/-/내위치 모두 정상 사용 가능.
+
+## Spec 갱신 (3 신규 케이스)
+- `seedFromSavedRoute skips items without coordinates and falls back missing fields` — 좌표 없는 item skip + startTime/contentTitle 누락 폴백 검증.
+- `seedFromSavedRoute survives missing items field (treats as empty)` — items 자체 누락 시 빈 코스 + error null + loading false.
+- `seedFromSavedRoute on fetch failure sets error and clears loading without throwing` — 401/Forbidden 등 실패 시 store 가 error 로 흡수, currentSavedRouteId 는 null 유지.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 666 tests** (663 → 666, 신규 3).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.07s.
+- `cd frontend && npm run lint` — 본 patch 가 만진 파일 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 3 시나리오 (정상/없는 id/비로그인) 는 사용자가 직접 검증 + console / Network 탭에서 `/api/route/1` 응답 코드 확인 follow-up 필요.
+
+## 변경 파일 (3건)
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+
+---
+
+# Task #19 — Fix `Cannot set properties of null (setting '__vnode')` on rt-card click
+
+## 증상
+사용자가 `/route?contentId=2&contentTitle=도깨비` 에서 카드 클릭 시 Vue runtime 에러:
+```
+Uncaught (in promise) TypeError: Cannot set properties of null (setting '__vnode')
+chunk-SLZUSZ5I.js:7929
+```
+patch/mount 중 el ref 가 null 이 되는 전형. 가장 유력 가설은 `RoutePlaceDetailModal` 의 v-if 토글 race(open=true ↔ place 채워지는 시점이 마이크로프레임 어긋남).
+
+## 변경 (3 파일)
+
+### A. `RoutePlaceDetailModal.vue` — Teleport(to body) + Transition fade
+- 모달 root 를 `<Teleport to="body"><Transition name="rt-detail">…</Transition></Teleport>` 로 감쌈. 부모 트리 안에서의 sibling vnode 패치 순서 문제를 회피 + body 로 끌어내 z-index 격리.
+- Transition fade(200ms) 가 enter/leave 에 한 프레임을 분리 — `open && place` 의 양쪽이 동기 토글되어도 mount 와 patch 가 따로 일어남.
+- CSS `.rt-detail-enter-from / -leave-to { opacity: 0 }` + `*-active { transition: opacity 200ms }` 추가.
+
+### B. `TripRoutePage.vue` — detailPlace null sync guard
+- `watch(detailPlace, (p) => { if (detailId.value != null && p == null) detailId.value = null; })`. detailPlace 가 stale 로 null 되면(예: reorder 직후 같은 id 가 잠깐 사라지는 microframe) detailId 도 함께 비워 modal v-if 가 일관되게 닫힘.
+
+### C. `RouteTimelineSheet.vue` — onCardClick microtask 양보
+- `emit('openDetail', id)` 를 `void Promise.resolve().then(() => emit(...))` 로 한 microtask 늦춤. pointer capture release 가 같은 task 안에서 먼저 끝나, 부모의 modal 마운트가 stale element 참조와 부딪히지 않게.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 666 tests** — 회귀 0 (모달 selector 의존 spec 없음).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 29.19s.
+- `cd frontend && npm run lint` — 본 patch 가 만진 파일 클린.
+- 브라우저 골든패스 4 시나리오(첫 클릭 / 드래그 직후 첫 클릭 무시 / 모달 열린 상태 reorder / 닫고 다른 카드) — 사용자가 직접 검증 예정. 재현되면 stack trace 와 함께 보고 부탁.
+
+## 변경 파일 (3건)
+- (M) `frontend/src/components/route/RoutePlaceDetailModal.vue`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+
+---
+
+# Task #20 — Polyline 못 그림 fix (kakao.maps.Point wrap)
+
+team-lead 가 사용자 콘솔 stack trace 확보 후 직접 적용한 fix. 본 메모는 통합 보고용 기록.
+
+## 원인
+`KakaoMap.vue` `shiftPathPerpendicular` 가 `proj.coordsFromContainerPoint(...)` 에 plain `{x, y}` 객체 전달. 카카오 v3 SDK 는 `kakao.maps.Point` 인스턴스를 요구 — 내부 메서드 호출(`b.e is not a function`) 에서 throw → renderRoute 자체가 죽음 → polyline + chevron 둘 다 못 그림 → 화면에 경로 안 보임.
+
+## team-lead 의 fix (`KakaoMap.vue` 단일)
+1. `shiftPathPerpendicular` 의 `k` 매개변수 타입에 `Point: new (x: number, y: number) => unknown` 추가.
+2. `const shiftedPt = new k.maps.Point(pxs[i].x + nx*offsetPx, pxs[i].y + ny*offsetPx)` — plain object → 인스턴스 wrap.
+3. `proj.coordsFromContainerPoint(shiftedPt)` 호출.
+4. `renderRoute()` 의 `k` destructure 에도 `Point` 타입 추가 (caller 와 매칭).
+
+## 검증 (통합)
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 666 tests** — 회귀 0.
+- `cd frontend && npm run build` ✓ vue-tsc + vite 28.80s.
+- `cd frontend && npm run lint` — 본 fix + 직전 task #18/#19 모두 클린. SavedPage.spec.ts 사전 결함 미터치.
+
+## 교훈
+카카오 SDK projection API 입력은 **항상 `kakao.maps.Point` 인스턴스로 wrap**. plain `{x,y}` 가 가능하다는 문서가 있어도 build 환경에 따라 fail.
+
+## 변경 파일 (1건, team-lead 직접 적용)
+- (M) `frontend/src/components/map/KakaoMap.vue`
+
+---
+
+# Task #21 — Chevron per-section fix
+
+team-lead 가 사용자 follow-up 후 직접 적용한 fix. 본 메모는 통합 보고용 기록.
+
+## 증상
+"겹치는 경로 두 line 은 분리됐는데 chevron 이 한쪽에만 표시됨"
+
+## 원인
+`renderRoute()` 의 chevron 패스가 sections loop **밖** 에서 flat `props.routePath`(offset 0) 위에만 그려졌음. 각 section 은 perpendicular offset(±2~6px) 으로 밀려 그려지는데 chevron 은 가운데 path 에 떠 있어 두 polyline 사이 중간에 배치 → 시각적으로 한쪽으로 치우쳐 보이는 증상.
+
+## team-lead 의 fix (`KakaoMap.vue` 단일)
+1. Chevron 로직을 `drawChevronsOnPath(coords, proj, k, intervalPx)` 헬퍼로 추출. segment 단위 walk + 누적 픽셀 거리(acc) 보간 로직 그대로.
+2. Sections loop 안 polyline 그린 직후 같은 shifted coords 로 `drawChevronsOnPath(shifted, ...)` 호출 — 각 leg 마다 자기 폴리라인 위에 chevron + bearing 도 shifted 좌표 기준이라 회전된 라인의 진행 방향과 일치.
+3. 가운데 flat path 의 단일 chevron 패스 제거.
+
+## 결과
+두 leg 가 겹치는 코스에서도 각 polyline 위에 chevron 이 자기 라인을 따라 진행 방향을 가리킴. n=1(단일 leg) 케이스도 그대로 — offset 0 의 폴리라인 위에 chevron.
+
+## 검증 (통합)
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 666 tests** — 회귀 0.
+- `cd frontend && npm run build` ✓ vue-tsc + vite 28.95s.
+- `cd frontend && npm run lint` — touched files 모두 클린.
+
+## 변경 파일 (1건, team-lead 직접 적용)
+- (M) `frontend/src/components/map/KakaoMap.vue`

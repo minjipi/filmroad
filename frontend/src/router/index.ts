@@ -87,6 +87,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/profile/routes',
+    name: 'ProfileRoutes',
+    component: () => import('../views/SavedRoutesPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/camera',
     name: 'Camera',
     component: () => import('../views/CameraPage.vue'),
@@ -149,6 +155,17 @@ const routes: Array<RouteRecordRaw> = [
     path: '/search',
     name: 'Search',
     component: () => import('../views/SearchPage.vue'),
+  },
+  {
+    // 여행 루트 짜기 — collectionId 가 있으면 기존 컬렉션 편집, 없으면 신규.
+    // contentId / contentTitle query 로 진입 시 해당 작품의 성지 N개 시드.
+    // (실제 구현은 task #7. 현재는 stub 페이지 — 백엔드 task #6 완료 후 frontend
+    //  task #7 가 본 컴포넌트로 채움.)
+    path: '/route/:collectionId?',
+    name: 'TripRoute',
+    component: () => import('../views/TripRoutePage.vue'),
+    props: true,
+    meta: { requiresAuth: true },
   },
 ];
 

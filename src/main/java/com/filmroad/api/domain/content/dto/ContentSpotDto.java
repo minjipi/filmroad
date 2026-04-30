@@ -13,6 +13,8 @@ public class ContentSpotDto {
     private Long placeId;
     private String name;
     private String regionShort;
+    private String regionLabel;
+    private String address;
     private List<String> coverImageUrls;
     /**
      * 작품 씬 목록 — `imageOrderIndex` ASC. 회차/타임스탬프/설명/이미지URL 4종 모두 PlaceSceneDto 안.

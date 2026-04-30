@@ -63,7 +63,8 @@ class KakaoPlaceInfoServiceTest {
     void setUp() throws Exception {
         properties = new KakaoLocalProperties(
                 "test-key",
-                new KakaoLocalProperties.Local("https://dapi.kakao.com", 3000, 24, 500)
+                new KakaoLocalProperties.Local("https://dapi.kakao.com", 3000, 24, 500),
+                new KakaoLocalProperties.Mobility("https://apis-navi.kakaomobility.com", 5000)
         );
         // KakaoLocalProperties는 record라 @InjectMocks가 채워주지 않음 → 리플렉션으로 주입.
         Field f = KakaoPlaceInfoService.class.getDeclaredField("properties");
