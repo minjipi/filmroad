@@ -439,37 +439,20 @@ function onCloseMoreSheet(): void {
   moreSheetOpen.value = false;
 }
 
+/**
+ * `<FeedMoreSheet>` 의 `:is-own` prop — 현재 더보기 시트가 viewer 본인 글에
+ * 열린 건지 판정. true 면 시트가 "수정/삭제" 액션 노출, false 면 신고/공유 만
+ * 노출. moreSheetTarget 이 비었으면 false (방어).
+ *
+ * (이전 actionSheetController 기반 onMore 로직은 FeedMoreSheet 컴포넌트로
+ *  대체됐고 reorganize 흔적으로 broken stub 이 남아 있었음 — 정리.)
+ */
 const moreSheetIsOwn = computed<boolean>(() => {
+  const target = moreSheetTarget.value;
+  if (!target) return false;
   const myId = authStore.user?.id ?? null;
-  const isMe = myId != null && p.author.userId === myId;
-  if (!isMe) {
-    await showInfo('더보기 메뉴는 곧 공개됩니다');
-    return;
-  }
-  const sheet = await actionSheetController.create({
-    header: '인증샷',
-    buttons: [
-      {
-        text: '수정',
-        icon: createOutline,
-        handler: () => {
-          // 같은 페이지 안에서 카드 anchor 만 갱신 — replace 로 history 오염 X.
-          void router.replace({ path: '/feed/detail', query: { ...route.query, shotId: String(p.id) } });
-        },
-      },
-      {
-        text: '삭제',
-        role: 'destructive',
-        icon: trashOutline,
-        handler: () => {
-          void confirmDelete(p.id);
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
-}
+  return myId != null && target.author.userId === myId;
+});
 
 async function confirmDelete(postId: number): Promise<void> {
   const alert = await alertController.create({
