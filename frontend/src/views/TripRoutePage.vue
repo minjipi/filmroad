@@ -122,7 +122,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, onIonViewDidEnter } from '@ionic/vue';
 import {
   add,
   chevronBack,
@@ -323,6 +323,17 @@ onMounted(async () => {
   // 401 / 권한 없음 / 응답 shape 오류 등으로 store.error 가 세팅됐으면 토스트.
   // 페이지 자체는 빈 코스로 살아있어 사용자가 검색/뒤로/+/-/내위치 모두 사용 가능.
   if (tripRouteStore.error) void showError(tripRouteStore.error);
+});
+
+/**
+ * task #22 — Ionic stack-preserved page. 카메라/업로드 다녀와 재진입할 때 onMounted
+ * 가 다시 안 발동될 수 있어 visited 가 stale 로 남는다. ionViewDidEnter 는 매 진입
+ * 마다 발동하므로 saved route 인 경우 visited 만 silent 갱신.
+ */
+onIonViewDidEnter(() => {
+  if (tripRouteStore.currentSavedRouteId != null) {
+    void tripRouteStore.refreshVisitedFromBackend();
+  }
 });
 
 onBeforeUnmount(() => {

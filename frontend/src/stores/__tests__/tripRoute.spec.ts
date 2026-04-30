@@ -42,6 +42,8 @@ function makePlace(over: Partial<TripPlace> = {}): TripPlace {
     coverImageUrl: null,
     sceneImageUrl: null,
     durationMin: 60,
+    visited: false,
+    visitedAt: null,
     ...over,
   };
 }
@@ -58,6 +60,8 @@ function makeInitPlace(over: Partial<RouteInitPlace> = {}): RouteInitPlace {
     sceneImageUrl: null,
     durationMin: 60,
     rating: null,
+    visited: false,
+    visitedAt: null,
     ...over,
   };
 }
@@ -104,6 +108,8 @@ function makeSavedDetail(over: Partial<SavedRouteDetail> = {}): SavedRouteDetail
         coverImageUrl: null,
         sceneImageUrl: null,
         rating: 4.6,
+        visited: true,
+        visitedAt: '2026-04-15T11:00:00Z',
       },
       {
         placeId: 70002,
@@ -118,6 +124,8 @@ function makeSavedDetail(over: Partial<SavedRouteDetail> = {}): SavedRouteDetail
         coverImageUrl: null,
         sceneImageUrl: null,
         rating: 4.4,
+        visited: false,
+        visitedAt: null,
       },
     ],
     createdAt: '2026-04-30T10:00:00Z',
@@ -557,6 +565,98 @@ describe('tripRoute store', () => {
     expect(mockSaveRoute).not.toHaveBeenCalled();
     expect(mockUpdateRoute.mock.calls[0][0]).toBe(42);
     expect(store.currentSavedRouteId).toBe(42);
+  });
+
+  // ── task #22: visited refresh after camera return ─────────────────
+  it('seedFromSavedRoute respects noop guard but force:true refetches', async () => {
+    mockLoadRoute.mockResolvedValue(makeSavedDetail({ id: 42 }));
+    const store = useTripRouteStore();
+    await store.seedFromSavedRoute(42);
+    expect(mockLoadRoute).toHaveBeenCalledTimes(1);
+
+    // 같은 routeId 재호출 → noop
+    await store.seedFromSavedRoute(42);
+    expect(mockLoadRoute).toHaveBeenCalledTimes(1);
+
+    // force:true → 우회해서 재fetch
+    await store.seedFromSavedRoute(42, { force: true });
+    expect(mockLoadRoute).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshVisitedFromBackend mutates only visited/visitedAt, preserves placeIds + notes', async () => {
+    mockLoadRoute.mockResolvedValueOnce(makeSavedDetail({ id: 42 }));
+    const store = useTripRouteStore();
+    await store.seedFromSavedRoute(42);
+    expect(store.placesById[70001].visited).toBe(true);
+    expect(store.placesById[70002].visited).toBe(false);
+    const initialIds = [...store.placeIds];
+    const initialNote = store.notes[70001];
+
+    // backend 가 두 번째 place 도 인증된 상태로 응답.
+    mockLoadRoute.mockResolvedValueOnce(
+      makeSavedDetail({
+        id: 42,
+        items: [
+          { placeId: 70001, orderIndex: 0, durationMin: 90, note: '벚꽃 좋음', name: '남이섬', regionLabel: '강원 춘천', address: null, latitude: 37.79, longitude: 127.525, coverImageUrl: null, sceneImageUrl: null, rating: 4.6, visited: true, visitedAt: '2026-04-15T11:00:00Z' },
+          { placeId: 70002, orderIndex: 1, durationMin: 60, note: null, name: '강촌 레일파크', regionLabel: '강원 춘천', address: null, latitude: 37.8237, longitude: 127.6151, coverImageUrl: null, sceneImageUrl: null, rating: 4.4, visited: true, visitedAt: '2026-04-30T16:00:00Z' },
+        ],
+      }),
+    );
+
+    await store.refreshVisitedFromBackend();
+
+    expect(store.placesById[70002].visited).toBe(true);
+    expect(store.placesById[70002].visitedAt).toBe('2026-04-30T16:00:00Z');
+    // 다른 mutable state 보존 — placeIds 순서, notes.
+    expect(store.placeIds).toEqual(initialIds);
+    expect(store.notes[70001]).toBe(initialNote);
+  });
+
+  it('refreshVisitedFromBackend is a noop when currentSavedRouteId is null', async () => {
+    const store = useTripRouteStore();
+    expect(store.currentSavedRouteId).toBeNull();
+    await store.refreshVisitedFromBackend();
+    expect(mockLoadRoute).not.toHaveBeenCalled();
+  });
+
+  it('refreshVisitedFromBackend silently swallows fetch failure (no throw)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(makeSavedDetail({ id: 42 }));
+    const store = useTripRouteStore();
+    await store.seedFromSavedRoute(42);
+
+    mockLoadRoute.mockRejectedValueOnce(new Error('boom'));
+    await expect(store.refreshVisitedFromBackend()).resolves.toBeUndefined();
+    // 실패해도 currentSavedRouteId 유지(다음 재진입 때 재시도).
+    expect(store.currentSavedRouteId).toBe(42);
+  });
+
+  // ── task #21: visited 노출 ─────────────────────────────────────────
+  it('seedFromContent maps RouteInitPlace.visited / visitedAt into TripPlace', async () => {
+    mockFetchRouteInit.mockResolvedValueOnce(
+      makeInitResponse([
+        makeInitPlace({ placeId: 1, visited: true, visitedAt: '2026-04-30T01:23:45Z' }),
+        makeInitPlace({ placeId: 2, visited: false, visitedAt: null }),
+      ]),
+    );
+    const store = useTripRouteStore();
+    await store.seedFromContent(1, '겨울연가');
+
+    expect(store.placesById[1].visited).toBe(true);
+    expect(store.placesById[1].visitedAt).toBe('2026-04-30T01:23:45Z');
+    expect(store.placesById[2].visited).toBe(false);
+    expect(store.placesById[2].visitedAt).toBeNull();
+  });
+
+  it('seedFromSavedRoute maps SavedRouteItem.visited / visitedAt into TripPlace', async () => {
+    mockLoadRoute.mockResolvedValueOnce(makeSavedDetail());
+    const store = useTripRouteStore();
+    await store.seedFromSavedRoute(42);
+
+    // makeSavedDetail 의 첫 item 은 visited=true, 두번째는 false.
+    expect(store.placesById[70001].visited).toBe(true);
+    expect(store.placesById[70001].visitedAt).toBe('2026-04-15T11:00:00Z');
+    expect(store.placesById[70002].visited).toBe(false);
+    expect(store.placesById[70002].visitedAt).toBeNull();
   });
 
   it('saveCurrentRoute throws when placeIds is empty (no API call)', async () => {

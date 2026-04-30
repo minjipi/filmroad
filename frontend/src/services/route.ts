@@ -57,6 +57,10 @@ export interface RouteInitPlace {
   sceneImageUrl: string | null;
   durationMin: number;
   rating: number | null;
+  /** 코스 소유자(또는 비로그인 시 false) 의 stamp 기준 방문 여부. */
+  visited: boolean;
+  /** 가장 최근 인증 시각(ISO). visited=false 면 null. */
+  visitedAt: string | null;
 }
 
 export interface RouteInitResponse {
@@ -125,6 +129,10 @@ export interface SavedRouteItem {
   coverImageUrl: string | null;
   sceneImageUrl: string | null;
   rating: number | null;
+  /** 코스 소유자의 stamp 기준 방문 여부. */
+  visited: boolean;
+  /** 가장 최근 인증 시각(ISO). visited=false 면 null. */
+  visitedAt: string | null;
 }
 
 /** `GET /api/route/me` 결과의 카드 요약. */

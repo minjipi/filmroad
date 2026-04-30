@@ -1,9 +1,12 @@
 package com.filmroad.api.domain.route.dto;
 
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.stamp.Stamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
+
+import java.util.Date;
 
 @Getter
 @Builder
@@ -22,7 +25,13 @@ public class RouteInitPlaceDto {
     private int durationMin;
     private double rating;
 
-    public static RouteInitPlaceDto from(Place p) {
+    @Schema(description = "현재 사용자가 인증샷(Stamp) 을 보유한 장소면 true. 비로그인은 항상 false.")
+    private boolean visited;
+
+    @Schema(description = "visited=true 일 때 stamp 획득 시각, 아니면 null.")
+    private Date visitedAt;
+
+    public static RouteInitPlaceDto from(Place p, Stamp stamp) {
         return RouteInitPlaceDto.builder()
                 .placeId(p.getId())
                 .name(p.getName())
@@ -34,6 +43,8 @@ public class RouteInitPlaceDto {
                 .sceneImageUrl(p.getPrimarySceneImageUrl())
                 .durationMin(60)
                 .rating(p.getRating())
+                .visited(stamp != null)
+                .visitedAt(stamp == null ? null : stamp.getAcquiredAt())
                 .build();
     }
 }

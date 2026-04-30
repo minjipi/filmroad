@@ -11,11 +11,11 @@ const { routeInitFixture } = vi.hoisted(() => ({
     suggestedName: '겨울연가 코스',
     suggestedStartTime: '09:00',
     places: [
-      { placeId: 90001, name: '남이섬', regionLabel: '강원 춘천 남산면', address: null, latitude: 37.7903, longitude: 127.5253, coverImageUrl: null, sceneImageUrl: null, durationMin: 120, rating: 4.6 },
-      { placeId: 90002, name: '강촌 레일파크', regionLabel: '강원 춘천 신동면', address: null, latitude: 37.8237, longitude: 127.6151, coverImageUrl: null, sceneImageUrl: null, durationMin: 90, rating: 4.5 },
-      { placeId: 90003, name: '명동 닭갈비', regionLabel: '강원 춘천 명동', address: null, latitude: 37.8813, longitude: 127.7299, coverImageUrl: null, sceneImageUrl: null, durationMin: 75, rating: 4.7 },
-      { placeId: 90004, name: '소양강 스카이워크', regionLabel: '강원 춘천 근화동', address: null, latitude: 37.8961, longitude: 127.7129, coverImageUrl: null, sceneImageUrl: null, durationMin: 45, rating: 4.3 },
-      { placeId: 90005, name: '구봉산 전망대', regionLabel: '강원 춘천 동면', address: null, latitude: 37.9023, longitude: 127.7826, coverImageUrl: null, sceneImageUrl: null, durationMin: 60, rating: 4.8 },
+      { placeId: 90001, name: '남이섬', regionLabel: '강원 춘천 남산면', address: null, latitude: 37.7903, longitude: 127.5253, coverImageUrl: null, sceneImageUrl: null, durationMin: 120, rating: 4.6, visited: false, visitedAt: null },
+      { placeId: 90002, name: '강촌 레일파크', regionLabel: '강원 춘천 신동면', address: null, latitude: 37.8237, longitude: 127.6151, coverImageUrl: null, sceneImageUrl: null, durationMin: 90, rating: 4.5, visited: false, visitedAt: null },
+      { placeId: 90003, name: '명동 닭갈비', regionLabel: '강원 춘천 명동', address: null, latitude: 37.8813, longitude: 127.7299, coverImageUrl: null, sceneImageUrl: null, durationMin: 75, rating: 4.7, visited: false, visitedAt: null },
+      { placeId: 90004, name: '소양강 스카이워크', regionLabel: '강원 춘천 근화동', address: null, latitude: 37.8961, longitude: 127.7129, coverImageUrl: null, sceneImageUrl: null, durationMin: 45, rating: 4.3, visited: false, visitedAt: null },
+      { placeId: 90005, name: '구봉산 전망대', regionLabel: '강원 춘천 동면', address: null, latitude: 37.9023, longitude: 127.7826, coverImageUrl: null, sceneImageUrl: null, durationMin: 60, rating: 4.8, visited: false, visitedAt: null },
     ],
   },
 }));
@@ -49,12 +49,21 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: queryRef.value, params: {} }),
 }));
 
-const { toastCreateSpy } = vi.hoisted(() => ({
+const { toastCreateSpy, ionViewEnterCb } = vi.hoisted(() => ({
   toastCreateSpy: vi.fn().mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }),
+  // jsdom 에선 Ionic 라우터 lifecycle 이 자동 발동 안 함. 등록된 callback 을 잡아
+  // 테스트에서 수동으로 부른다.
+  ionViewEnterCb: { current: null as (() => void) | null },
 }));
 vi.mock('@ionic/vue', async () => {
   const actual = await vi.importActual<typeof import('@ionic/vue')>('@ionic/vue');
-  return { ...actual, toastController: { create: toastCreateSpy } };
+  return {
+    ...actual,
+    toastController: { create: toastCreateSpy },
+    onIonViewDidEnter: (cb: () => void) => {
+      ionViewEnterCb.current = cb;
+    },
+  };
 });
 
 // KakaoMap 은 jsdom 에서 SDK 를 못 띄우므로 가벼운 stub 으로 대체. 실제 props
@@ -171,5 +180,29 @@ describe('TripRoutePage.vue', () => {
     await flushPromises();
     await wrapper.find('[data-testid="tr-back"]').trigger('click');
     expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // ── task #22: visited refresh on Ionic re-enter ───────────────────────
+  it('onIonViewDidEnter refreshes visited from backend when there is a saved route', async () => {
+    mountPage({ contentId: '1', contentTitle: '겨울연가' });
+    await flushPromises();
+    const store = useTripRouteStore();
+    store.currentSavedRouteId = 42;
+    const refreshSpy = vi.spyOn(store, 'refreshVisitedFromBackend').mockResolvedValue();
+
+    expect(ionViewEnterCb.current).toBeTypeOf('function');
+    ionViewEnterCb.current?.();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('onIonViewDidEnter is a noop when no saved route is loaded', async () => {
+    mountPage({ contentId: '1', contentTitle: '겨울연가' });
+    await flushPromises();
+    const store = useTripRouteStore();
+    expect(store.currentSavedRouteId).toBeNull();
+    const refreshSpy = vi.spyOn(store, 'refreshVisitedFromBackend').mockResolvedValue();
+
+    ionViewEnterCb.current?.();
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 });

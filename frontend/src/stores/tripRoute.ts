@@ -40,6 +40,9 @@ export interface TripPlace {
   openHours?: string | null;
   price?: string | null;
   rating?: number | null;
+  /** task #21: 방문 인증 여부 + 마지막 인증 시각. backend `visited/visitedAt` 와 1:1. */
+  visited: boolean;
+  visitedAt: string | null;
 }
 
 interface State {
@@ -115,6 +118,8 @@ function initPlaceToTripPlace(
     openHours: null,
     price: null,
     rating: p.rating,
+    visited: Boolean(p.visited),
+    visitedAt: p.visitedAt ?? null,
   };
 }
 
@@ -143,6 +148,8 @@ function savedItemToTripPlace(
     openHours: null,
     price: null,
     rating: item.rating,
+    visited: Boolean(item.visited),
+    visitedAt: item.visitedAt ?? null,
   };
 }
 
@@ -164,6 +171,8 @@ const MOCK_SEARCH_SUGGESTIONS: TripPlace[] = [
     sceneImageUrl: null,
     durationMin: 90,
     rating: 4.2,
+    visited: false,
+    visitedAt: null,
   },
   {
     id: 90012,
@@ -177,6 +186,8 @@ const MOCK_SEARCH_SUGGESTIONS: TripPlace[] = [
     sceneImageUrl: null,
     durationMin: 60,
     rating: 4.4,
+    visited: false,
+    visitedAt: null,
   },
   {
     id: 90013,
@@ -190,6 +201,8 @@ const MOCK_SEARCH_SUGGESTIONS: TripPlace[] = [
     sceneImageUrl: null,
     durationMin: 60,
     rating: 4.5,
+    visited: false,
+    visitedAt: null,
   },
 ];
 
@@ -324,8 +337,19 @@ export const useTripRouteStore = defineStore('tripRoute', {
      * 진입 흐름. 기존 시드/coursesById 모두 폐기하고 hydrated items 로 다시
      * 빌드. routeId 가 같으면 noop(사용자 손길 보존).
      */
-    async seedFromSavedRoute(routeId: number): Promise<void> {
-      if (this.currentSavedRouteId === routeId && this.placeIds.length > 0) return;
+    async seedFromSavedRoute(
+      routeId: number,
+      options?: { force?: boolean },
+    ): Promise<void> {
+      // 기본은 같은 routeId + 비어있지 않은 코스에 대해 noop(사용자 손길 보존).
+      // force:true 면 backend 의 visited/place 변동을 즉시 끌어오기 위해 우회.
+      if (
+        !options?.force &&
+        this.currentSavedRouteId === routeId &&
+        this.placeIds.length > 0
+      ) {
+        return;
+      }
       this.placesById = {};
       this.notes = {};
       this.placeIds = [];
@@ -357,6 +381,30 @@ export const useTripRouteStore = defineStore('tripRoute', {
         this.error = e instanceof Error ? e.message : '저장된 코스를 불러올 수 없어요';
       } finally {
         this.loading = false;
+      }
+    },
+
+    /**
+     * 카메라/업로드 다녀와 page 가 재진입될 때 호출. reseed 안 하고 visited/
+     * visitedAt 만 backend 의 최신 stamp 기준으로 갱신 — placeIds 순서 / notes /
+     * currentSavedRouteId 모두 보존. currentSavedRouteId 가 없으면 noop. fetch
+     * 실패는 silent (보조 정보, 사용자 흐름 막지 않음).
+     */
+    async refreshVisitedFromBackend(): Promise<void> {
+      const id = this.currentSavedRouteId;
+      if (id == null) return;
+      try {
+        const data = await loadRoute(id);
+        const items = Array.isArray(data?.items) ? data.items : [];
+        for (const it of items) {
+          const p = this.placesById[it.placeId];
+          if (p) {
+            p.visited = Boolean(it.visited);
+            p.visitedAt = it.visitedAt ?? null;
+          }
+        }
+      } catch {
+        /* silent — 재시도는 다음 진입 때 자동. */
       }
     },
 

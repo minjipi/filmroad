@@ -99,9 +99,19 @@ app:
     # 차단해 CSRF 보호는 유지. Strict 로 두면 OAuth redirect callback(Google/Kakao → 우리 백엔드)
     # 에서 쿠키가 떨어져 세션이 끊기므로 Lax 사용.
     # 운영에서는 APP_TOKEN_ACCESS_FORMAT / APP_TOKEN_REFRESH_FORMAT 환경변수로
-    # Domain=.yourdomain.com 등 실도메인을 덮어쓴다.
-    access-format: "ATOKEN=%s; HttpOnly; Secure; SameSite=Lax; Domain=localhost; Path=/; Max-Age=%d"
-    refresh-format: "RTOKEN=%s; HttpOnly; Secure; SameSite=Lax; Domain=localhost; Path=/; Max-Age=%d"
+    # Domain=.yourdomain.com 등 실도메인 + Secure 를 덮어쓴다.
+    #
+    # dev 환경 주의 — 이전 포맷에 박혀 있던 `Secure` / `Domain=localhost` 두 개를
+    # 제거. 두 속성이 같이 있으면 다음 두 케이스에서 브라우저가 Set-Cookie 를 통째로
+    # drop:
+    #   1) `Secure` — HTTP 위에서는 무시(Chrome 만 localhost 호스트 한정 예외, Firefox/
+    #      Safari 는 그것도 미지원). 127.0.0.1 / WSL IP 로 접속하면 Chrome 도 거절.
+    #   2) `Domain=localhost` — 응답 host(예: 172.30.1.10) 와 매칭되지 않으면 쿠키 저장
+    #      자체가 안 됨.
+    # 둘 다 빼면 브라우저가 응답 host 를 default Domain 으로 사용 → localhost 든 WSL IP
+    # 든 동일하게 동작. HttpOnly / SameSite=Lax / Path 는 dev 에도 유지(보안 + CSRF 방어).
+    access-format: "ATOKEN=%s; HttpOnly; SameSite=Lax; Path=/; Max-Age=%d"
+    refresh-format: "RTOKEN=%s; HttpOnly; SameSite=Lax; Path=/; Max-Age=%d"
 
 management:
   endpoints:

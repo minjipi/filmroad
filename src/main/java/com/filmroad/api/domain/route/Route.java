@@ -74,9 +74,22 @@ public class Route extends BaseEntity {
     /**
      * places 리스트 통째 교체. orphanRemoval 로 기존 RoutePlace 가 cascade 삭제되고,
      * 새 RoutePlace 들은 양방향 연결을 보장.
+     *
+     * <p><b>주의</b>: 기존 places 가 있는 Route 를 update 할 때는 단일 flush 안에서
+     * Hibernate 가 INSERT 를 먼저, DELETE 를 나중에 처리해 `(route_id, order_index)`
+     * 유니크 제약과 충돌한다. 그런 케이스에서는 {@link #clearPlaces()} → repository flush →
+     * {@link #addPlaces(List)} 로 단계를 쪼개 사용한다 (Service 책임).</p>
      */
     public void replacePlaces(List<RoutePlace> next) {
+        clearPlaces();
+        addPlaces(next);
+    }
+
+    public void clearPlaces() {
         this.places.clear();
+    }
+
+    public void addPlaces(List<RoutePlace> next) {
         for (RoutePlace rp : next) {
             rp.attachToRoute(this);
             this.places.add(rp);

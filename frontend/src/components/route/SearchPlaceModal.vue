@@ -210,6 +210,10 @@ const searchResults = computed<TripPlace[]>(() =>
       coverImageUrl: r.coverImageUrls[0] ?? null,
       sceneImageUrl: r.sceneImageUrl ?? null,
       durationMin: 60,
+      // 검색 결과는 backend visited 정보 없음 — 사용자가 코스에 추가한 후
+      // 다음 init/load 에서 backend 가 채워준다. 기본값 false/null.
+      visited: false,
+      visitedAt: null,
     })),
 );
 </script>

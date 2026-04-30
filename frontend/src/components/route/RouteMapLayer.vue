@@ -11,7 +11,7 @@
     :zoom="effectiveZoom"
     :markers="markers"
     :selected-id="activeId"
-    :visited-ids="[]"
+    :visited-ids="visitedIds"
     :user-location="userLocation"
     :route-path="effectiveRoutePath"
     :route-sections="routeSections"
@@ -92,6 +92,11 @@ const effectiveRoutePath = computed(() => {
   if (props.routePath && props.routePath.length >= 2) return props.routePath;
   return props.places.map((p) => ({ lat: p.latitude, lng: p.longitude }));
 });
+
+/** task #21 — visited 인 place id 목록. KakaoMap 의 buildPinContent 에서 ✓ 표기. */
+const visitedIds = computed<number[]>(() =>
+  props.places.filter((p) => p.visited).map((p) => p.id),
+);
 
 /** 모든 코스 점이 한 화면에 들어오게 fitBounds. 0~1 점이면 KakaoMap 측이 조용히 폴백. */
 const fitTo = computed(() =>

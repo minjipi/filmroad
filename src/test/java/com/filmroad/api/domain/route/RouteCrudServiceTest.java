@@ -12,6 +12,8 @@ import com.filmroad.api.domain.route.dto.RouteCreateRequest;
 import com.filmroad.api.domain.route.dto.RouteInitResponse;
 import com.filmroad.api.domain.route.dto.RouteItemRequest;
 import com.filmroad.api.domain.route.dto.RouteResponse;
+import com.filmroad.api.domain.stamp.Stamp;
+import com.filmroad.api.domain.stamp.StampRepository;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +26,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,6 +54,7 @@ class RouteCrudServiceTest {
     @Mock private PlaceRepository placeRepository;
     @Mock private ContentRepository contentRepository;
     @Mock private UserRepository userRepository;
+    @Mock private StampRepository stampRepository;
     @Mock private CurrentUser currentUser;
 
     @InjectMocks
@@ -87,20 +94,46 @@ class RouteCrudServiceTest {
     }
 
     @Test
-    @DisplayName("init: content + 정렬된 places, 추천 이름 = \"{title} 코스\", 출발 09:00")
-    void initFromContent_buildsResponse() {
+    @DisplayName("init anonymous: content + places + 모든 visited=false, 외부 stamp 호출 없음")
+    void initFromContent_anonymous_allVisitedFalse() {
+        when(currentUser.currentUserIdOrNull()).thenReturn(null);
         when(contentRepository.findById(5L)).thenReturn(Optional.of(content));
         when(placeRepository.findByContentIdOrderByIdAsc(5L)).thenReturn(List.of(place10, place11));
 
         RouteInitResponse response = service.initFromContent(5L);
 
         assertThat(response.getContent().getId()).isEqualTo(5L);
-        assertThat(response.getContent().getTitle()).isEqualTo("도깨비");
         assertThat(response.getSuggestedName()).isEqualTo("도깨비 코스");
         assertThat(response.getSuggestedStartTime()).isEqualTo("09:00");
         assertThat(response.getPlaces()).hasSize(2);
-        assertThat(response.getPlaces().get(0).getPlaceId()).isEqualTo(10L);
         assertThat(response.getPlaces().get(0).getDurationMin()).isEqualTo(60);
+        assertThat(response.getPlaces()).allMatch(p -> !p.isVisited() && p.getVisitedAt() == null);
+        verify(stampRepository, never()).findByUserIdAndContentId(any(), any());
+    }
+
+    @Test
+    @DisplayName("init logged-in: 일부 place 에 stamp → visited=true + visitedAt, 나머지 false")
+    void initFromContent_loggedInWithPartialStamps() {
+        when(currentUser.currentUserIdOrNull()).thenReturn(1L);
+        when(contentRepository.findById(5L)).thenReturn(Optional.of(content));
+        when(placeRepository.findByContentIdOrderByIdAsc(5L)).thenReturn(List.of(place10, place11));
+
+        Date acquired = Date.from(Instant.now().minus(2, ChronoUnit.DAYS));
+        Stamp stampForPlace10 = Stamp.builder()
+                .id(100L).user(userA).place(place10).acquiredAt(acquired).build();
+        when(stampRepository.findByUserIdAndContentId(1L, 5L)).thenReturn(List.of(stampForPlace10));
+
+        RouteInitResponse response = service.initFromContent(5L);
+
+        assertThat(response.getPlaces()).hasSize(2);
+        var first = response.getPlaces().get(0);
+        var second = response.getPlaces().get(1);
+        assertThat(first.getPlaceId()).isEqualTo(10L);
+        assertThat(first.isVisited()).isTrue();
+        assertThat(first.getVisitedAt()).isEqualTo(acquired);
+        assertThat(second.getPlaceId()).isEqualTo(11L);
+        assertThat(second.isVisited()).isFalse();
+        assertThat(second.getVisitedAt()).isNull();
     }
 
     @Test
@@ -214,12 +247,17 @@ class RouteCrudServiceTest {
     }
 
     @Test
-    @DisplayName("get: 본인 → RouteResponse, content 정보까지 응답")
-    void getRoute_owner_returnsResponse() {
+    @DisplayName("get: 본인 → RouteResponse, content 정보 + visited 플래그 채워짐")
+    void getRoute_owner_returnsResponseWithVisited() {
         when(currentUser.currentUserId()).thenReturn(1L);
         Route route = buildPersistedRoute(42L, userA, content, "코스", "09:00",
                 List.of(routePlace(place10, 0, 60, "메모"), routePlace(place11, 1, 90, null)));
         when(routeRepository.findById(42L)).thenReturn(Optional.of(route));
+
+        Date acquired = Date.from(Instant.now().minus(3, ChronoUnit.HOURS));
+        Stamp s10 = Stamp.builder().id(200L).user(userA).place(place10).acquiredAt(acquired).build();
+        when(stampRepository.findByUserIdAndPlaceIdIn(eq(1L), any(Collection.class)))
+                .thenReturn(List.of(s10));
 
         RouteResponse response = service.getRoute(42L);
 
@@ -228,8 +266,38 @@ class RouteCrudServiceTest {
         assertThat(response.getContentTitle()).isEqualTo("도깨비");
         assertThat(response.getItems()).hasSize(2);
         assertThat(response.getItems().get(0).getPlaceId()).isEqualTo(10L);
-        assertThat(response.getItems().get(0).getDurationMin()).isEqualTo(60);
-        assertThat(response.getItems().get(0).getNote()).isEqualTo("메모");
+        assertThat(response.getItems().get(0).isVisited()).isTrue();
+        assertThat(response.getItems().get(0).getVisitedAt()).isEqualTo(acquired);
+        assertThat(response.getItems().get(1).getPlaceId()).isEqualTo(11L);
+        assertThat(response.getItems().get(1).isVisited()).isFalse();
+        assertThat(response.getItems().get(1).getVisitedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("get: 본인이지만 stamp 없음 → 모든 item visited=false")
+    void getRoute_ownerNoStamps_allVisitedFalse() {
+        when(currentUser.currentUserId()).thenReturn(1L);
+        Route route = buildPersistedRoute(42L, userA, null, "코스", "09:00",
+                List.of(routePlace(place10, 0, 60, null)));
+        when(routeRepository.findById(42L)).thenReturn(Optional.of(route));
+        when(stampRepository.findByUserIdAndPlaceIdIn(eq(1L), any(Collection.class)))
+                .thenReturn(List.of());
+
+        RouteResponse response = service.getRoute(42L);
+        assertThat(response.getItems().get(0).isVisited()).isFalse();
+        assertThat(response.getItems().get(0).getVisitedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("get: places 빈 코스 → stamp 호출 없이 빈 items")
+    void getRoute_emptyPlaces_skipsStampQuery() {
+        when(currentUser.currentUserId()).thenReturn(1L);
+        Route route = buildPersistedRoute(42L, userA, null, "x", "09:00", List.of());
+        when(routeRepository.findById(42L)).thenReturn(Optional.of(route));
+
+        RouteResponse response = service.getRoute(42L);
+        assertThat(response.getItems()).isEmpty();
+        verify(stampRepository, never()).findByUserIdAndPlaceIdIn(any(), any());
     }
 
     @Test
@@ -272,7 +340,7 @@ class RouteCrudServiceTest {
     }
 
     @Test
-    @DisplayName("update: 본인 → 메타 + items 통째 교체")
+    @DisplayName("update: 본인 → 메타 + items 통째 교체, 응답에 visited 채워짐")
     void updateRoute_owner_replacesPlaces() {
         when(currentUser.currentUserId()).thenReturn(1L);
         Route route = buildPersistedRoute(42L, userA, null, "old", "08:00",
@@ -280,6 +348,8 @@ class RouteCrudServiceTest {
         when(routeRepository.findById(42L)).thenReturn(Optional.of(route));
         when(contentRepository.findById(5L)).thenReturn(Optional.of(content));
         when(placeRepository.findAllById(anySet())).thenReturn(List.of(place10, place11));
+        when(stampRepository.findByUserIdAndPlaceIdIn(eq(1L), any(Collection.class)))
+                .thenReturn(List.of());
 
         RouteCreateRequest req = buildCreateRequest("new", "11:00", 5L,
                 List.of(item(11L, 0, 30, "new-note"), item(10L, 1, 45, null)));
@@ -293,6 +363,7 @@ class RouteCrudServiceTest {
         assertThat(response.getItems().get(0).getPlaceId()).isEqualTo(11L);
         assertThat(response.getItems().get(0).getDurationMin()).isEqualTo(30);
         assertThat(response.getItems().get(0).getNote()).isEqualTo("new-note");
+        assertThat(response.getItems().get(0).isVisited()).isFalse();
     }
 
     @Test

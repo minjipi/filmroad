@@ -956,3 +956,64 @@ task #8 구현에서 `body.put("summary", true)` 로 둔 것이 잘못. summary 
 3. **빈 sectionPath skip**: 카카오가 인접 두 좌표가 너무 가까울 때 빈 section 을 돌려주는 케이스를 봤다. parseRoute 에서 `!sectionPath.isEmpty()` 가드로 sections 에 push 안 함. flat path 도 동일하게 영향 없음. 이 경우 `sections.length` 가 `waypoints.length + 1` 보다 작아질 수 있어 프론트는 길이를 신뢰하기보다 sections 자체를 iterate 하는 편이 안전.
 4. **commit 보류**: task #2~#17 묶어 단일 commit (team-lead 지시).
 
+---
+
+# Task #20 — Visited flag on route DTOs (feat/trip-route-frontend)
+
+## 작업 범위
+프론트 trip route 화면에서 인증샷 보유 장소를 표시하기 위해 `RouteInitPlaceDto` / `SavedRouteItemDto` 에 `visited`, `visitedAt` 필드 추가. 익명 init 은 항상 `false`.
+
+## 변경된 파일
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteInitPlaceDto.java`
+  - `boolean visited`, `Date visitedAt` 필드 추가.
+  - factory 시그니처: `from(Place)` → `from(Place, Stamp)` (Stamp null OK → false).
+- `src/main/java/com/filmroad/api/domain/route/dto/SavedRouteItemDto.java`
+  - 동일 두 필드 + factory `from(RoutePlace, Stamp)`.
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteResponse.java`
+  - factory: `from(Route)` → `from(Route, Map<Long, Stamp>)`. items 매핑 시 stamp lookup.
+- `src/main/java/com/filmroad/api/domain/route/RouteCrudService.java`
+  - `StampRepository` 의존 추가.
+  - `initFromContent(contentId)`: `currentUser.currentUserIdOrNull()` 로 분기 — 비로그인이면 빈 맵, 로그인이면 `stampRepository.findByUserIdAndContentId` 1회 호출 → placeId 인덱스.
+  - `getRoute / updateRoute`: `ownerStamps(route, userId)` 헬퍼로 `findByUserIdAndPlaceIdIn(userId, placeIds)` 1회 호출 → stamp 맵 → `RouteResponse.from(route, map)`. 빈 places 면 외부 호출 skip.
+  - `indexStamps(List<Stamp>)`: placeId → Stamp 매핑 헬퍼.
+- `src/main/java/com/filmroad/api/domain/route/Route.java`
+  - `replacePlaces(List)` 의 내부를 `clearPlaces()` + `addPlaces(List)` 로 분리. createRoute 같은 신규 경로는 그대로 `replacePlaces` 호출.
+  - 사유: 기존 places 가 있는 Route 를 update 할 때 한 flush 안에서 INSERT 가 DELETE 보다 먼저 실행돼 `(route_id, order_index)` 유니크 제약과 충돌. updateRoute 는 `clear → flush → add` 단계로 쪼개 orphan 삭제를 먼저 DB 에 반영.
+  - 이전엔 update 응답에서 추가 SELECT 가 없어 commit 시점 flush 전 에 add 결과까지 메모리에 모아두고 H2 가 batch 처리해 우연히 통과했지만, 이제 `ownerStamps()` 의 SELECT 가 auto-flush 를 트리거해 잠재 버그가 표면화. update 자체의 정합성을 위한 영구 fix.
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/route/RouteCrudServiceTest.java`
+  - StampRepository mock 추가.
+  - init: `initFromContent_anonymous_allVisitedFalse` (기존 happy 대체) + `initFromContent_loggedInWithPartialStamps` 추가 — anonymous 는 stamp 호출 없음 검증, 일부 stamp 시 visited true/false 분리 확인.
+  - get: `getRoute_owner_returnsResponseWithVisited` (기존 happy 대체) + `getRoute_ownerNoStamps_allVisitedFalse` + `getRoute_emptyPlaces_skipsStampQuery` 추가.
+  - update: 본인 update 테스트가 stamp 빈 응답 스텁 + visited=false 검증 추가.
+- 신규 테스트 케이스 총 +3 (RouteCrudServiceTest 15 → 18).
+
+## 프론트 contract (변경)
+```json
+GET /api/route/init?contentId=2
+→ { "results": { ..., "places": [{ ..., "visited": bool, "visitedAt": "ISO8601|null" }, ...] } }
+
+GET /api/route/{id}
+→ { "results": { ..., "items":  [{ ..., "visited": bool, "visitedAt": "ISO8601|null" }, ...] } }
+```
+- 비로그인 init 호출 → 모든 place `visited=false`, `visitedAt=null`.
+- 코스 단건 GET 은 owner 한정이므로 코스 소유자의 stamp 가 기준 — 다른 사용자의 stamp 는 영향 없음 (`findByUserIdAndPlaceIdIn` 의 userId 필터).
+
+## 마이그레이션 안전성
+- 스키마 변경 없음 — 기존 `stamp` 테이블만 조회.
+- DTO 응답에 필드 추가 — 기존 클라이언트는 모르는 필드를 무시할 수 있어 호환성 유지.
+
+## 테스트
+- `./gradlew build` (WSL 우회) → BUILD SUCCESSFUL (2m 56s)
+- 278 tests / 0 failures / 0 errors. 이전 265 → +13 (RouteCrudServiceTest +3, 기존 update 테스트는 stamp 스텁 추가 후 그린).
+
+## 의사결정
+1. **batch 1쿼리**: `findByUserIdAndPlaceIdIn(userId, ids)` 가 이미 컬렉션 detail 용도로 존재해 그대로 차용. N+1 회피.
+2. **익명 init 분기**: `currentUserIdOrNull()` 이 null 이면 stamp 조회 자체를 skip. 미인증 호출 비용 0. 데모 fallback userId(1L) 로 잘못 해석되지 않도록 `currentUserId()` 가 아닌 `currentUserIdOrNull()` 사용.
+3. **Route.clearPlaces / addPlaces 분리**: 이번 task 의 부수 작업. 기존 update 가 `replacePlaces` 한 번에 처리해 H2 트랜잭션 commit 시점 flush 에 의존했고, 새 SELECT 가 추가되며 mid-transaction flush 에서 unique 제약 충돌. clear/flush/add 3단계 로 분리해 영구 fix. createRoute 는 영향 없음 (replacePlaces 그대로 사용).
+4. **다른 사용자 stamp 영향 없음**: `findByUserIdAndPlaceIdIn` 의 `userId` 필터로 보장. 별도 단위 테스트는 추가하지 않고 stub 으로 빈 결과 반환 시 visited=false 확인 (`getRoute_ownerNoStamps_allVisitedFalse`).
+5. **commit 보류**: task #2~#21 묶어 단일 commit 예정 (team-lead 지시).
+

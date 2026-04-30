@@ -1842,3 +1842,118 @@ team-lead 가 사용자 follow-up 후 직접 적용한 fix. 본 메모는 통합
 
 ## 변경 파일 (1건, team-lead 직접 적용)
 - (M) `frontend/src/components/map/KakaoMap.vue`
+
+---
+
+# Task #22 — Visited 표시 UI (route DTOs 의 visited / visitedAt 노출)
+
+backend #48 (= task #20) 의 `visited: bool` + `visitedAt: ISO|null` 필드를 trip route 화면 3곳(timeline card / 마커 / 디테일 모달) 에 노출.
+
+## 변경 (8 파일)
+
+### `frontend/src/services/route.ts`
+- `RouteInitPlace` + `SavedRouteItem` 둘 다 `visited: boolean` + `visitedAt: string | null` 필드 추가.
+
+### `frontend/src/stores/tripRoute.ts`
+- `TripPlace` 인터페이스에 두 필드 추가 (필수, 옵셔널 아님 — 입력 누락 케이스는 매퍼에서 default 처리).
+- `initPlaceToTripPlace` / `savedItemToTripPlace` 두 매퍼 — `Boolean(p.visited)` / `p.visitedAt ?? null` 안전 매핑.
+- `MOCK_SEARCH_SUGGESTIONS` 3 항목에 `visited: false, visitedAt: null` 추가.
+
+### `frontend/src/components/route/RouteTimelineSheet.vue`
+- 카드 thumb 안에 `<span class="rt-visited-badge" v-if="p.visited">` 추가 — `checkmarkOutline` + "인증" 라벨, mint 톤 round pill.
+- import 에 `checkmarkOutline` 추가.
+- CSS `.rt-visited-badge` — bottom-left absolute, mint 배경, 작은 그림자.
+
+### `frontend/src/components/route/RoutePlaceDetailModal.vue`
+- 정보 탭에 `<RoutePlaceInfoRow v-if="place.visited" icon="✓" label="방문 인증" :value="visitedLabel" />` 추가.
+- `visitedLabel` computed — visitedAt ISO → `YYYY-MM-DD` 포맷. 파싱 실패 시 "기록됨" 폴백.
+- CTA 라벨 분기: `place.visited ? '다시 인증하기' : '인증하기'`. onCapture 호출은 동일.
+
+### `frontend/src/components/route/RouteMapLayer.vue`
+- `visitedIds: number[]` computed 추가 — `places.filter(p => p.visited).map(p => p.id)`.
+- KakaoMap 의 `:visited-ids="visitedIds"` 로 전달 (기존 `[]` 하드코딩 제거).
+
+### `frontend/src/components/map/KakaoMap.vue`
+- `buildPinContent` 분기 정정:
+  - `orderIndex != null` 이면 dot 텍스트는 번호. visited 면 우하단에 작은 `<span class="tick">✓</span>` DOM 추가.
+  - 없으면 기존 visited(✓) / 기본(●) 분기.
+- CSS `.kakao-map .pin .dot { position: relative }` + `.kakao-map .pin .dot .tick`:
+  - `position: absolute; right: -4px; bottom: -4px; width/height: 12px`
+  - mint 배경, 흰 outline(`box-shadow: 0 0 0 2px #fff`), 작은 ✓.
+
+### `frontend/src/components/route/SearchPlaceModal.vue`
+- searchResults 매퍼의 TripPlace literal 에 `visited: false, visitedAt: null` 추가 (필수 필드 추가에 따른 타입 보정).
+
+### Spec 갱신
+- `frontend/src/stores/__tests__/tripRoute.spec.ts`:
+  - `makePlace` / `makeInitPlace` factory 에 visited/visitedAt 기본값 추가.
+  - `makeSavedDetail` items 에 visited true/false 두 케이스 fixture 화.
+  - 신규 케이스 2건:
+    - `seedFromContent maps RouteInitPlace.visited / visitedAt into TripPlace`
+    - `seedFromSavedRoute maps SavedRouteItem.visited / visitedAt into TripPlace`
+- `frontend/src/views/__tests__/TripRoutePage.spec.ts`: routeInitFixture 5 places 모두 visited/visitedAt 추가.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 670 tests** (666 → 670, 신규 2 + fixture 보정으로 다른 케이스도 깔끔히 통과).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 39.35s. 첫 시도엔 `SearchPlaceModal.vue` 의 stale literal 한 군데가 vue-tsc 에 잡혀 즉시 보정.
+- `cd frontend && npm run lint` — 본 task 수정 파일 모두 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(인증한 카드 배지 / 마커 dot 번호 + ✓ tick / 모달 "방문 인증 — YYYY-MM-DD" + "다시 인증하기" / 비로그인·미방문 무변화) — 사용자가 직접 검증 예정.
+
+## 변경 파일 (8건)
+- (M) `frontend/src/services/route.ts`
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/components/route/RouteTimelineSheet.vue`
+- (M) `frontend/src/components/route/RoutePlaceDetailModal.vue`
+- (M) `frontend/src/components/route/RouteMapLayer.vue`
+- (M) `frontend/src/components/route/SearchPlaceModal.vue`
+- (M) `frontend/src/components/map/KakaoMap.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- (M) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
+
+---
+
+# Task #23 — Visited refresh after camera return
+
+## 증상
+사용자가 인증샷 찍고 코스로 돌아와도 카드 visited 가 false 유지. 원인 두 가지:
+1. `seedFromSavedRoute` 의 noop guard (`currentSavedRouteId === routeId && placeIds.length > 0`) 가 fetch 를 통째 skip — backend 의 새 stamp 안 반영.
+2. Ionic stack-preserved 페이지라 `/camera` 에서 돌아올 때 `onMounted` 가 다시 발동 안 함.
+
+## 변경 (2 파일)
+
+### `frontend/src/stores/tripRoute.ts`
+- **A** `seedFromSavedRoute(routeId, options?: { force?: boolean })` — 기본 noop 유지, `force:true` 면 우회해서 재fetch.
+- **B** 신규 action `refreshVisitedFromBackend()`:
+  - `currentSavedRouteId` 가 null 이면 noop.
+  - `loadRoute(id)` 호출 → 응답의 items 를 walk 하면서 `placesById[placeId].visited / visitedAt` 만 mutate.
+  - placeIds 순서, notes, currentSavedRouteId 모두 보존. fetch 실패는 silent (보조 정보, 다음 진입 때 재시도).
+
+### `frontend/src/views/TripRoutePage.vue`
+- **C** `import { onIonViewDidEnter } from '@ionic/vue'`.
+- 등록: `onIonViewDidEnter(() => { if (currentSavedRouteId != null) void refreshVisitedFromBackend(); })`. onMounted 의 첫 진입 처리는 그대로.
+
+## Spec 신규 케이스 (6개)
+### `tripRoute.spec.ts` (+4)
+- `seedFromSavedRoute respects noop guard but force:true refetches` — 같은 routeId 재호출 noop / force:true 우회 확인.
+- `refreshVisitedFromBackend mutates only visited/visitedAt, preserves placeIds + notes` — visited 변경 + placeIds 순서/notes 보존 검증.
+- `refreshVisitedFromBackend is a noop when currentSavedRouteId is null` — 가드 동작 확인.
+- `refreshVisitedFromBackend silently swallows fetch failure (no throw)` — silent + currentSavedRouteId 유지.
+
+### `TripRoutePage.spec.ts` (+2)
+- `onIonViewDidEnter` mock 으로 callback 캡처 → 수동 발동 후 `refreshVisitedFromBackend` 호출 확인 / 미저장 코스 시 noop 확인.
+- `vi.mock('@ionic/vue', ...)` 에 `onIonViewDidEnter: (cb) => { ionViewEnterCb.current = cb; }` 추가.
+
+## 검증
+- `cd frontend && npm run test:unit -- --run` ✓ **56 files / 676 tests** (670 → 676, 신규 6).
+- `cd frontend && npm run build` ✓ vue-tsc + vite 40.38s.
+- `cd frontend && npm run lint` — touched files 모두 클린. SavedPage.spec.ts 사전 결함 미터치.
+- 브라우저 골든패스(`/route?routeId=1` → 인증하기 → 업로드(GPS 통과) → 뒤로 → 인증 배지 즉시 노출 / GPS 미통과 시 visited 유지) — 사용자가 직접 검증 예정.
+
+## 사용자 follow-up 안내 (참고)
+visited 가 계속 false 면 GPS 미통과 가능성 — devtools Network 의 `/api/places/{id}/photos` 응답에서 `gpsScore` 필드 확인. backend 정책 `gpsScore >= GPS_VERIFY_THRESHOLD(=50)` 이라 미달이면 stamp 자체가 안 만들어짐.
+
+## 변경 파일 (4건)
+- (M) `frontend/src/stores/tripRoute.ts`
+- (M) `frontend/src/views/TripRoutePage.vue`
+- (M) `frontend/src/stores/__tests__/tripRoute.spec.ts`
+- (M) `frontend/src/views/__tests__/TripRoutePage.spec.ts`
