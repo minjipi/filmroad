@@ -205,8 +205,9 @@ describe('ProfilePage.vue', () => {
 
     expect(wrapper.find('.profile-card').exists()).toBe(true);
     expect(wrapper.text()).toContain('김미루');
-    // Handle is rendered at the top bar as "@miru".
-    expect(wrapper.find('.top-bar h1').text()).toBe('@miru');
+    // 헤더는 nickname 큰 글자 + handle 작은 회색 두 줄 (Instagram 패턴).
+    expect(wrapper.find('.top-bar h1').text()).toBe('김미루');
+    expect(wrapper.find('.top-bar .handle-sub').text()).toBe('@miru');
     expect(wrapper.text()).toContain('성지 순례자');
     expect(wrapper.text()).toContain('LV.5');
   });

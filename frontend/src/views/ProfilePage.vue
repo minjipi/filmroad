@@ -2,7 +2,15 @@
   <ion-page>
     <ion-content :fullscreen="true" class="pf-content">
       <header class="top-bar">
-        <h1>{{ handleLabel }}</h1>
+        <!-- Instagram/Twitter 패턴: 큰 글자로 nickname (사용자 정체성),
+             작은 회색으로 handle (시스템 ID). handle 자체가 못생긴 자동
+             생성 형태(@xxx-uuid) 라도 시각 무게가 작아 답답한 인상이 줄어듦.
+             user 가 아직 로드 전엔 handle 만 단독 노출 (placeholder 효과). -->
+        <div class="title-block">
+          <h1 v-if="user">{{ user.nickname }}</h1>
+          <h1 v-else class="title-fallback">{{ handleLabel }}</h1>
+          <div v-if="user" class="handle-sub">{{ handleLabel }}</div>
+        </div>
         <div class="r">
           <button type="button" aria-label="menu" @click="onMenu">
             <ion-icon :icon="menuOutline" class="ic-20" />
@@ -556,10 +564,31 @@ ion-content.pf-content {
   align-items: center;
   background: #ffffff;
 }
+.top-bar .title-block {
+  flex: 1;
+  min-width: 0;
+}
 .top-bar h1 {
   margin: 0;
   font-size: 18px; font-weight: 800;
   letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-bar .handle-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* user 가 아직 로드 전엔 handle 단독 — 옛 톤(굵은 검정 큰 글자) 그대로 유지. */
+.top-bar h1.title-fallback {
   color: var(--fr-ink);
 }
 .top-bar .r { display: flex; gap: 4px; }
