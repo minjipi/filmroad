@@ -509,7 +509,7 @@ const homeStore = useHomeStore();
 const uiStore = useUiStore();
 const { targetPlace, photos, selectedIndex, caption, tags, visibility, addToStampbook, loading, uploadProgress, error: errorText, lastResult } = storeToRefs(uploadStore);
 const selectedPhoto = computed(() => uploadStore.selectedPhoto);
-const { showError } = useToast();
+const { showError, showInfo } = useToast();
 const online = useOnline();
 
 // ---------- Stage machine (task #8) ----------
@@ -839,6 +839,7 @@ function scheduleExtrasReveal(): void {
     extrasRevealTimer = null;
     extrasVisible.value = true;
     maybeRevealLevelUp();
+    maybeRevealTrophy();
   }, EXTRAS_REVEAL_DELAY_MS);
 }
 
@@ -851,6 +852,21 @@ function maybeRevealLevelUp(): void {
     levelUpRevealTimer = null;
     levelUpOpen.value = true;
   }, LEVELUP_REVEAL_DELAY_MS);
+}
+
+// 작품 트로피 알림 — 새 마일스톤(25/50/75/100%) 진입 시 백엔드가 newTrophyTier 를
+// 채워준다. MASTER 는 강한 톤(🏆), 그 외는 가벼운 톤(🎉)으로 차이를 둔다.
+// 같은 작품 같은 tier 는 한번만 발급되므로 중복 노출 걱정 없음.
+function maybeRevealTrophy(): void {
+  const reward = lastResult.value?.reward;
+  if (!reward || !reward.newTrophyTier) return;
+  const title = reward.newTrophyContentTitle ?? '작품';
+  if (reward.newTrophyTier === 'MASTER') {
+    void showInfo(`🏆 ${title} 마스터 달성!`);
+  } else {
+    const pct = reward.newTrophyTier === 'THREE_Q' ? 75 : reward.newTrophyTier === 'HALF' ? 50 : 25;
+    void showInfo(`🎉 ${title} ${pct}% 도달`);
+  }
 }
 
 function onLevelUpClose(): void {

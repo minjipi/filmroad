@@ -127,6 +127,9 @@
           </button>
         </section>
 
+        <!-- 작품 컴플리트 트로피 — 사회 증명. 타 유저면 빈 배열일 때 surface 자체 숨김. -->
+        <TrophyShelf :trophies="user.trophies ?? []" :show-empty="false" />
+
         <!-- Highlights — 17-design "스탬프 북" horizontal row of
              collected contents. Backend gives collectedCount + totalCount. -->
         <section
@@ -221,6 +224,7 @@ import { storeToRefs } from 'pinia';
 import { useUserProfileStore } from '@/stores/userProfile';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
+import TrophyShelf from '@/components/profile/TrophyShelf.vue';
 
 const props = defineProps<{ id: string | number }>();
 

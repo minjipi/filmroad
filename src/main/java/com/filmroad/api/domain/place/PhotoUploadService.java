@@ -14,6 +14,8 @@ import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
 import com.filmroad.api.domain.stamp.dto.RewardDeltaDto;
 import com.filmroad.api.domain.stamp.dto.StampRewardDto;
+import com.filmroad.api.domain.trophy.ContentTrophyTier;
+import com.filmroad.api.domain.trophy.TrophyService;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
 import com.filmroad.api.domain.user.dto.UserMeDto;
@@ -92,6 +94,7 @@ public class PhotoUploadService {
     private final UserBadgeRepository userBadgeRepository;
     private final CurrentUser currentUser;
     private final ShotScoringService shotScoringService;
+    private final TrophyService trophyService;
 
     @Value("${project.upload.path}")
     private String uploadPath;
@@ -208,6 +211,10 @@ public class PhotoUploadService {
 
             List<UserBadgeDto> newBadges = awardBadges(user, place, stampCount, contentStampCount, contentTotalCount);
 
+            // 작품 컴플리트 트로피 — 새 마일스톤(25/50/75/100%)에 진입했을 때만 tier 가
+            // 반환되고, 같은 tier 는 재발급되지 않아 중복 알림이 없다.
+            ContentTrophyTier newTrophyTier = trophyService.maybeAward(user, place.getContent(), workPercent);
+
             stampReward = StampRewardDto.builder()
                     .placeName(place.getName())
                     .contentId(place.getContent().getId())
@@ -225,6 +232,9 @@ public class PhotoUploadService {
                     .previousLevel(previousLevel)
                     .levelName(UserMeDto.levelName(user.getLevel()))
                     .newBadges(newBadges)
+                    .newTrophyTier(newTrophyTier)
+                    .newTrophyContentTitle(newTrophyTier == null ? null : place.getContent().getTitle())
+                    .newTrophyContentPosterUrl(newTrophyTier == null ? null : place.getContent().getPosterUrl())
                     .build();
         }
 

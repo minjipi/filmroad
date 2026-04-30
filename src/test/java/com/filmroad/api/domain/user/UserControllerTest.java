@@ -221,6 +221,36 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/users/me — trophies 4개 (4작품 MASTER), tier 와 percent=100 동반")
+    void getMe_returnsTrophies() throws Exception {
+        mockMvc.perform(get("/api/users/me").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(4)))
+                .andExpect(jsonPath("$.results.trophies[0].tier", is("MASTER")))
+                .andExpect(jsonPath("$.results.trophies[0].percent", is(100)))
+                .andExpect(jsonPath("$.results.trophies[0].contentTitle", notNullValue()))
+                .andExpect(jsonPath("$.results.trophies[0].collectedCount", is(2)))
+                .andExpect(jsonPath("$.results.trophies[0].totalCount", is(2)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/1 (공개 프로필) — trophies 도 함께 노출 (사회 증명)")
+    void getPublicProfile_includesTrophies() throws Exception {
+        mockMvc.perform(get("/api/users/1").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(4)))
+                .andExpect(jsonPath("$.results.trophies[0].tier", is("MASTER")));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/2 — stamp/trophy 없는 유저는 trophies=빈 배열")
+    void getPublicProfile_noTrophies_returnsEmptyArray() throws Exception {
+        mockMvc.perform(get("/api/users/2").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("GET /api/users/2 (비로그인) — permitAll, isMe=false, following=false")
     void getPublicProfile_anonymous_returnsPublicView() throws Exception {
         mockMvc.perform(get("/api/users/2"))  // ATOKEN 쿠키 없음

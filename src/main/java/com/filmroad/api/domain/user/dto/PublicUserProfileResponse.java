@@ -1,5 +1,6 @@
 package com.filmroad.api.domain.user.dto;
 
+import com.filmroad.api.domain.trophy.dto.ContentTrophyDto;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -39,4 +40,6 @@ public class PublicUserProfileResponse {
     private List<PublicPhotoDto> topPhotos;
     /** 최근 수집한 작품과 진행률. */
     private List<CollectedContentDto> recentCollectedContents;
+    /** 작품 컴플리트 트로피 (마스터·진행 중). 사회 증명 — 비로그인 viewer 에게도 노출. */
+    private List<ContentTrophyDto> trophies;
 }
