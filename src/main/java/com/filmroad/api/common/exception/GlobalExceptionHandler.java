@@ -92,10 +92,12 @@ public class GlobalExceptionHandler {
                 || statusCode == BaseResponseStatus.USER_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.COMMENT_NOT_FOUND.getCode()
                 || statusCode == BaseResponseStatus.COLLECTION_NOT_FOUND.getCode()
-                || statusCode == BaseResponseStatus.PHOTO_NOT_FOUND.getCode()) {
+                || statusCode == BaseResponseStatus.PHOTO_NOT_FOUND.getCode()
+                || statusCode == BaseResponseStatus.ROUTE_NOT_FOUND.getCode()) {
             return 404;
         }
-        if (statusCode == BaseResponseStatus.UNAUTHORIZED_COMMENT.getCode()) {
+        if (statusCode == BaseResponseStatus.UNAUTHORIZED_COMMENT.getCode()
+                || statusCode == BaseResponseStatus.ROUTE_FORBIDDEN.getCode()) {
             return 403;
         }
         // 자격증명 실패 계열은 401, 리소스 충돌(중복 이메일 등)은 409.

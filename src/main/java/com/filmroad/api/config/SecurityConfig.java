@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/route/directions").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/route/init").permitAll()
+                        .requestMatchers("/api/route/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/auth/check-email").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/home",

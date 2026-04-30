@@ -29,6 +29,10 @@ export interface ContentDetailSpot {
   placeId: number;
   name: string;
   regionShort: string;
+  /** 카드/리스트 좌측에 노출되는 도시·구·동 한 줄 라벨. tripRoute 시드에 사용. */
+  regionLabel: string;
+  /** 도로명/지번 풀 주소. spot 모달과 tripRoute 상세 모달의 정보 탭에 노출. */
+  address: string | null;
   coverImageUrls: string[];
   /**
    * 작품 씬 목록 — `orderIndex` ASC. 0번이 대표. 회차/타임스탬프/설명/이미지 URL

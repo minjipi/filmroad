@@ -265,7 +265,18 @@ async function onBookmark(): Promise<void> {
 }
 
 async function onOpenRoute(): Promise<void> {
-  await showInfo('루트 짜기는 곧 공개됩니다');
+  // 작품 컨텍스트(시드 작품 + 제목) 를 query 로 실어 보내 TripRoutePage 가
+  // 신규 코스의 default 시드로 사용. 기존 컬렉션이 있으면 :collectionId 경로
+  // 로 진입하는 별도 흐름. 백엔드 task #6 완료되면 TripRoutePage 가 query
+  // 를 읽어 해당 작품의 성지를 자동 채움.
+  const c = content.value;
+  await router.push({
+    path: '/route',
+    query: {
+      contentId: String(contentIdNum.value),
+      ...(c?.title ? { contentTitle: c.title } : {}),
+    },
+  });
 }
 
 async function onSelectChip(c: ContentDetailChip): Promise<void> {

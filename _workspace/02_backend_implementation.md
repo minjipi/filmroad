@@ -607,3 +607,352 @@ type PlaceSceneDto = {
 3. **마이그레이션 트랜잭션 폴루션 회피**: `try { native query } catch (...)` 만으로는 부족. JPA 트랜잭션이 rollback-only 마킹돼 commit 시점에 `UnexpectedRollbackException` → ApplicationContext 부팅 실패. information_schema 사전 체크로 예외 자체를 차단.
 4. **메타-only row 손실 감수**: 기존 데이터 모두 4종이 함께 들어오는 패턴. image_url 없이 메타만 있는 historical row 는 사실상 없음. drop 으로 손실 허용.
 5. **commit 보류**: 프론트 작업 끝나면 합께 한 commit 으로 — team-lead 지시.
+
+---
+
+# Task #1 — Add regionLabel + address to ContentSpotDto (feat/trip-route-frontend)
+
+## 작업 범위
+- `/api/contents/{id}` 의 `spots[]` 항목에 `regionLabel` (전체 행정구역 라벨)과 `address` (도로명/지번 주소) 두 필드 추가.
+- 기존 `regionShort` 는 유지 (ContentDetailPage 칩 표기 영향 없도록).
+- 프론트 trip route store가 이 두 필드를 사용해 지도 마커/리스트에 노출 예정.
+
+## 변경된 파일
+- `src/main/java/com/filmroad/api/domain/content/dto/ContentSpotDto.java`
+  - `regionLabel`, `address` 필드 추가 (둘 다 `String`).
+- `src/main/java/com/filmroad/api/domain/content/ContentDetailService.java`
+  - `getContent` 의 spot 빌더에 `.regionLabel(p.getRegionLabel())`, `.address(p.getAddress())` 매핑 추가.
+
+## 영향도
+- **Place 엔티티 변경 없음** — `regionLabel`/`address` 모두 기존 컬럼이라 DDL/마이그레이션 불필요.
+- **응답 호환성** — 추가 필드만 들어가므로 기존 클라이언트 무영향. ContentDetailPage 가 사용하는 `regionShort` 는 그대로 유지.
+- **다른 도메인** — `ContentSpotDto` 사용처 grep 결과 ContentDetailService / ContentDetailResponse 외 없음.
+
+## 테스트
+- `./gradlew build` (test 포함) → **BUILD SUCCESSFUL** (3m 54s, 모든 테스트 통과)
+  - 빌드 환경: WSL `/mnt/c` 에서 file lock I/O 에러로 `~/.gradle` 캐시 사용 불가 → `GRADLE_USER_HOME=/tmp/filmroad-gradle`, `--project-cache-dir=/tmp/filmroad-project-cache` 로 우회.
+- 회귀 영향 없음: `ContentDetailService` 만 변경, 기존 spot 필드/순서는 모두 유지.
+
+## 프론트엔드 영향
+- frontend-developer (Task #2) 가 trip route store 를 실 API 로 교체할 때 `spots[i].regionLabel`, `spots[i].address` 활용 가능.
+- 기존 `regionShort` 는 ContentDetailPage 가 그대로 사용 — 변경 없음.
+
+---
+
+# Task #8 — Kakao Mobility directions proxy (feat/trip-route-frontend)
+
+## 작업 범위
+- 카카오 모빌리티 `POST /v1/waypoints/directions` 를 백엔드에서 프록시.
+- 이유: REST API 키(`KAKAO_REST_API_KEY`) 클라이언트 노출 금지. 기존 `KakaoLocalClient` 와 같은 키 + `KakaoAK` 헤더 패턴 그대로 차용.
+- 외부 키 미설정/장애 시에도 200 + `available=false`, 빈 path → 프론트가 polyline 없이 폴백.
+
+## 변경된 파일
+
+### 신규 (production)
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoMobilityClient.java`
+  - `getDirections(LatLng origin, LatLng destination, List<LatLng> waypoints) → Optional<MobilityRoute>`.
+  - 요청 body: `{origin: {x: lng, y: lat}, destination: {...}, waypoints: [{name: "wp{i}", x, y}], priority: "RECOMMEND", car_fuel: "GASOLINE", car_hipass: false, alternatives: false, road_details: false, summary: true}`.
+  - 응답 `routes[0].sections[].roads[].vertexes` flat array `[x,y,x,y,...]` → `List<LatLng(lat, lng)`).
+  - `routes[0].summary.distance/duration` 추출.
+  - 키 sentinel/빈 키/4xx/5xx/타임아웃/JSON 실패 → `Optional.empty()` + `log.debug`.
+  - `result_code != 0` (경로 못 찾음) → empty.
+  - `LatLng`, `MobilityRoute` 내부 record 노출 (서비스에서 변환용).
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoIntegrationConfig.java`
+  - `kakaoMobilityRestClient` `@Bean` — baseUrl/timeout/Authorization 헤더 사전 주입한 `RestClient` 빈 정의.
+  - 클라이언트가 직접 `RestClient.Builder.requestFactory()` 를 덮어쓰지 않게 함 → 테스트 `MockRestServiceServer` mock factory 가 깨지지 않음.
+- `src/main/java/com/filmroad/api/domain/route/RouteController.java`
+  - `POST /api/route/directions` — `BaseResponse<DirectionsResponse>`. `@Operation`/`@ApiResponses` Swagger anno.
+- `src/main/java/com/filmroad/api/domain/route/RouteService.java`
+  - `KakaoMobilityClient` 호출 + DTO 변환. empty 면 `DirectionsResponse.unavailable()`.
+- `src/main/java/com/filmroad/api/domain/route/dto/LatLngDto.java`
+  - `lat` `[-90, 90]`, `lng` `[-180, 180]` Bean Validation, `@NotNull`.
+- `src/main/java/com/filmroad/api/domain/route/dto/DirectionsRequest.java`
+  - `@NotNull` origin/destination, `@Valid` 중첩, waypoints `@Size(max = 30)`, null OK.
+- `src/main/java/com/filmroad/api/domain/route/dto/DirectionsResponse.java`
+  - `available`, `path`, `distanceMeters`, `durationSec` + `unavailable()` 정적 팩토리.
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoLocalProperties.java`
+  - `Mobility(baseUrl, timeoutMs)` 중첩 record 추가. record 시그니처에 세 번째 인자.
+- `src/main/java/com/filmroad/api/config/SecurityConfig.java`
+  - `POST /api/route/directions` permitAll (비로그인도 코스 그리기 가능).
+- `src/main/resources/application.yml`, `src/main/resources/application-dev.yml`
+  - `kakao.mobility.base-url=https://apis-navi.kakaomobility.com`, `kakao.mobility.timeout-ms=5000` 추가.
+- `src/test/resources/application-test.yml`
+  - 같은 mobility 블록 추가.
+
+### 신규 (테스트)
+- `src/test/java/com/filmroad/api/integration/kakao/KakaoMobilityClientTest.java` (6 cases)
+  - 키 sentinel → 외부 호출 없이 empty
+  - 정상 응답 → vertexes 두 개씩 묶어 4-pt path + summary 추출
+  - 빈 vertexes/summary → empty
+  - `result_code != 0` → empty
+  - 외부 5xx → 예외 삼키고 empty
+  - origin/destination null → empty
+- `src/test/java/com/filmroad/api/domain/route/RouteControllerTest.java` (6 cases)
+  - happy → `available=true` + path/distance/duration
+  - client empty → `available=false` + 빈 path
+  - waypoints 생략 OK
+  - origin lat 91 → 400, 외부 호출 없음
+  - destination lng -181 → 400
+  - origin null → 400
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/place/KakaoPlaceInfoServiceTest.java`
+  - `new KakaoLocalProperties(...)` 호출에 `Mobility(...)` 인자 추가 (record 시그니처 변경 반영).
+
+## 프론트 contract
+```http
+POST /api/route/directions
+Content-Type: application/json
+
+{
+  "origin":      {"lat": 37.57, "lng": 126.98},
+  "destination": {"lat": 37.58, "lng": 126.99},
+  "waypoints":   [{"lat": 37.575, "lng": 126.985}]
+}
+
+→ 200
+{
+  "success": true,
+  "code": 20000,
+  "message": "요청에 성공하였습니다.",
+  "results": {
+    "available": true,
+    "path": [{"lat": ..., "lng": ...}, ...],
+    "distanceMeters": 38500,
+    "durationSec": 5400
+  }
+}
+```
+- 키 미설정/외부 장애 → `available=false`, `path: []`, `distanceMeters: 0`, `durationSec: 0`.
+- 좌표 범위 위반 / origin null / waypoints 30개 초과 → 400 `BaseResponse.error(REQUEST_ERROR)`.
+
+## 마이그레이션 안전성
+- 스키마 변경 없음 (외부 API 프록시).
+- `KakaoLocalProperties` record 시그니처에 세 번째 인자(`Mobility`) 추가 — 직접 `new KakaoLocalProperties(...)` 호출하는 코드만 영향. 프로덕션 코드는 `@ConfigurationProperties` 바인딩이라 영향 없음. 테스트 한 곳만 수정.
+
+## 테스트
+- `GRADLE_USER_HOME=/tmp/filmroad-gradle ./gradlew --no-daemon --project-cache-dir=/tmp/filmroad-project-cache build` → **BUILD SUCCESSFUL**
+  - 236 tests / 0 failures / 0 errors
+  - KakaoMobilityClientTest 6/6, RouteControllerTest 6/6
+  - 기존 230 케이스 영향 없음
+
+## 의사결정 메모
+1. **RestClient 를 @Bean 으로 분리한 이유**: 클라이언트 클래스가 직접 `RestClient.Builder.requestFactory()` 를 호출하면, 테스트의 `MockRestServiceServer.bindTo(builder)` 가 설치한 mock factory 를 덮어써 mock 이 무시됨. 빈으로 분리하면 (a) 프로덕션은 timeout/factory 적용된 RestClient 주입, (b) 테스트는 MockRestServiceServer 바인딩한 RestClient 를 직접 생성자로 주입. 양쪽 모두 깨끗하게 분리.
+2. **KakaoLocalProperties 확장 vs 별도 properties 분리**: 같은 REST 키를 공유하므로 같은 prefix(`kakao.*`) 아래 두는 게 자연스러움. 별도 빈으로 가면 키 환경변수도 두 곳에서 읽어야 해 운영 부담. 단점은 record 시그니처 변경으로 테스트 1곳 수정 필요했으나 `@ConfigurationProperties` 바인딩은 영향 없음.
+3. **available=false fallback**: 키 미설정/외부 장애 시 500 던지지 않고 200 + 빈 응답. KakaoLocalClient/`/api/places/*/kakao-info` 와 동일 정책 — 프론트가 polyline 없이 자연스러운 폴백 가능.
+4. **waypoints null 허용**: 프론트가 origin↔destination 직선 경로만 필요할 때 비워서 보낼 수 있음. 서비스에서 `Collections.emptyList()` 로 정규화.
+5. **30개 상한**: 카카오 모빌리티는 5개까지 권장이지만 트립 코스 최대 한도 + 안전 마진. 프론트 trip route 시나리오에서 spot 수가 그 이상 되면 sectional 호출로 분할해야 함 — 현재 task 범위 밖.
+6. **commit 보류**: 프론트 task #9 끝나면 묶음 commit (team-lead 지시).
+
+---
+
+# Task #10 — Route init + save/load CRUD (feat/trip-route-frontend)
+
+## 작업 범위
+- `domain/route/` 에 사용자 트립 코스 도메인 추가: `Route` + `RoutePlace` 엔티티, 6개 엔드포인트.
+- 동일 RouteController 에 task #8 의 `/directions` 와 함께 보관.
+- 인증 정책: `init` 만 permitAll, 나머지는 본인 가드.
+
+## 변경된 파일
+
+### 신규 (production)
+- `src/main/java/com/filmroad/api/domain/route/Route.java`
+  - `id, user (FK NOT NULL LAZY), content (FK nullable LAZY), name, startTime VARCHAR(5), places OneToMany cascade ALL + orphanRemoval`.
+  - `replacePlaces(List)` 헬퍼: `places.clear()` 후 양방향 연결로 재구성. orphanRemoval 로 기존 RoutePlace 자동 cascade 삭제.
+  - `updateMeta(name, startTime, content)` 헬퍼.
+  - 인덱스: `idx_route_user_updated (user_id, UPDATE_DATE)` — `findByUserIdOrderByUpdatedAtDesc` 최적화.
+- `src/main/java/com/filmroad/api/domain/route/RoutePlace.java`
+  - `id, route (FK), place (FK LAZY), orderIndex, durationMin (default 60), note TEXT`.
+  - 유니크 제약: `(route_id, order_index)` → 동일 코스 내 순서 중복 차단.
+- `src/main/java/com/filmroad/api/domain/route/RouteRepository.java`
+  - `findByUserIdOrderByUpdatedAtDesc(userId)` — `@EntityGraph({content, places, places.place})`.
+  - `findById(id)` 오버라이드 — 같은 그래프 + `user`. `places.place.coverImages/sceneImages` 는 List 라 **MultipleBagFetchException** 회피하기 위해 그래프에서 빠짐 → Service `@Transactional` 안에서 lazy 로 해결.
+- `src/main/java/com/filmroad/api/domain/route/RouteCrudService.java`
+  - `initFromContent(contentId)` — 비로그인 OK. Place ASC + suggestedName=`{title} 코스`, suggestedStartTime=`09:00`, durationMin=60.
+  - `createRoute(req)`, `getRoute(id)`, `listMyRoutes()`, `updateRoute(id, req)`, `deleteRoute(id)`.
+  - 본인 가드: 미존재 → ROUTE_NOT_FOUND(404), 비소유 → ROUTE_FORBIDDEN(403).
+  - items 검증: 비어있지 않음(@NotEmpty), placeId 존재 확인(`findAllById` 결과 size 비교), orderIndex `0..n-1` 연속(중복/누락/음수/n초과 모두 거부) → ROUTE_INVALID_ITEMS(400).
+  - 트랜잭션: 읽기 `readOnly = true`, 쓰기 기본.
+- `src/main/java/com/filmroad/api/domain/route/RouteController.java` (task #8 컨트롤러에 6 엔드포인트 추가)
+  - `GET /api/route/init?contentId=` (permitAll)
+  - `POST /api/route` (auth)
+  - `GET /api/route/me` (auth)
+  - `GET /api/route/{id}` (auth, 본인만)
+  - `PUT /api/route/{id}` (auth, 본인만)
+  - `DELETE /api/route/{id}` (auth, 본인만)
+  - 각각 `@Operation` + `@ApiResponses` Swagger 메타.
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteInitContentDto.java`
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteInitPlaceDto.java` (`durationMin=60` 기본)
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteInitResponse.java`
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteItemRequest.java` (Bean Validation)
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteCreateRequest.java` (Bean Validation: `@NotBlank name`, `@Pattern(HH:mm) startTime`, `@NotEmpty @Size(max=30) items`)
+- `src/main/java/com/filmroad/api/domain/route/dto/SavedRouteItemDto.java`
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteResponse.java`
+- `src/main/java/com/filmroad/api/domain/route/dto/RouteSummaryDto.java`
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/common/model/BaseResponseStatus.java`
+  - 추가: `ROUTE_NOT_FOUND(40100)`, `ROUTE_FORBIDDEN(40101)`, `ROUTE_INVALID_ITEMS(30100)`.
+- `src/main/java/com/filmroad/api/common/exception/GlobalExceptionHandler.java`
+  - `ROUTE_NOT_FOUND` → 404, `ROUTE_FORBIDDEN` → 403 매핑 추가.
+- `src/main/java/com/filmroad/api/config/SecurityConfig.java`
+  - `/api/route/init` GET permitAll, `/api/route/**` authenticated. `/api/route/directions` 는 task #8 에서 이미 permitAll.
+  - 매처 순서: directions → init → 나머지 authenticated. permit 매처가 먼저라 우선 매치.
+
+### 신규 (테스트)
+- `src/test/java/com/filmroad/api/domain/route/RouteCrudServiceTest.java` (15 cases)
+  - init: 응답 빌드 / 미존재 contentId
+  - create: happy / contentId 없는 자유 코스 / orderIndex 비연속 / 중복 / 미존재 placeId
+  - get: 본인 / 타 유저 → ROUTE_FORBIDDEN / 미존재 → ROUTE_NOT_FOUND
+  - listMyRoutes: SummaryDto 매핑
+  - update: 본인 (메타 + items 통째 교체) / 타 유저 → ROUTE_FORBIDDEN
+  - delete: 본인 / 타 유저
+- `src/test/java/com/filmroad/api/domain/route/RouteCrudControllerTest.java` (14 cases)
+  - init: 비로그인 OK / 미존재 contentId 404
+  - POST: 미인증 401 / happy → id + GET 본인 200 / items 빈 400 / startTime "9:00" 400 / orderIndex 비연속 400(code=30100)
+  - GET: 타 유저 403(code=40101) / 미존재 404(code=40100)
+  - GET /me: 내 코스 목록
+  - PUT: 본인 → items 통째 교체 / 타 유저 403
+  - DELETE: 본인 → 200 + GET 404 / 타 유저 403 + 코스 살아있음
+
+## 프론트 contract
+```http
+GET /api/route/init?contentId=5
+→ 200
+{ "results": {
+    "content": {"id":5,"title":"…","posterUrl":"…|null"},
+    "suggestedName": "… 코스",
+    "suggestedStartTime": "09:00",
+    "places": [{ "placeId","name","regionLabel","address","latitude","longitude",
+                 "coverImageUrl","sceneImageUrl","durationMin":60,"rating" }, …]
+  }
+}
+
+POST /api/route   (auth)
+{ "name":"…", "startTime":"09:00", "contentId":5|null,
+  "items":[{"placeId":10,"orderIndex":0,"durationMin":60,"note":"…|null"}, …] }
+→ 200 { "results": { "id": 42 } }
+
+GET  /api/route/me              (auth)  → 200 { "results": [RouteSummaryDto, …] }
+GET  /api/route/{id}             (auth, owner)  → 200 { "results": RouteResponse }
+PUT  /api/route/{id}             (auth, owner, body=Create 와 동일)  → 200 { "results": RouteResponse }
+DELETE /api/route/{id}           (auth, owner)  → 200 { "results": null }
+```
+- 미인증 → 401 BaseResponse INVALID_JWT
+- 비소유 → 403 ROUTE_FORBIDDEN(code=40101)
+- 미존재 → 404 ROUTE_NOT_FOUND(code=40100)
+- items 비/orderIndex 비연속 → 400 ROUTE_INVALID_ITEMS(code=30100)
+- 형식 위반(startTime 패턴/items 빈/placeId null/coord 범위) → 400 REQUEST_ERROR(code=30001)
+
+## 마이그레이션 안전성
+- 신규 테이블 `route`, `route_place` 만 추가. 기존 데이터 영향 없음.
+- dev: `ddl-auto=update` 가 부팅 시 두 테이블을 자동 생성 (인덱스/유니크 포함).
+- test: `ddl-auto=create-drop` + `data.sql` 환경에서 동일하게 생성됨 (테스트 통과로 확인).
+- 시드 INSERT 추가 안 함 — 사용자 생성 데이터라 빈 상태가 자연스러움.
+
+## 테스트
+- `GRADLE_USER_HOME=/tmp/filmroad-gradle ./gradlew --no-daemon --project-cache-dir=/tmp/filmroad-project-cache build` → **BUILD SUCCESSFUL** (2m 43s)
+- 265 tests / 0 failures / 0 errors (이전 236 → 신규 29: RouteCrudServiceTest 15 + RouteCrudControllerTest 14)
+- 회귀: 기존 250+건 모두 그린.
+- Swagger UI 확인 항목: `/api/route/init`, `/api/route` (POST), `/api/route/me`, `/api/route/{id}` (GET/PUT/DELETE), `/api/route/directions` 6개 노출.
+
+## 의사결정 메모
+1. **EntityGraph 에서 coverImages/sceneImages 제외**: `Place.coverImages`, `Place.sceneImages` 가 모두 `List` 라 두 컬렉션을 동시에 fetch 하면 Hibernate `MultipleBagFetchException`. `Route.places` 와도 동시에 묶이면 같은 예외. → 그래프는 `places, places.place` 까지만, URL 들은 Service `@Transactional` 안의 lazy 로 풀음. 단건 detail 은 최대 30 items × 2 collection = 60 lazy 쿼리이지만 1회 호출이라 허용.
+2. **RouteCrudService 분리**: task #8 의 `RouteService` 가 카카오 directions 만 담당하므로, CRUD 는 별도 service 로 분리해 책임을 좁혔다. 컨트롤러는 양쪽 다 주입.
+3. **orderIndex 검증 in-memory**: DB 유니크 제약 `(route_id, order_index)` 가 있긴 하지만, 비즈니스 시맨틱(`0..n-1` 연속)을 사용자에게 친절한 에러로 돌려주려면 in-memory 검증이 필요. boolean 배열로 O(n).
+4. **items.size() == 0 → 400 vs 정상**: 코스의 정의상 0개는 의미 없음. `@NotEmpty` 로 컨트롤러 boundary 에서 거부.
+5. **content 의 nullable**: 자유 코스(콘텐츠 무관) 허용. 프론트가 init 안 거치고 직접 만들 수 있도록.
+6. **404 vs 403 구분**: 타 유저 코스를 "404 로 숨기는" 보안적 장점도 있으나, 프론트 UX 가 "삭제됐어요" 와 "권한 없어요" 를 다르게 표시할 수 있도록 정직한 403 으로 응답. 사용자가 자기 ID 외로 코스 ID 를 brute-force 하는 시나리오는 데모 단계에서 우려 낮음.
+7. **commit 보류**: 프론트 task #11 까지 끝나면 묶음 commit (team-lead 지시).
+
+---
+
+# Task #12 — Fix: KakaoMobility `summary:true` suppresses polyline (feat/trip-route-frontend)
+
+## 증상
+`/api/route/directions` 응답에 `path: []` 인데 `distanceMeters / durationSec` 만 정상값.
+
+## 원인
+카카오 모빌리티 사양상 요청 body 의 `summary` 파라미터는:
+- `false` (기본): summary + sections + roads + vertexes 전체 응답
+- `true`: summary 만 응답 — sections 가 통째로 빠짐
+
+task #8 구현에서 `body.put("summary", true)` 로 둔 것이 잘못. summary 만 받게 되어 vertexes 가 누락 → `parseRoute` 에서 path 가 빈 채 `(distance, duration)` 만 채워져 응답.
+
+## 변경된 파일
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoMobilityClient.java`
+  - `body.put("summary", true)` → `body.put("summary", false)` + 사양 코멘트.
+
+## 테스트
+- `./gradlew build` (WSL 우회) → BUILD SUCCESSFUL (3m 35s)
+- 265 tests / 0 failures / 0 errors. KakaoMobilityClientTest 의 정상 응답 mock 이 sections/roads/vertexes 를 포함하고 있어 그대로 그린 (요청 body 의 summary 값과 무관하게 mock 응답을 그대로 파싱).
+
+## 검증 (manual)
+- 백엔드 재기동 후:
+  ```
+  curl -X POST http://localhost:8080/api/route/directions \
+    -H "Content-Type: application/json" \
+    -d '{"origin":{"lat":37.394,"lng":127.110},"destination":{"lat":37.402,"lng":127.108},"waypoints":[{"lat":37.396,"lng":127.113}]}'
+  ```
+  응답 `results.path` 가 수십~수백 개 `{lat, lng}` 좌표쌍으로 채워지면 정상. distance/duration 도 동일하게 채워져야 함.
+
+## 의사결정
+- 라인 자체 제거(=false default 의존)도 가능했지만, 의도를 명시하기 위해 `false` 로 두고 카카오 사양 코멘트 첨부. 동일 실수 재발 방지.
+
+---
+
+# Task #16 — Expose `sections` (per-leg path) in directions response
+
+## 작업 범위
+프론트가 leg(section) 별로 polyline 을 perpendicular pixel offset 으로 시각 분리할 수 있도록, 카카오 모빌리티 응답의 sections 단위를 그대로 백엔드 응답에 노출. 기존 평탄화된 `path` 도 그대로 유지(단순 polyline 용).
+
+## 변경된 파일
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/integration/kakao/KakaoMobilityClient.java`
+  - `MobilityRoute` record 시그니처: `(path, distanceMeters, durationSec)` → `(path, sections, distanceMeters, durationSec)`. `sections` = `List<List<LatLng>>`.
+  - `parseRoute`: 각 카카오 section 마다 별도 `sectionPath` 를 만들어 roads 의 vertexes 를 누적, 비어있지 않으면 `sectionsOut` 에 push 하고 동시에 flat `path` 에도 addAll. 결과적으로 `path == sections.flatten()`.
+- `src/main/java/com/filmroad/api/domain/route/dto/DirectionsResponse.java`
+  - `sections: List<List<LatLngDto>>` 필드 + Swagger 메타.
+  - `unavailable()` 팩토리에서 `sections: List.of()` 추가.
+- `src/main/java/com/filmroad/api/domain/route/RouteService.java`
+  - 응답 빌더에 `route.sections()` → `List<List<LatLngDto>>` 매핑 추가.
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/integration/kakao/KakaoMobilityClientTest.java`
+  - 정상 응답 mock 을 2개 section 으로 변경 (첫 section 두 road / 두 번째 한 road). path 7개, sections 2개(4+3) 검증.
+- `src/test/java/com/filmroad/api/domain/route/RouteControllerTest.java`
+  - happy path: `MobilityRoute` 생성 시 sections 인자 추가, 응답에서 `results.sections` shape (2 leg, 각 leg 2 좌표) + 첫/마지막 좌표 검증.
+  - client empty: `results.sections.length() == 0` 검증 추가.
+
+## 프론트 contract (변경)
+```json
+{ "results": {
+    "available": true,
+    "path": [{"lat":..,"lng":..}, ...],
+    "sections": [
+      [{"lat":..,"lng":..}, ...],   // leg 0: origin → wp0
+      [{"lat":..,"lng":..}, ...],   // leg k: wp(k-1) → wp(k)
+      ...                            // 마지막 leg: 마지막 wp → destination
+    ],
+    "distanceMeters": ...,
+    "durationSec": ...
+  }
+}
+```
+- `path` 는 `sections.flatten()` 과 동일 — 단순 polyline 그릴 때 그대로 사용.
+- `sections.length === waypoints.length + 1` (waypoints 가 비어있으면 1).
+- `available=false` 면 `path: []`, `sections: []`.
+
+## 테스트
+- `./gradlew build` (WSL 우회) → BUILD SUCCESSFUL (4m 43s)
+- 265 tests / 0 failures / 0 errors. KakaoMobilityClientTest / RouteControllerTest 의 신규 sections 검증 모두 그린.
+
+## 의사결정
+1. **path + sections 둘 다 유지**: sections 만 노출하면 단순 polyline 그릴 때 프론트가 평탄화 코드를 매번 작성해야 하므로 path 를 함께 제공. 데이터 중복은 있으나 directions 응답은 단발성이라 부담 적음.
+2. **section 단위 = 카카오의 section 그대로**: 카카오 모빌리티는 origin → wp1 → wp2 → ... → destination 의 leg 마다 `routes[0].sections[i]` 를 1:1 로 만든다. 우리 측에서 추가 가공 없이 그대로 노출 — leg 카운트가 항상 `waypoints.length + 1` 이라 프론트가 안전하게 인덱싱 가능.
+3. **빈 sectionPath skip**: 카카오가 인접 두 좌표가 너무 가까울 때 빈 section 을 돌려주는 케이스를 봤다. parseRoute 에서 `!sectionPath.isEmpty()` 가드로 sections 에 push 안 함. flat path 도 동일하게 영향 없음. 이 경우 `sections.length` 가 `waypoints.length + 1` 보다 작아질 수 있어 프론트는 길이를 신뢰하기보다 sections 자체를 iterate 하는 편이 안전.
+4. **commit 보류**: task #2~#17 묶어 단일 commit (team-lead 지시).
+

@@ -64,6 +64,9 @@ kakao:
     timeout-ms: 3000
     cache-ttl-hours: 24
     nearby-radius-meters: 500
+  mobility:
+    base-url: https://apis-navi.kakaomobility.com
+    timeout-ms: 5000
 
 korea-tourism:
   service-key: disabled-korea-tourism

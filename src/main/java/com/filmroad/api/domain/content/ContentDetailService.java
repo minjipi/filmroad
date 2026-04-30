@@ -57,6 +57,8 @@ public class ContentDetailService {
                     .placeId(p.getId())
                     .name(p.getName())
                     .regionShort(shortenRegion(p.getRegionLabel()))
+                    .regionLabel(p.getRegionLabel())
+                    .address(p.getAddress())
                     .coverImageUrls(p.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                     .scenes(p.getSceneImages().stream().map(PlaceSceneDto::from).toList())
                     .visited(s != null)

@@ -13,6 +13,11 @@ export interface MapMarker {
   contentTitle: string;
   regionLabel: string;
   distanceKm: number | null;
+  /**
+   * 코스에서의 순서(1-based). 지정되면 마커 dot 안에 숫자가 표시되고, 없으면
+   * 기본 `●` 으로 폴백. 일반 `/map` 마커는 미지정 → 기존 점 그대로.
+   */
+  orderIndex?: number;
 }
 
 export interface PlaceDetail {
