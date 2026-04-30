@@ -45,6 +45,20 @@
         <!-- 컬렉션 목록 — 서버 fetch 결과 직접 렌더. 편집 모드에선 카드 우상단
              "..." 버튼 노출, 카드 자체 탭은 막아 액션과 충돌 방지. -->
         <div class="collection-row no-scrollbar">
+          <template v-if="loading && collections.length === 0">
+            <div
+              v-for="n in 3"
+              :key="`coll-sk-${n}`"
+              class="coll coll--skeleton"
+              data-testid="coll-card-skeleton"
+            >
+              <ion-skeleton-text :animated="true" class="sk-cover" />
+              <div>
+                <ion-skeleton-text :animated="true" class="sk-name" />
+                <ion-skeleton-text :animated="true" class="sk-count" />
+              </div>
+            </div>
+          </template>
           <div
             v-for="c in collections"
             :key="c.id"
@@ -106,6 +120,23 @@
             <span class="sort-btn">거리순<ion-icon :icon="chevronDownOutline" class="ic-16" /></span>
           </div>
           <div class="saved-list">
+            <template v-if="loading && items.length === 0">
+              <div
+                v-for="n in 4"
+                :key="`saved-sk-${n}`"
+                class="saved saved--skeleton"
+                data-testid="saved-card-skeleton"
+              >
+                <ion-skeleton-text :animated="true" class="sk-thumb" />
+                <div class="saved-info">
+                  <div>
+                    <ion-skeleton-text :animated="true" class="sk-chip" />
+                    <ion-skeleton-text :animated="true" class="sk-t" />
+                    <ion-skeleton-text :animated="true" class="sk-loc" />
+                  </div>
+                </div>
+              </div>
+            </template>
             <div
               v-for="i in items"
               :key="i.placeId"
@@ -152,7 +183,7 @@
                 <ion-icon :icon="i.visited ? checkmark : cameraOutline" class="ic-18" />
               </button>
             </div>
-            <p v-if="items.length === 0" class="empty-note">저장한 장소가 없어요</p>
+            <p v-if="!loading && items.length === 0" class="empty-note">저장한 장소가 없어요</p>
           </div>
         </section>
       </div>
@@ -173,6 +204,7 @@ import {
   IonPage,
   IonContent,
   IonIcon,
+  IonSkeletonText,
   actionSheetController,
   alertController,
 } from '@ionic/vue';
@@ -209,7 +241,7 @@ const router = useRouter();
 const savedStore = useSavedStore();
 const uploadStore = useUploadStore();
 const uiStore = useUiStore();
-const { collections, items, totalCount, error } = storeToRefs(savedStore);
+const { collections, items, totalCount, error, loading } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 
 // AI 루트 배너는 고정 문구. `savedStore.suggestion` 이 null 이 아닌 값으로
@@ -512,6 +544,39 @@ ion-content.sv-content {
    시각적으로 구분. 카드 탭 자체는 비활성. */
 .coll.editing { cursor: default; }
 
+.coll--skeleton {
+  background: var(--fr-bg-muted);
+  cursor: default;
+}
+.coll--skeleton::before { display: none; }
+.coll--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  z-index: 1;
+}
+.coll--skeleton > div {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.coll--skeleton .sk-name {
+  width: 70%;
+  height: 14px;
+  margin: 0;
+  border-radius: 4px;
+}
+.coll--skeleton .sk-count {
+  width: 45%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+
 .coll-menu {
   position: absolute;
   top: 6px;
@@ -596,6 +661,34 @@ ion-content.sv-content {
   background: #eef2f6;
 }
 .saved-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.saved--skeleton {
+  cursor: default;
+}
+.saved--skeleton .sk-thumb {
+  width: 88px;
+  height: 88px;
+  margin: 0;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.saved--skeleton .sk-chip {
+  width: 50px;
+  height: 16px;
+  margin: 0 0 6px;
+  border-radius: 6px;
+}
+.saved--skeleton .sk-t {
+  width: 65%;
+  height: 14px;
+  margin: 0 0 4px;
+  border-radius: 4px;
+}
+.saved--skeleton .sk-loc {
+  width: 40%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
 .saved-info {
   flex: 1;
   display: flex;

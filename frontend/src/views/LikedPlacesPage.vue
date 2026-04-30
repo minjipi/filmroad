@@ -34,10 +34,16 @@
 
         <div
           v-if="!loaded && loading"
-          class="lp-loading"
+          class="lp-grid"
           data-testid="liked-places-loading"
         >
-          불러오는 중…
+          <div
+            v-for="n in 6"
+            :key="`lp-sk-${n}`"
+            class="cell cell--skeleton"
+          >
+            <ion-skeleton-text :animated="true" class="sk-cover" />
+          </div>
         </div>
 
         <div
@@ -89,7 +95,7 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   chevronBackOutline,
   heartOutline,
@@ -233,6 +239,16 @@ ion-content.lp-content {
   transition: transform 0.2s;
 }
 .cell:hover img { transform: scale(1.04); }
+.cell--skeleton {
+  cursor: default;
+}
+.cell--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
 .cell .cell-fallback {
   position: absolute;
   inset: 0;

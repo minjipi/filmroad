@@ -27,6 +27,18 @@
           </div>
         </div>
       </div>
+      <div
+        v-else-if="loading"
+        class="head head--skeleton"
+        data-testid="cd-head-skeleton"
+      >
+        <ion-skeleton-text :animated="true" class="sk-poster" />
+        <div class="head-info">
+          <ion-skeleton-text :animated="true" class="sk-kind" />
+          <ion-skeleton-text :animated="true" class="sk-title" />
+          <ion-skeleton-text :animated="true" class="sk-meta" />
+        </div>
+      </div>
 
       <div class="card-sheet">
         <section v-if="progress" class="progress-card">
@@ -38,6 +50,18 @@
             <div v-if="progress.nextBadgeText" class="s">{{ progress.nextBadgeText }}</div>
           </div>
           <button class="go" type="button" @click="onOpenRoute">루트 짜기</button>
+        </section>
+        <section
+          v-else-if="loading"
+          class="progress-card progress-card--skeleton"
+          data-testid="cd-progress-skeleton"
+        >
+          <ion-skeleton-text :animated="true" class="sk-ring" />
+          <div class="mid">
+            <ion-skeleton-text :animated="true" class="sk-t" />
+            <ion-skeleton-text :animated="true" class="sk-s" />
+          </div>
+          <ion-skeleton-text :animated="true" class="sk-go" />
         </section>
 
         <nav class="chips no-scrollbar">
@@ -144,7 +168,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   chevronBack,
   chevronForwardOutline,
@@ -169,7 +193,7 @@ const props = defineProps<{ id: string | number }>();
 
 const router = useRouter();
 const contentStore = useContentDetailStore();
-const { content, progress, spots, activeChip, error } = storeToRefs(contentStore);
+const { content, progress, spots, activeChip, error, loading } = storeToRefs(contentStore);
 const { showError, showInfo } = useToast();
 
 const contentIdNum = computed(() => Number(props.id));
@@ -401,6 +425,79 @@ ion-content.wd-content {
 }
 .head-info .meta b { font-size: 14px; font-weight: 800; }
 .star-ic { color: #f5a524; }
+
+.head--skeleton .sk-poster {
+  width: 104px;
+  height: 152px;
+  margin: 0;
+  border-radius: 14px;
+  flex-shrink: 0;
+  --background: rgba(255, 255, 255, 0.18);
+  --background-rgb: 255, 255, 255;
+}
+.head--skeleton .head-info {
+  gap: 6px;
+}
+.head--skeleton .sk-kind {
+  width: 28%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+  --background: rgba(255, 255, 255, 0.18);
+  --background-rgb: 255, 255, 255;
+}
+.head--skeleton .sk-title {
+  width: 65%;
+  height: 26px;
+  margin: 6px 0 8px;
+  border-radius: 6px;
+  --background: rgba(255, 255, 255, 0.22);
+  --background-rgb: 255, 255, 255;
+}
+.head--skeleton .sk-meta {
+  width: 45%;
+  height: 14px;
+  margin: 0;
+  border-radius: 4px;
+  --background: rgba(255, 255, 255, 0.18);
+  --background-rgb: 255, 255, 255;
+}
+
+.progress-card--skeleton {
+  background: var(--fr-bg-muted);
+}
+.progress-card--skeleton .sk-ring {
+  width: 54px;
+  height: 54px;
+  margin: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.progress-card--skeleton .mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.progress-card--skeleton .sk-t {
+  width: 70%;
+  height: 14px;
+  margin: 0;
+  border-radius: 4px;
+}
+.progress-card--skeleton .sk-s {
+  width: 45%;
+  height: 11px;
+  margin: 0;
+  border-radius: 4px;
+}
+.progress-card--skeleton .sk-go {
+  width: 70px;
+  height: 32px;
+  margin: 0;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
 
 .card-sheet {
   position: relative;

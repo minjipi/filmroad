@@ -40,6 +40,22 @@
       </div>
 
       <div class="fl-list no-scrollbar">
+        <template v-if="current.loading && current.users.length === 0">
+          <div
+            v-for="n in 8"
+            :key="`fl-sk-${n}`"
+            class="fl-row fl-row--skeleton"
+            data-testid="fl-row-skeleton"
+          >
+            <ion-skeleton-text :animated="true" class="sk-ava" />
+            <div class="meta">
+              <ion-skeleton-text :animated="true" class="sk-nm" />
+              <ion-skeleton-text :animated="true" class="sk-hd" />
+            </div>
+            <ion-skeleton-text :animated="true" class="sk-follow-btn" />
+          </div>
+        </template>
+
         <div
           v-for="u in current.users"
           :key="u.id"
@@ -83,7 +99,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import { chevronBackOutline } from 'ionicons/icons';
 import { useRouter, useRoute } from 'vue-router';
 import { useFollowListStore, type FollowTab } from '@/stores/followList';
@@ -310,6 +326,36 @@ ion-content.fl-content {
 .follow-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.fl-row--skeleton {
+  cursor: default;
+}
+.fl-row--skeleton .sk-ava {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.fl-row--skeleton .sk-nm {
+  width: 45%;
+  height: 14px;
+  margin: 0 0 4px;
+  border-radius: 4px;
+}
+.fl-row--skeleton .sk-hd {
+  width: 30%;
+  height: 12px;
+  margin: 0;
+  border-radius: 4px;
+}
+.fl-row--skeleton .sk-follow-btn {
+  width: 70px;
+  height: 32px;
+  margin: 0;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .empty-note {

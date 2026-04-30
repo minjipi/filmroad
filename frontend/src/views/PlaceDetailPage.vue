@@ -341,14 +341,36 @@
         </div>
       </div>
 
-      <div v-else-if="loading" class="pd-loading" />
+      <div
+        v-else-if="loading"
+        class="pd-loading pd-skeleton"
+        data-testid="pd-skeleton"
+      >
+        <ion-skeleton-text :animated="true" class="sk-hero" />
+        <div class="sk-body">
+          <ion-skeleton-text :animated="true" class="sk-title" />
+          <ion-skeleton-text :animated="true" class="sk-sub" />
+          <div class="sk-actions">
+            <ion-skeleton-text
+              v-for="n in 4"
+              :key="`sk-act-${n}`"
+              :animated="true"
+              class="sk-action"
+            />
+          </div>
+          <ion-skeleton-text :animated="true" class="sk-section-h" />
+          <ion-skeleton-text :animated="true" class="sk-block" />
+          <ion-skeleton-text :animated="true" class="sk-section-h" />
+          <ion-skeleton-text :animated="true" class="sk-block" />
+        </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
 import {
   chevronBack,
   chevronForward,
@@ -1265,6 +1287,54 @@ ion-content.pd-content {
 .pd-loading {
   height: 100%;
   background: var(--fr-bg-muted);
+}
+.pd-skeleton {
+  background: #ffffff;
+  overflow-y: auto;
+}
+.pd-skeleton .sk-hero {
+  width: 100%;
+  height: 440px;
+  margin: 0;
+  border-radius: 0;
+}
+.pd-skeleton .sk-body {
+  padding: 18px 20px;
+}
+.pd-skeleton .sk-title {
+  width: 60%;
+  height: 22px;
+  margin: 0 0 8px;
+  border-radius: 6px;
+}
+.pd-skeleton .sk-sub {
+  width: 35%;
+  height: 13px;
+  margin: 0 0 18px;
+  border-radius: 4px;
+}
+.pd-skeleton .sk-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.pd-skeleton .sk-action {
+  flex: 1;
+  height: 44px;
+  margin: 0;
+  border-radius: 12px;
+}
+.pd-skeleton .sk-section-h {
+  width: 40%;
+  height: 16px;
+  margin: 18px 0 12px;
+  border-radius: 4px;
+}
+.pd-skeleton .sk-block {
+  width: 100%;
+  height: 120px;
+  margin: 0;
+  border-radius: 12px;
 }
 
 /* ----- 카카오맵 정보 섹션 -----

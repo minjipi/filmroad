@@ -69,6 +69,15 @@
             </div>
           </div>
         </div>
+        <div
+          v-else-if="loading && posts.length === 0"
+          class="featured-wrap"
+          data-testid="feed-featured-skeleton"
+        >
+          <div class="featured featured--skeleton">
+            <ion-skeleton-text :animated="true" class="sk-cover" />
+          </div>
+        </div>
 
         <div class="sec-h">
           <span>최근 인증샷</span>
@@ -83,6 +92,16 @@
              center vertical divider; multi/video posts carry a top-right
              type icon. Tap → /shot/:id (task #38 parity). -->
         <div class="grid" data-testid="feed-grid">
+          <template v-if="loading && posts.length === 0">
+            <div
+              v-for="n in 9"
+              :key="`feed-sk-${n}`"
+              class="cell cell--skeleton"
+              data-testid="feed-grid-cell-skeleton"
+            >
+              <ion-skeleton-text :animated="true" class="sk-cover" />
+            </div>
+          </template>
           <div
             v-for="p in gridPosts"
             :key="p.id"
@@ -129,6 +148,7 @@ import {
   IonIcon,
   IonInfiniteScroll,
   IonInfiniteScrollContent,
+  IonSkeletonText,
 } from '@ionic/vue';
 import {
   heart,
@@ -381,6 +401,21 @@ ion-content.feed-content {
     rgba(0, 0, 0, 0.78) 100%
   );
 }
+.featured--skeleton {
+  background: var(--fr-bg-muted);
+  cursor: default;
+}
+.featured--skeleton::after {
+  display: none;
+}
+.featured--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 16px;
+}
 .featured .info {
   position: absolute;
   left: 0;
@@ -453,6 +488,16 @@ ion-content.feed-content {
   overflow: hidden;
   cursor: pointer;
   background: #eef2f6;
+}
+.cell--skeleton {
+  cursor: default;
+}
+.cell--skeleton .sk-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 .cell img {
   width: 100%;
