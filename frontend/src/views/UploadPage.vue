@@ -8,9 +8,11 @@
         <h1>인증샷 올리기</h1>
         <button
           class="post"
+          :class="{ 'post-disabled': !canShare }"
           type="button"
-          :disabled="!canShare"
-          @click="onShare"
+          :aria-disabled="!canShare"
+          data-testid="upload-share-btn"
+          @click="onShareClick"
         >
           {{ loading ? `공유 중 ${uploadProgress}%` : '공유하기' }}
         </button>
@@ -781,6 +783,37 @@ function resetCompletionState(): void {
   levelUpOpen.value = false;
 }
 
+/**
+ * "공유하기" 버튼 디스패처. canShare 면 곧장 onShare(), 아니면 누락 항목별
+ * 토스트 + 가능하면 후속 액션(예: 장소 picker 자동 오픈)으로 다음 단계 안내.
+ * 우선순위: 진행 중(무시) → 사진 → 장소 → 오프라인. 한 번에 한 가지만 안내.
+ */
+async function onShareClick(): Promise<void> {
+  if (canShare.value) {
+    await onShare();
+    return;
+  }
+  if (loading.value) return; // 이미 진행 표시 중
+  if (photos.value.length === 0) {
+    await showError('사진을 한 장 이상 추가해 주세요');
+    return;
+  }
+  if (photos.value.length > MAX_PHOTOS_PER_POST) {
+    await showError(`사진은 최대 ${MAX_PHOTOS_PER_POST}장까지 올릴 수 있어요`);
+    return;
+  }
+  if (targetPlace.value === null) {
+    await showError('장소를 선택해 주세요');
+    // 사용자가 한 번 더 누르는 수고를 줄이도록 picker 곧장 오픈.
+    void onOpenPicker();
+    return;
+  }
+  if (!online.value) {
+    await showError('인터넷 연결을 확인해 주세요');
+    return;
+  }
+}
+
 async function onShare(): Promise<void> {
   resetCompletionState();
   scoreLoading.value = true;
@@ -971,7 +1004,9 @@ ion-content.up-content {
   border: none;
   cursor: pointer;
 }
-.post[disabled] { opacity: 0.6; cursor: default; }
+/* aria-disabled 만 사용 — 클릭은 onShareClick 가 받아 누락 항목 토스트 + picker
+   자동 오픈을 처리하므로 native disabled 속성은 떼고 시각만 흐리게. */
+.post.post-disabled { opacity: 0.6; cursor: pointer; }
 
 .upload-progress {
   height: 3px;
