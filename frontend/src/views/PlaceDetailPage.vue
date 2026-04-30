@@ -198,7 +198,8 @@
                 v-for="(p, i) in galleryCells"
                 :key="p.kind === 'photo' ? `ph-${p.photo.id}` : 'more'"
                 :class="['cell', p.kind === 'more' ? 'more' : '']"
-                @click="p.kind === 'more' ? onOpenGallery() : undefined"
+                :data-testid="p.kind === 'photo' ? 'pd-gallery-cell' : undefined"
+                @click="p.kind === 'more' ? onOpenGallery() : onOpenShot(p.photo.id)"
               >
                 <img v-if="p.kind === 'photo'" :src="p.photo.imageUrl" :alt="`photo-${i}`" />
                 <template v-else>+{{ formatCount(p.remaining) }}</template>
@@ -822,6 +823,12 @@ async function onCapture(): Promise<void> {
 async function onOpenGallery(): Promise<void> {
   if (!place.value) return;
   await router.push(`/gallery/${place.value.id}`);
+}
+
+// 갤러리 셀(개별 인증샷) 클릭 → /shot/:id. "전체 보기" 또는 +N more 셀은
+// 위의 onOpenGallery 가 처리하고, 일반 사진 셀만 이 핸들러로 진입한다.
+async function onOpenShot(photoId: number): Promise<void> {
+  await router.push(`/shot/${photoId}`);
 }
 
 async function onOpenContent(): Promise<void> {

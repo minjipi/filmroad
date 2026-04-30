@@ -589,6 +589,26 @@ describe('PlaceDetailPage.vue', () => {
     expect(wrapper.findAll('.gallery .cell.more').length).toBe(1);
   });
 
+  it('갤러리 사진 셀 click → /shot/:id 라우팅 (more 셀은 /gallery 로 그대로)', async () => {
+    const { wrapper } = mountPlaceDetailPage();
+    await flushPromises();
+    pushSpy.mockClear();
+
+    // 사진 셀 — fixture.photos[0].id 로 이동.
+    const photoCells = wrapper.findAll('[data-testid="pd-gallery-cell"]');
+    expect(photoCells.length).toBe(fixture.photos.length);
+    await photoCells[0].trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith(`/shot/${fixture.photos[0].id}`);
+
+    // more 셀은 그대로 /gallery 진입.
+    pushSpy.mockClear();
+    const moreCell = wrapper.find('.gallery .cell.more');
+    await moreCell.trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith(`/gallery/${fixture.place.id}`);
+  });
+
   it('renders one .rel-card per related place', async () => {
     const { wrapper } = mountPlaceDetailPage();
     await flushPromises();
