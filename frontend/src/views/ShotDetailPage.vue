@@ -55,7 +55,7 @@
               @click="onOpenAuthor"
             >
               <div class="nm" data-testid="sd-author-nickname">
-                {{ shot.author.handle }}
+                <span class="nm-text">{{ shot.author.handle }}</span>
                 <ion-icon v-if="shot.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
               </div>
               <div class="loc">
@@ -167,7 +167,7 @@
               </div>
               <div class="meta clickable" @click="onOpenAppendedAuthor(s)">
                 <div class="nm">
-                  {{ s.author.handle }}
+                  <span class="nm-text">{{ s.author.handle }}</span>
                   <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div class="loc">
@@ -280,6 +280,23 @@
       @created="onCommentCreated"
     />
 
+    <!-- Primary 카드 더보기 시트 — 본인이면 수정/삭제, 타인이면 placeholder. -->
+    <PostMoreSheet
+      :open="primaryMoreOpen"
+      :is-own="primaryMoreIsOwn"
+      @close="onClosePrimaryMoreSheet"
+      @edit="onPrimaryEditFromSheet"
+      @delete="onPrimaryDeleteFromSheet"
+    />
+    <!-- Appended 카드 더보기 시트. 수정 → /shot/:id 라우팅. -->
+    <PostMoreSheet
+      :open="appendedMoreOpen"
+      :is-own="appendedMoreIsOwn"
+      @close="onCloseAppendedMoreSheet"
+      @edit="onAppendedEditFromSheet"
+      @delete="onAppendedDeleteFromSheet"
+    />
+
     <!-- 인증샷 수정 모달 — Teleport 로 body 에 띄워 ion-page 레이아웃 영향 없이
          iOS 시트 톤. 닫기 X 는 헤더 우상단, 저장은 footer primary. -->
     <Teleport to="body">
@@ -367,7 +384,6 @@ import {
   IonPage,
   IonContent,
   IonIcon,
-  actionSheetController,
   alertController,
 } from '@ionic/vue';
 import {
@@ -383,8 +399,6 @@ import {
   bookmarkOutline,
   paperPlaneOutline,
   closeOutline,
-  createOutline,
-  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -394,6 +408,7 @@ import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
+import PostMoreSheet from '@/components/post/PostMoreSheet.vue';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const props = defineProps<{ id: string | number }>();
@@ -563,35 +578,29 @@ async function onSaveEdit(): Promise<void> {
 
 // 작성자 더보기 메뉴: 본인 인증샷에는 수정 / 삭제 행 노출, 남 인증샷에는
 // 아직 부여할 메뉴가 없어 placeholder 토스트 유지(추후 신고 등이 들어갈 자리).
-async function onCardMore(): Promise<void> {
-  const s = shot.value;
-  if (!s) return;
-  if (!s.author.isMe) {
-    await showInfo('더보기 메뉴는 곧 공개됩니다');
-    return;
-  }
-  const sheet = await actionSheetController.create({
-    header: '인증샷',
-    buttons: [
-      {
-        text: '수정',
-        icon: createOutline,
-        handler: () => {
-          openEditModal();
-        },
-      },
-      {
-        text: '삭제',
-        role: 'destructive',
-        icon: trashOutline,
-        handler: () => {
-          void confirmDelete();
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
+// Primary 카드 더보기 — Teleport 기반 PostMoreSheet 통일 (헤더 우상단 X 아이콘).
+// 본인이면 수정/삭제 행, 타인이면 placeholder. 수정 → inline edit modal,
+// 삭제 → confirm alert → DELETE → router.back.
+const primaryMoreOpen = ref(false);
+const primaryMoreIsOwn = computed<boolean>(() => shot.value?.author.isMe === true);
+
+function onCardMore(): void {
+  if (!shot.value) return;
+  primaryMoreOpen.value = true;
+}
+
+function onClosePrimaryMoreSheet(): void {
+  primaryMoreOpen.value = false;
+}
+
+function onPrimaryEditFromSheet(): void {
+  primaryMoreOpen.value = false;
+  openEditModal();
+}
+
+function onPrimaryDeleteFromSheet(): void {
+  primaryMoreOpen.value = false;
+  void confirmDelete();
 }
 
 // 삭제 확인 → API 호출 → 성공 시 ShotDetail 자체가 의미 없으므로 router.back.
@@ -632,14 +641,15 @@ function isAppendedOwn(post: { author: { userId: number } }): boolean {
   return myId != null && post.author.userId === myId;
 }
 
-// 추가 카드의 작성자가 본인이면 primary 와 동일한 수정/삭제 ActionSheet 를
-// 띄운다. 수정은 별도 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서
-// primary 가 되어 기존 edit 모달 플로우 그대로 재사용. 본인 아니면 placeholder
-// 토스트 유지(추후 신고/숨기기 자리).
-async function onAppendedCardMore(post: {
+// Appended 카드 더보기 — primary 와 동일한 PostMoreSheet 사용. 수정은 별도
+// 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서 primary 가 되어
+// 기존 edit 모달 플로우 재사용. 본인 아니면 placeholder.
+const appendedMoreOpen = ref(false);
+const appendedMoreTarget = ref<{
   id: number;
   author: { userId: number };
-}): Promise<void> {
+} | null>(null);
+const appendedMoreIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
   const isMe = myId != null && post.author.userId === myId;
   if (!isMe) {
@@ -916,8 +926,17 @@ ion-content.sd-content {
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  min-width: 0;
 }
-.post-head .verified { color: var(--fr-primary); }
+/* 자동 생성 OAuth handle (예: @ghdalswl9833-b189d4) 처럼 긴 핸들이 카드
+   레이아웃을 밀어내지 않도록 ellipsis. 인증 아이콘은 flex-shrink:0 으로 유지. */
+.post-head .nm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.post-head .verified { color: var(--fr-primary); flex-shrink: 0; }
 .post-head .loc {
   display: flex;
   align-items: center;

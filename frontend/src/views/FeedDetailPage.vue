@@ -196,6 +196,13 @@
       @close="activeCommentPhotoId = null"
       @created="onCommentCreated"
     />
+    <PostMoreSheet
+      :open="moreSheetOpen"
+      :is-own="moreSheetIsOwn"
+      @close="onCloseMoreSheet"
+      @edit="onEditFromSheet"
+      @delete="onDeleteFromSheet"
+    />
   </ion-page>
 </template>
 
@@ -207,7 +214,6 @@ import {
   IonIcon,
   IonInfiniteScroll,
   IonInfiniteScrollContent,
-  actionSheetController,
   alertController,
 } from '@ionic/vue';
 import {
@@ -223,8 +229,6 @@ import {
   chatbubbleOutline,
   bookmark,
   bookmarkOutline,
-  createOutline,
-  trashOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
@@ -235,6 +239,7 @@ import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
+import PostMoreSheet from '@/components/post/PostMoreSheet.vue';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
@@ -420,10 +425,21 @@ function onShare(p: FeedPost): void {
   });
 }
 
-// 카드 더보기 — /shot/:id 의 onCardMore 와 동일 contract. 본인 인증샷이면
-// 수정/삭제 ActionSheet, 타인이면 placeholder 토스트 (추후 신고/숨기기 자리).
-// 수정은 별도 모달 대신 /shot/:id 라우팅 → 거기서 primary 의 edit modal 재사용.
-async function onMore(p: FeedPost): Promise<void> {
+// 카드 더보기 — Teleport 기반 PostMoreSheet 로 통일. 헤더 우상단 X 아이콘
+// 으로 닫고, 본인 인증샷이면 수정/삭제 행, 타인이면 placeholder 메시지.
+const moreSheetOpen = ref(false);
+const moreSheetTarget = ref<FeedPost | null>(null);
+
+function onMore(p: FeedPost): void {
+  moreSheetTarget.value = p;
+  moreSheetOpen.value = true;
+}
+
+function onCloseMoreSheet(): void {
+  moreSheetOpen.value = false;
+}
+
+const moreSheetIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
   const isMe = myId != null && p.author.userId === myId;
   if (!isMe) {
@@ -778,8 +794,17 @@ ion-content.feed-content {
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
+  min-width: 0;
 }
-.post-head .verified { color: var(--fr-primary); }
+/* 자동 생성 OAuth handle (예: @ghdalswl9833-b189d4) 처럼 긴 핸들이 카드
+   레이아웃을 밀어내지 않도록 ellipsis. 인증 아이콘은 flex-shrink:0 으로 유지. */
+.post-head .nm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.post-head .verified { color: var(--fr-primary); flex-shrink: 0; }
 .post-head .loc {
   display: flex;
   align-items: center;
