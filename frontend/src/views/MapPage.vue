@@ -137,7 +137,19 @@
         </div>
 
         <div class="sheet-body no-scrollbar">
-          <div class="title-row">
+          <!-- 시트 헤더(작품칩 + 장소명 + 지역) 와 썸네일은 "인증하러 가기"
+               버튼과 동일하게 /place/:id 로 진입하는 클릭 영역. 한 번에 큰
+               타깃을 누를 수 있게 두 row 모두 트리거. role=button + Enter
+               키 핸들러로 a11y 보강. -->
+          <div
+            class="title-row clickable"
+            role="button"
+            tabindex="0"
+            data-testid="map-sheet-title"
+            @click="onOpenDetail"
+            @keydown.enter="onOpenDetail"
+            @keydown.space.prevent="onOpenDetail"
+          >
             <div>
               <FrChip variant="soft">{{ workBadge }}</FrChip>
               <div class="t1">{{ selected.name }}</div>
@@ -148,7 +160,16 @@
           </div>
 
           <div class="sheet-preview">
-            <div class="sheet-thumb">
+            <div
+              class="sheet-thumb clickable"
+              role="button"
+              tabindex="0"
+              data-testid="map-sheet-thumb"
+              :aria-label="`${selected.name} 상세 보기`"
+              @click="onOpenDetail"
+              @keydown.enter="onOpenDetail"
+              @keydown.space.prevent="onOpenDetail"
+            >
               <img
                 v-if="selected.sceneImageUrl"
                 :src="selected.sceneImageUrl"
@@ -1076,6 +1097,16 @@ ion-content.map-content {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+/* title-row + sheet-thumb 모두 /place/:id 진입 트리거. cursor + focus ring 으로
+   클릭 가능 신호. */
+.title-row.clickable,
+.sheet-thumb.clickable { cursor: pointer; }
+.title-row.clickable:focus-visible,
+.sheet-thumb.clickable:focus-visible {
+  outline: 2px solid var(--fr-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 .t1 {
   font-size: 17px; font-weight: 800;
