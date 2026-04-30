@@ -11,6 +11,7 @@ import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.place.PlaceRepository;
 import com.filmroad.api.domain.stamp.Stamp;
 import com.filmroad.api.domain.stamp.StampRepository;
+import com.filmroad.api.domain.trophy.TrophyService;
 import com.filmroad.api.domain.user.dto.CollectedContentDto;
 import com.filmroad.api.domain.user.dto.LikedPlaceDto;
 import com.filmroad.api.domain.user.dto.MiniMapPinDto;
@@ -56,6 +57,7 @@ public class UserService {
     private final PlaceRepository placeRepository;
     private final PlaceLikeRepository placeLikeRepository;
     private final UserFollowRepository userFollowRepository;
+    private final TrophyService trophyService;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
@@ -86,6 +88,7 @@ public class UserService {
                 .user(UserMeDto.from(user))
                 .stats(stats)
                 .miniMapPins(pins)
+                .trophies(trophyService.listForUser(userId))
                 .build();
     }
 
@@ -185,6 +188,7 @@ public class UserService {
                 .following(following)
                 .topPhotos(topPhotos)
                 .recentCollectedContents(recentCollectedContents)
+                .trophies(trophyService.listForUser(targetUserId))
                 .build();
     }
 

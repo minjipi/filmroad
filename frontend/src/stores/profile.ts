@@ -31,10 +31,28 @@ export interface MiniMapPin {
   variant: MiniMapVariant;
 }
 
+/**
+ * 작품 컴플리트 트로피 단계. percent (collected/total) 가 컷오프 이상일 때 진입.
+ * 25 → QUARTER, 50 → HALF, 75 → THREE_Q, 100 → MASTER. 한번 획득하면 영구.
+ */
+export type ContentTrophyTier = 'QUARTER' | 'HALF' | 'THREE_Q' | 'MASTER';
+
+export interface ContentTrophy {
+  contentId: number;
+  contentTitle: string;
+  contentPosterUrl: string | null;
+  tier: ContentTrophyTier;
+  awardedAt: string;
+  collectedCount: number;
+  totalCount: number;
+  percent: number;
+}
+
 export interface ProfileResponse {
   user: ProfileUser;
   stats: ProfileStats;
   miniMapPins: MiniMapPin[];
+  trophies: ContentTrophy[];
 }
 
 export type PhotoVisibility = 'PUBLIC' | 'PRIVATE';
@@ -63,6 +81,7 @@ interface State {
   user: ProfileUser | null;
   stats: ProfileStats | null;
   miniMapPins: MiniMapPin[];
+  trophies: ContentTrophy[];
   loading: boolean;
   error: string | null;
   // My-photos grid (task #35). Kept alongside the profile payload so the
@@ -83,6 +102,7 @@ export const useProfileStore = defineStore('profile', {
     user: null,
     stats: null,
     miniMapPins: [],
+    trophies: [],
     loading: false,
     error: null,
     myPhotos: [],
@@ -100,6 +120,7 @@ export const useProfileStore = defineStore('profile', {
         this.user = data.user;
         this.stats = data.stats;
         this.miniMapPins = data.miniMapPins;
+        this.trophies = data.trophies ?? [];
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Failed to load profile';
       } finally {

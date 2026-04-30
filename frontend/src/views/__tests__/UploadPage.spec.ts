@@ -386,6 +386,9 @@ describe('UploadPage.vue', () => {
           previousLevel: 5,
           levelName: '성지 순례자',
           newBadges: [],
+          newTrophyTier: null,
+          newTrophyContentTitle: null,
+          newTrophyContentPosterUrl: null,
         },
       };
       vi.spyOn(store, 'submit').mockImplementation(async () => {
@@ -702,6 +705,9 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
           previousLevel: 3,
           levelName: '성실 순례자',
           newBadges: [],
+          newTrophyTier: null,
+          newTrophyContentTitle: null,
+          newTrophyContentPosterUrl: null,
         },
       }));
 
@@ -866,6 +872,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
         reward: {
           pointsEarned: 50, currentPoints: 350, streakDays: 7,
           level: 3, previousLevel: 3, levelName: '성실 순례자', newBadges: [],
+          newTrophyTier: null, newTrophyContentTitle: null, newTrophyContentPosterUrl: null,
         },
       });
       vi.spyOn(store, 'submit').mockImplementation(async () => {

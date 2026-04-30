@@ -393,6 +393,15 @@ INSERT IGNORE INTO stamp (id, user_id, place_id, photo_id, acquired_at, CREATE_D
   (7, 1, 11, 110, NOW(), NOW(), NOW()),
   (8, 1, 17, 170, NOW(), NOW(), NOW());
 
+-- 작품 컴플리트 트로피 시드. user=1 은 시드 stamp 8개로 4개 작품 모두 100% 도달
+-- → 4개 MASTER 트로피. percent 는 응답 시점에 stamp/place count 로 즉석 계산되므로
+-- 트로피 row 가 MASTER 라도 화면에는 "100% / 마스터 작품" 으로 일관 노출.
+INSERT IGNORE INTO content_trophy (id, user_id, content_id, tier, awarded_at, CREATE_DATE, UPDATE_DATE) VALUES
+  (1, 1, 1, 'MASTER', NOW(), NOW(), NOW()),
+  (2, 1, 2, 'MASTER', NOW(), NOW(), NOW()),
+  (3, 1, 3, 'MASTER', NOW(), NOW(), NOW()),
+  (4, 1, 4, 'MASTER', NOW(), NOW(), NOW());
+
 -- 작품 확장(#23) 메타데이터 백필: synopsis/ratingAverage/yearStart/episodeCount/network/subtitle.
 UPDATE content SET synopsis = '불멸의 도깨비와 그의 신부가 된 소녀의 이야기',
   rating_average = 9.2, year_start = 2016, episode_count = 16, network = 'tvN',

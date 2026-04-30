@@ -62,6 +62,7 @@ const fixture: UserProfile = {
     { id: 1, title: '도깨비', posterUrl: 'https://img/w1.jpg', collectedCount: 24, totalCount: 24 },
     { id: 2, title: '갯마을차차차', posterUrl: 'https://img/w2.jpg', collectedCount: 18, totalCount: 26 },
   ],
+  trophies: [],
 };
 
 const mockApi = api as unknown as {
