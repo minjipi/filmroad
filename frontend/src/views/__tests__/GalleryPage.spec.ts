@@ -149,23 +149,23 @@ describe('GalleryPage.vue', () => {
     expect(wrapper.find('.grid-view').exists()).toBe(false);
   });
 
-  it('post-head ava + handle-block click → /user/:authorUserId', async () => {
+  it('post-head avatar + meta click → /user/:authorUserId', async () => {
     const { wrapper } = mountGallery();
     await flushPromises();
     pushSpy.mockClear();
 
     const post = wrapper.findAll('.gal-feed .post')[0];
-    await post.find('.ava').trigger('click');
+    await post.find('.avatar').trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/user/7');
 
     pushSpy.mockClear();
-    await post.find('.handle-block').trigger('click');
+    await post.find('.meta').trigger('click');
     await flushPromises();
     expect(pushSpy).toHaveBeenCalledWith('/user/7');
   });
 
-  it('anonymous photo (authorUserId=null) → ava/handle-block click is a no-op', async () => {
+  it('anonymous photo (authorUserId=null) → avatar/meta click is a no-op', async () => {
     // anonymous 시드 사진처럼 user 가 없는 케이스는 라우팅 자체를 disable.
     // (.clickable 클래스도 안 붙어 cursor 도 default.)
     const anonPhotos = [{ ...galleryState.photos[0], authorUserId: null }];
@@ -174,9 +174,9 @@ describe('GalleryPage.vue', () => {
     pushSpy.mockClear();
 
     const post = wrapper.findAll('.gal-feed .post')[0];
-    expect(post.find('.ava').classes()).not.toContain('clickable');
-    expect(post.find('.handle-block').classes()).not.toContain('clickable');
-    await post.find('.ava').trigger('click');
+    expect(post.find('.avatar').classes()).not.toContain('clickable');
+    expect(post.find('.meta').classes()).not.toContain('clickable');
+    await post.find('.avatar').trigger('click');
     await flushPromises();
     expect(pushSpy).not.toHaveBeenCalled();
   });
@@ -190,7 +190,8 @@ describe('GalleryPage.vue', () => {
     const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
     const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
-    const bookmarks = wrapper.findAll('[data-testid="gallery-save"]');
+    // /feed/detail 와 동일한 testid("feed-save") 사용 — 시각/마크업 통일.
+    const bookmarks = wrapper.findAll('[data-testid="feed-save"]');
     // One bookmark per feed-view post.
     expect(bookmarks.length).toBe(galleryState.photos.length);
 
@@ -213,7 +214,7 @@ describe('GalleryPage.vue', () => {
     const toggleSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
     const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
-    const bookmarks = wrapper.findAll('[data-testid="gallery-save"]');
+    const bookmarks = wrapper.findAll('[data-testid="feed-save"]');
     await bookmarks[0].trigger('click');
     expect(toggleSpy).toHaveBeenCalledWith(galleryState.placeHeader.placeId);
     expect(pickerSpy).not.toHaveBeenCalled();

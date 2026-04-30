@@ -551,42 +551,39 @@ describe('ShotDetailPage.vue', () => {
     expect(cards.length).toBe(1);
     const card = cards[0];
 
-    // 5 sections — same class names as primary so styles cascade through.
-    expect(card.find('section.compare').exists()).toBe(true);
-    expect(card.find('section.sd-user').exists()).toBe(true);
-    expect(card.find('section.sd-stats').exists()).toBe(true);
-    expect(card.find('section.sd-caption').exists()).toBe(true);
-    expect(card.find('button.cmt-input-wrap').exists()).toBe(true);
+    // /feed/detail 와 동일한 카드 마크업 (디자인 통일).
+    expect(card.find('.post-head').exists()).toBe(true);
+    expect(card.find('.post-image').exists()).toBe(true);
+    expect(card.find('.post-actions').exists()).toBe(true);
+    expect(card.find('.post-caption').exists()).toBe(true);
+    expect(card.find('.post-time').exists()).toBe(true);
 
-    // compare-hero — two imgs (drama + shot) + scene-meta with work info.
-    const compareImgs = card.findAll('section.compare img');
+    // post-image: dramaSceneImageUrl 있으면 compare-wrap, 아니면 single-img.
+    expect(card.find('.compare-wrap').exists()).toBe(true);
+    const compareImgs = card.findAll('.compare-wrap img');
     expect(compareImgs.length).toBe(2);
     expect(compareImgs[0].attributes('src')).toBe('https://cdn/scene/76.jpg');
     expect(compareImgs[1].attributes('src')).toBe('https://cdn/p/76.jpg');
-    expect(card.find('section.compare .scene-meta').text()).toContain('도깨비');
-    expect(card.find('section.compare .scene-meta').text()).toContain('2회');
+    expect(card.find('.drama-badge').text()).toContain('2회');
 
-    // sd-user — nickname + place + verified, all interactive (task #18).
-    expect(card.find('.sd-user .nm').text()).toContain('trip_hj');
-    expect(card.find('.sd-user .verified').exists()).toBe(true);
-    expect(card.find('.sd-user .sub').text()).toContain('강릉 안목해변');
-    expect((card.find('.sd-user .nm').element as HTMLButtonElement).disabled).toBe(false);
-    expect((card.find('.sd-user .follow').element as HTMLButtonElement).disabled).toBe(false);
+    // post-head: handle / verified / loc(content·place) / follow / more.
+    expect(card.find('.nm').text()).toContain('trip_hj');
+    expect(card.find('.verified').exists()).toBe(true); // fixture verified=true
+    expect(card.find('.loc').text()).toContain('도깨비');
+    expect(card.find('.loc').text()).toContain('강릉 안목해변');
+    expect(card.find('.author-follow').exists()).toBe(true); // !isOwn (viewer=1, author=2) → 노출
+    expect(card.find('.author-follow').text()).toBe('팔로잉'); // following=true
+    expect(card.find('.post-head .more').exists()).toBe(true);
 
-    // sd-stats — 4 buttons. 좋아요/댓글/저장 interactive (task #18), 공유 disabled.
-    const statBtns = card.findAll('.sd-stat-btn');
-    expect(statBtns.length).toBe(4);
-    expect((statBtns[0].element as HTMLButtonElement).disabled).toBe(false); // 좋아요
-    expect((statBtns[1].element as HTMLButtonElement).disabled).toBe(false); // 댓글
-    expect((statBtns[2].element as HTMLButtonElement).disabled).toBe(false); // 저장
-    expect((statBtns[3].element as HTMLButtonElement).disabled).toBe(true); // 공유 (no real endpoint)
+    // post-actions: like / comment / share / spacer / save (4 spans + spacer).
+    const actions = card.findAll('.post-actions .a');
+    expect(actions.length).toBe(4);
+    expect(card.find('[data-testid="feed-share"]').exists()).toBe(true);
+    expect(card.find('[data-testid="feed-save"]').exists()).toBe(true);
 
-    // sd-caption — caption text only (FeedPost has no tags).
-    expect(card.find('.sd-caption .body').text()).toContain('안목해변에서');
-    expect(card.findAll('.sd-caption .tag').length).toBe(0);
-
-    // cmt-input-wrap — interactive (task #18).
-    expect((card.find('button.cmt-input-wrap').element as HTMLButtonElement).disabled).toBe(false);
+    // post-caption: caption-text wrapping handle + caption.
+    expect(card.find('.caption-text').text()).toContain('안목해변에서');
+    expect(card.find('.caption-text b').text()).toBe('@trip_hj');
   });
 
   // task #18 — appended-card interaction wiring.
@@ -635,7 +632,7 @@ describe('ShotDetailPage.vue', () => {
     mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 101 } });
 
     const card = wrapper.find('[data-testid="sd-feed-card"]');
-    const likeBtn = card.findAll('.sd-stat-btn')[0];
+    const likeBtn = card.findAll('.post-actions .a')[0];
     await likeBtn.trigger('click');
     await flushPromises();
 
@@ -659,7 +656,7 @@ describe('ShotDetailPage.vue', () => {
     const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
 
     const card = wrapper.find('[data-testid="sd-feed-card"]');
-    const saveBtn = card.findAll('.sd-stat-btn')[2];
+    const saveBtn = card.find('[data-testid="feed-save"]');
     await saveBtn.trigger('click');
     await flushPromises();
 
@@ -679,7 +676,7 @@ describe('ShotDetailPage.vue', () => {
     });
 
     const card = wrapper.find('[data-testid="sd-feed-card"]');
-    await card.find('.sd-user .follow').trigger('click');
+    await card.find('.author-follow').trigger('click');
     await flushPromises();
 
     const calls = mockApi.post.mock.calls;
@@ -688,7 +685,9 @@ describe('ShotDetailPage.vue', () => {
     expect(store.appendedShots[0].author.following).toBe(true);
   });
 
-  it('appended card cmt-input-wrap click → opens CommentSheet for that post id (task #18)', async () => {
+  it('appended card 댓글 아이콘 click → opens CommentSheet for that post id', async () => {
+    // /feed/detail 통일 후엔 inline cmt-input 대신 post-actions 의 댓글 아이콘이
+    // 시트를 연다. (디자인 통일 — 같은 카드를 여러 페이지가 공유)
     const { wrapper } = mountPage();
     await flushPromises();
     const { useShotDetailStore } = await import('@/stores/shotDetail');
@@ -696,12 +695,13 @@ describe('ShotDetailPage.vue', () => {
     store.appendedShots.push(seedAppended({ id: 76 }));
     await flushPromises();
 
-    // 초기엔 시트 닫힘.
     let stub = wrapper.find('.comment-sheet-stub');
     expect(stub.attributes('data-open')).toBe('false');
 
     const card = wrapper.find('[data-testid="sd-feed-card"]');
-    await card.find('button.cmt-input-wrap').trigger('click');
+    // 두 번째 a (댓글). [0]=좋아요, [1]=댓글, [2]=공유, [3]=저장.
+    const commentBtn = card.findAll('.post-actions .a')[1];
+    await commentBtn.trigger('click');
     await flushPromises();
 
     stub = wrapper.find('.comment-sheet-stub');
@@ -753,26 +753,11 @@ describe('ShotDetailPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith('/user/9');
   });
 
-  it('appended card sub(place) click → router.push /map?selectedId=:placeId (task #21)', async () => {
-    const { wrapper } = mountPage();
-    await flushPromises();
-    const { useShotDetailStore } = await import('@/stores/shotDetail');
-    const store = useShotDetailStore();
-    store.appendedShots.push(seedAppended({ placeId: 22 }));
-    await flushPromises();
+  // /feed/detail 디자인 통일로 appended 카드의 sub(place) 클릭 → /map 진입은
+  // 제거됨. place 이름은 head 의 .loc 안에 텍스트로만 표시되며, 카드 인터랙션은
+  // avatar/meta(작성자) → /user/:id, 본문 → /shot/:id 두 경로로 단순화.
 
-    pushSpy.mockClear();
-    const card = wrapper.find('[data-testid="sd-feed-card"]');
-    await card.find('.sub').trigger('click');
-    await flushPromises();
-
-    expect(pushSpy).toHaveBeenCalledWith({
-      path: '/map',
-      query: { selectedId: '22' },
-    });
-  });
-
-  it('appended card 닉네임 click → router.push /user/:userId (task #18)', async () => {
+  it('appended card 메타(작성자) click → router.push /user/:userId', async () => {
     const { wrapper } = mountPage();
     await flushPromises();
     const { useShotDetailStore } = await import('@/stores/shotDetail');
@@ -782,7 +767,8 @@ describe('ShotDetailPage.vue', () => {
 
     pushSpy.mockClear();
     const card = wrapper.find('[data-testid="sd-feed-card"]');
-    await card.find('.sd-user .nm').trigger('click');
+    // .meta 전체가 클릭 영역 (avatar 와 동일 동작).
+    await card.find('.meta').trigger('click');
     await flushPromises();
 
     expect(pushSpy).toHaveBeenCalledWith('/user/9');
@@ -852,7 +838,10 @@ describe('ShotDetailPage.vue', () => {
     expect(compare.find('.lbl-chip.r').exists()).toBe(false);
   });
 
-  it('appended feed cards each render their own .card-more button (task #26)', async () => {
+  it('appended feed cards each render their own more button (/feed/detail 톤 통일)', async () => {
+    // /feed/detail 디자인 통일 후엔 카드 우상단 .card-more 가 아니라 head 우측의
+    // .more 버튼이 그 역할을 한다. primary 카드는 여전히 .card-more 를 사용
+    // (carousel 위 오버레이라 자리 다름).
     const { wrapper } = mountPage();
     await flushPromises();
 
@@ -885,10 +874,9 @@ describe('ShotDetailPage.vue', () => {
 
     const card = wrapper.find('[data-testid="sd-feed-card"]');
     expect(card.exists()).toBe(true);
-    // 카드 내부의 .card-more — 셀렉터를 카드로 좁혀 primary 와 충돌 회피.
-    const more = card.find('.card-more');
+    const more = card.find('.post-head .more');
     expect(more.exists()).toBe(true);
-    expect(more.attributes('aria-label')).toBe('더보기');
+    expect(more.attributes('aria-label')).toBe('more');
   });
 
   it('back button calls router.back()', async () => {
