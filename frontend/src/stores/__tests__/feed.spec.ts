@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }));
 
 // NEARBY 탭의 geolocation 호출을 컨트롤하기 위한 mock.
@@ -41,6 +41,7 @@ import { signInForTest } from './__helpers__/auth';
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
 };
 
 function makePost(id: number, sceneCompare = false): FeedPost {
@@ -406,5 +407,36 @@ describe('feed store', () => {
     expect(store.error).toBe('자기 자신은 팔로우할 수 없어요');
     const u1 = store.recommendedUsers.find((u) => u.userId === 1);
     expect(u1?.following).toBe(false);
+  });
+
+  it('deletePost: DELETE /api/photos/:id 후 posts 에서 splice', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: page1 });
+    const store = useFeedStore();
+    await store.fetch();
+    const before = store.posts.length;
+    expect(before).toBeGreaterThan(0);
+    const targetId = store.posts[0].id;
+
+    mockApi.delete.mockResolvedValueOnce({ data: null });
+    const ok = await store.deletePost(targetId);
+
+    expect(ok).toBe(true);
+    expect(mockApi.delete).toHaveBeenCalledWith(`/api/photos/${targetId}`);
+    expect(store.posts.length).toBe(before - 1);
+    expect(store.posts.find((p) => p.id === targetId)).toBeUndefined();
+  });
+
+  it('deletePost: 실패 시 error 저장 + posts 그대로', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: page1 });
+    const store = useFeedStore();
+    await store.fetch();
+    const before = store.posts.length;
+
+    mockApi.delete.mockRejectedValueOnce(new Error('서버 오류'));
+    const ok = await store.deletePost(store.posts[0].id);
+
+    expect(ok).toBe(false);
+    expect(store.error).toBe('서버 오류');
+    expect(store.posts.length).toBe(before);
   });
 });

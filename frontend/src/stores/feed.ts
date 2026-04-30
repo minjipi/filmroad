@@ -269,5 +269,21 @@ export const useFeedStore = defineStore('feed', {
         this.error = e instanceof Error ? e.message : 'Failed to toggle follow';
       }
     },
+
+    /**
+     * 본인 인증샷 hard delete — DELETE /api/photos/:id 후 posts 에서 splice.
+     * shotDetail.deleteAppendedShot 와 동일 contract. 권한 검사는 백엔드가
+     * PHOTO_UNAUTHORIZED 로 차단 (호출부도 isOwn 검사 후 호출).
+     */
+    async deletePost(postId: number): Promise<boolean> {
+      try {
+        await api.delete(`/api/photos/${postId}`);
+        this.posts = this.posts.filter((p) => p.id !== postId);
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '삭제에 실패했어요';
+        return false;
+      }
+    },
   },
 });

@@ -124,5 +124,28 @@ export const useGalleryStore = defineStore('gallery', {
       this.loading = false;
       this.error = null;
     },
+
+    /**
+     * 본인 인증샷 hard delete — DELETE /api/photos/:id 후 photos 에서 splice +
+     * placeHeader.totalPhotoCount 감소. shotDetail.deleteAppendedShot 와 동일
+     * contract. 권한 검사는 백엔드가 PHOTO_UNAUTHORIZED 로 차단.
+     */
+    async deletePhoto(photoId: number): Promise<boolean> {
+      try {
+        await api.delete(`/api/photos/${photoId}`);
+        this.photos = this.photos.filter((p) => p.id !== photoId);
+        this.total = Math.max(0, this.total - 1);
+        if (this.placeHeader) {
+          this.placeHeader = {
+            ...this.placeHeader,
+            totalPhotoCount: Math.max(0, this.placeHeader.totalPhotoCount - 1),
+          };
+        }
+        return true;
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '삭제에 실패했어요';
+        return false;
+      }
+    },
   },
 });

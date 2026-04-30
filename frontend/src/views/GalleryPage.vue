@@ -74,7 +74,7 @@
                   <span class="drama">{{ placeHeader.contentTitle }}</span>·{{ placeHeader.name }}
                 </div>
               </div>
-              <button class="more" type="button" aria-label="more" @click="onMore">
+              <button class="more" type="button" aria-label="more" @click="onMore(p)">
                 <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
               </button>
             </div>
@@ -156,7 +156,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, actionSheetController, alertController } from '@ionic/vue';
 import {
   chevronBack,
   mapOutline,
@@ -171,6 +171,8 @@ import {
   paperPlaneOutline,
   bookmarkOutline,
   bookmark,
+  createOutline,
+  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -178,9 +180,11 @@ import {
   useGalleryStore,
   type GallerySort,
   type GalleryViewMode,
+  type GalleryPhoto,
 } from '@/stores/gallery';
 import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
+import { useAuthStore } from '@/stores/auth';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
 import { useToast } from '@/composables/useToast';
 
@@ -190,6 +194,7 @@ const router = useRouter();
 const galleryStore = useGalleryStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
 const { placeHeader, photos, total, sort, viewMode, loading, error } = storeToRefs(galleryStore);
 const { showError, showInfo } = useToast();
 
@@ -274,8 +279,65 @@ async function onLoadMore(): Promise<void> {
   await galleryStore.loadMore();
 }
 
-async function onMore(): Promise<void> {
-  await showInfo('메뉴는 곧 공개됩니다');
+// 카드 더보기 — /shot/:id 의 onCardMore 와 동일 contract. 본인 인증샷이면
+// 수정/삭제 ActionSheet, 타인이면 placeholder 토스트. 수정은 별도 모달 대신
+// /shot/:id 라우팅 → 거기서 primary 의 edit modal 재사용.
+async function onMore(p: GalleryPhoto): Promise<void> {
+  const myId = authStore.user?.id ?? null;
+  const isMe = myId != null && p.authorUserId === myId;
+  if (!isMe) {
+    await showInfo('더보기 메뉴는 곧 공개됩니다');
+    return;
+  }
+  const sheet = await actionSheetController.create({
+    header: '인증샷',
+    buttons: [
+      {
+        text: '수정',
+        icon: createOutline,
+        handler: () => {
+          void router.push(`/shot/${p.id}`);
+        },
+      },
+      {
+        text: '삭제',
+        role: 'destructive',
+        icon: trashOutline,
+        handler: () => {
+          void confirmDelete(p.id);
+        },
+      },
+      { text: '취소', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+}
+
+async function confirmDelete(photoId: number): Promise<void> {
+  const alert = await alertController.create({
+    header: '인증샷을 삭제할까요?',
+    message: '삭제한 인증샷은 다시 복구할 수 없어요.',
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      {
+        text: '삭제',
+        role: 'destructive',
+        handler: () => {
+          void performDelete(photoId);
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+async function performDelete(photoId: number): Promise<void> {
+  const ok = await galleryStore.deletePhoto(photoId);
+  if (!ok) {
+    if (galleryStore.error) await showError(galleryStore.error);
+    return;
+  }
+  await showInfo('인증샷이 삭제됐어요');
 }
 
 async function load(): Promise<void> {
