@@ -823,25 +823,25 @@ describe('ShotDetailPage.vue', () => {
   });
 
   describe('owner more menu — edit / delete', () => {
-    it('isMe=true 작성자 카드 더보기 → actionSheet 가 수정/삭제/취소 buttons 로 present', async () => {
+    // ActionSheet → Teleport 기반 PostMoreSheet 로 통일됨. 셀렉터는
+    // document.body 에서 [data-testid="post-more-*"] 로 직접 클릭.
+
+    it('isMe=true 작성자 카드 더보기 → 시트 렌더 + 수정/삭제 행 노출', async () => {
       const { wrapper } = mountPage();
       await flushPromises();
 
       await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
       await flushPromises();
 
-      expect(actionSheetCreateSpy).toHaveBeenCalledTimes(1);
-      const opts = actionSheetCreateSpy.mock.calls[0][0] as {
-        header?: string;
-        buttons: Array<{ text: string; role?: string }>;
-      };
-      expect(opts.header).toBe('인증샷');
-      expect(opts.buttons.map((b) => b.text)).toEqual(['수정', '삭제', '취소']);
-      expect(opts.buttons[1].role).toBe('destructive');
+      const sheet = document.body.querySelector('[data-testid="post-more-sheet"]');
+      expect(sheet).not.toBeNull();
+      expect(document.body.querySelector('[data-testid="post-more-edit"]')).not.toBeNull();
+      expect(document.body.querySelector('[data-testid="post-more-delete"]')).not.toBeNull();
+      // 본인이라 placeholder 메시지 없어야.
+      expect(document.body.querySelector('[data-testid="post-more-empty"]')).toBeNull();
     });
 
-    it('isMe=false 인 다른 사람 카드 → actionSheet 안 뜨고 placeholder toast 만', async () => {
-      // 다른 사람 인증샷 시나리오: fetch 응답을 isMe=false 로 갈아끼움.
+    it('isMe=false 인 다른 사람 카드 → 시트는 뜨지만 placeholder 메시지 (수정/삭제 X)', async () => {
       mockApi.get.mockReset();
       mockApi.get.mockResolvedValue({
         data: { ...fixture, author: { ...fixture.author, isMe: false } },
@@ -852,20 +852,23 @@ describe('ShotDetailPage.vue', () => {
       await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
       await flushPromises();
 
-      expect(actionSheetCreateSpy).not.toHaveBeenCalled();
-      expect(toastCreateSpy).toHaveBeenCalled();
+      // 시트 자체는 노출되지만 본인 아니라 placeholder 행만.
+      expect(document.body.querySelector('[data-testid="post-more-sheet"]')).not.toBeNull();
+      expect(document.body.querySelector('[data-testid="post-more-empty"]')).not.toBeNull();
+      expect(document.body.querySelector('[data-testid="post-more-edit"]')).toBeNull();
+      expect(document.body.querySelector('[data-testid="post-more-delete"]')).toBeNull();
     });
 
-    it('수정 행 handler → 수정 모달이 열리고 textarea/visibility 가 현재 값으로 시드', async () => {
+    it('수정 행 click → 수정 모달이 열리고 textarea/visibility 가 현재 값으로 시드', async () => {
       const { wrapper } = mountPage();
       await flushPromises();
       await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
       await flushPromises();
 
-      const buttons = (actionSheetCreateSpy.mock.calls[0][0] as {
-        buttons: Array<{ text: string; handler?: () => void }>;
-      }).buttons;
-      buttons.find((b) => b.text === '수정')!.handler!();
+      const editBtn = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="post-more-edit"]',
+      )!;
+      editBtn.click();
       await flushPromises();
 
       // Teleport 가 body 에 시트를 박아두므로 document.body 에서 직접 조회.
@@ -886,10 +889,9 @@ describe('ShotDetailPage.vue', () => {
       await flushPromises();
       await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
       await flushPromises();
-      const buttons = (actionSheetCreateSpy.mock.calls[0][0] as {
-        buttons: Array<{ text: string; handler?: () => void }>;
-      }).buttons;
-      buttons.find((b) => b.text === '수정')!.handler!();
+      document.body
+        .querySelector<HTMLButtonElement>('[data-testid="post-more-edit"]')!
+        .click();
       await flushPromises();
 
       // 사용자 입력 시뮬레이션: 캡션 변경 + 공개범위 PRIVATE.
@@ -919,15 +921,15 @@ describe('ShotDetailPage.vue', () => {
       expect(body).toMatchObject({ caption: '바뀐 캡션', visibility: 'PRIVATE' });
     });
 
-    it('삭제 행 handler → alert present + 확인 시 DELETE 호출 + router.back', async () => {
+    it('삭제 행 click → alert present + 확인 시 DELETE 호출 + router.back', async () => {
       const { wrapper } = mountPage();
       await flushPromises();
       await wrapper.find('[data-testid="sd-card-more"]').trigger('click');
       await flushPromises();
-      const sheetButtons = (actionSheetCreateSpy.mock.calls[0][0] as {
-        buttons: Array<{ text: string; handler?: () => void }>;
-      }).buttons;
-      sheetButtons.find((b) => b.text === '삭제')!.handler!();
+
+      document.body
+        .querySelector<HTMLButtonElement>('[data-testid="post-more-delete"]')!
+        .click();
       await flushPromises();
 
       expect(alertCreateSpy).toHaveBeenCalledTimes(1);
@@ -948,7 +950,9 @@ describe('ShotDetailPage.vue', () => {
   // Teleport 시트가 document.body 에 머물러 다음 테스트로 새는 걸 막는 cleanup.
   afterEach(() => {
     document.body
-      .querySelectorAll('[data-testid="sd-edit-sheet"], [data-testid="sd-edit-backdrop"]')
+      .querySelectorAll(
+        '[data-testid="sd-edit-sheet"], [data-testid="sd-edit-backdrop"], [data-testid="post-more-sheet"], [data-testid="post-more-backdrop"]',
+      )
       .forEach((el) => el.remove());
   });
 });
