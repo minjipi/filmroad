@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), delete: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }));
 
 import api from '@/services/api';
@@ -10,10 +10,11 @@ import { useGalleryStore, type GalleryResponse } from '@/stores/gallery';
 
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
 };
 
-function makePhoto(id: number) {
+function makePhoto(id: number, overrides: { liked?: boolean } = {}) {
   return {
     id,
     imageUrl: `https://cdn/p/${id}.jpg`,
@@ -27,6 +28,7 @@ function makePhoto(id: number) {
     likeCount: 120,
     commentCount: 3,
     sceneCompare: false,
+    liked: overrides.liked ?? false,
   };
 }
 
@@ -59,6 +61,7 @@ describe('gallery store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApi.get.mockReset();
+    mockApi.post.mockReset();
   });
 
   it('fetch happy path populates placeHeader/photos/total and calls GET /api/places/:id/photos with sort/page/size', async () => {
@@ -154,6 +157,69 @@ describe('gallery store', () => {
     expect(store.total).toBe(beforeTotal - 1);
     expect(store.placeHeader!.totalPhotoCount).toBe(beforeHeaderCount - 1);
     expect(store.photos.find((p) => p.id === targetId)).toBeUndefined();
+  });
+
+  // ── task #25: toggleLike ───────────────────────────────────────────
+  it('toggleLike: 비로그인 시 LoginPrompt 띄우고 noop (no API call)', async () => {
+    const { useUiStore } = await import('@/stores/ui');
+    const { useAuthStore } = await import('@/stores/auth');
+    const ui = useUiStore();
+    const auth = useAuthStore();
+    auth.user = null;
+    const promptSpy = vi.spyOn(ui, 'showLoginPrompt').mockImplementation(() => {});
+
+    mockApi.get.mockResolvedValueOnce({ data: page0Fixture });
+    const store = useGalleryStore();
+    await store.fetch(10);
+
+    await store.toggleLike(store.photos[0].id);
+    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(promptSpy).toHaveBeenCalled();
+  });
+
+  it('toggleLike: POST /api/photos/:id/like + 응답으로 photo.liked / likeCount 갱신', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    const auth = useAuthStore();
+    auth.user = {
+      id: 1, nickname: 'me', handle: 'me', avatarUrl: '',
+      bio: null, level: 1, levelName: '', points: 0, streakDays: 0,
+      followersCount: 0, followingCount: 0,
+    };
+
+    mockApi.get.mockResolvedValueOnce({ data: page0Fixture });
+    const store = useGalleryStore();
+    await store.fetch(10);
+    const targetId = store.photos[1].id;
+    expect(store.photos[1].liked).toBe(false);
+
+    mockApi.post.mockResolvedValueOnce({ data: { liked: true, likeCount: 999 } });
+    await store.toggleLike(targetId);
+
+    expect(mockApi.post).toHaveBeenCalledWith(`/api/photos/${targetId}/like`);
+    const target = store.photos.find((p) => p.id === targetId)!;
+    expect(target.liked).toBe(true);
+    expect(target.likeCount).toBe(999);
+  });
+
+  it('toggleLike: API 실패 시 error 저장 + photo 상태 미변경', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    const auth = useAuthStore();
+    auth.user = {
+      id: 1, nickname: 'me', handle: 'me', avatarUrl: '',
+      bio: null, level: 1, levelName: '', points: 0, streakDays: 0,
+      followersCount: 0, followingCount: 0,
+    };
+
+    mockApi.get.mockResolvedValueOnce({ data: page0Fixture });
+    const store = useGalleryStore();
+    await store.fetch(10);
+    const before = store.photos[0].liked;
+
+    mockApi.post.mockRejectedValueOnce(new Error('서버 오류'));
+    await store.toggleLike(store.photos[0].id);
+
+    expect(store.error).toBe('서버 오류');
+    expect(store.photos[0].liked).toBe(before);
   });
 
   it('deletePhoto: 실패 시 error 저장 + photos 그대로', async () => {

@@ -511,7 +511,7 @@ function onShare(): void {
     title: `${s.author.nickname}의 인증샷`,
     description: `${s.content.title} · ${s.place.name}`,
     imageUrl: s.imageUrl,
-    url: `${origin}/shot/${s.id}`,
+    url: `${origin}/feed/detail?shotId=${s.id}`,
   });
 }
 
@@ -653,7 +653,7 @@ async function onAppendedCardMore(post: {
         text: '수정',
         icon: createOutline,
         handler: () => {
-          void router.push(`/shot/${post.id}`);
+          void router.push(`/feed/detail?shotId=${post.id}`);
         },
       },
       {

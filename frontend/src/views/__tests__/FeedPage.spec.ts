@@ -172,23 +172,23 @@ describe('FeedPage.vue (Explore grid — task #40)', () => {
     expect(cells[0].classes()).not.toContain('compare');
   });
 
-  it('tapping a grid cell pushes /shot/:id (task #38 wiring preserved)', async () => {
+  it('tapping a grid cell pushes /feed/detail?shotId=:id (task #23 unification)', async () => {
     const { wrapper } = mountFeed();
     await flushPromises();
     pushSpy.mockClear();
 
     const cells = wrapper.findAll('[data-testid="feed-grid-cell"]');
     await cells[1].trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith('/shot/3');
+    expect(pushSpy).toHaveBeenCalledWith('/feed/detail?shotId=3');
   });
 
-  it('tapping the featured hero pushes /shot/:id for the hero post', async () => {
+  it('tapping the featured hero pushes /feed/detail?shotId=:id for the hero post', async () => {
     const { wrapper } = mountFeed();
     await flushPromises();
     pushSpy.mockClear();
 
     await wrapper.find('[data-testid="feed-featured"]').trigger('click');
-    expect(pushSpy).toHaveBeenCalledWith('/shot/1');
+    expect(pushSpy).toHaveBeenCalledWith('/feed/detail?shotId=1');
   });
 
   it('selecting a work chip narrows the grid + hero to matching posts (task #40)', async () => {

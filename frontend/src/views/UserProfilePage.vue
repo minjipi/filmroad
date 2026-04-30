@@ -282,7 +282,7 @@ async function onOpenContent(contentId: number): Promise<void> {
 }
 
 async function onOpenShot(photoId: number): Promise<void> {
-  await router.push(`/shot/${photoId}`);
+  await router.push(`/feed/detail?shotId=${photoId}`);
 }
 
 async function onNotifs(): Promise<void> {

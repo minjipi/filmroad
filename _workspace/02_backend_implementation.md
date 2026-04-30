@@ -1017,3 +1017,104 @@ GET /api/route/{id}
 4. **다른 사용자 stamp 영향 없음**: `findByUserIdAndPlaceIdIn` 의 `userId` 필터로 보장. 별도 단위 테스트는 추가하지 않고 stub 으로 빈 결과 반환 시 visited=false 확인 (`getRoute_ownerNoStamps_allVisitedFalse`).
 5. **commit 보류**: task #2~#21 묶어 단일 commit 예정 (team-lead 지시).
 
+---
+
+# Task #24 — `liked` flag on GalleryPhotoDto (feat/trip-route-frontend)
+
+## 작업 범위
+`/api/places/{id}/photos` 응답의 photos 항목에 viewer 의 좋아요 여부(`liked: boolean`) 노출. 비로그인 → 모두 false.
+
+## 변경된 파일
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/domain/place/dto/GalleryPhotoDto.java`
+  - `boolean liked` 필드 + Schema 코멘트.
+  - factory 시그니처: `from(PlacePhoto)` → `from(PlacePhoto, boolean liked)`. Service 가 batch 조회 후 placeholder 로 채움.
+- `src/main/java/com/filmroad/api/domain/place/GalleryService.java`
+  - `PhotoLikeRepository` 의존 추가.
+  - `currentUser.currentUserIdOrNull()` 로 비로그인 분기 — null 또는 빈 페이지면 외부 호출 skip + `Set.of()`.
+  - 로그인 + 빈 페이지 아님 → `photoLikeRepository.findPhotoIdsLikedByUser(userId, photoIds)` **1회** 호출 → `HashSet`. (메서드 기존 존재, 신규 추가 없음.)
+  - 매핑: `GalleryPhotoDto.from(p, likedIds.contains(p.getId()))`.
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/place/GalleryControllerTest.java`
+  - 신규 3 케이스:
+    - `getPhotos_loggedInOwnerLikes_setsLikedTrueForLikedRows` — 시드 `photo_like(user 1, photo 100)` 활용 → photo 100 liked=true, 101/102 liked=false.
+    - `getPhotos_otherUserLikes_dontLeakAcrossViewers` — viewer=user 2 → photo 100 liked=false (user 1 의 like 영향 없음).
+    - `getPhotos_anonymous_allLikedFalse` — 비로그인 viewer → 모든 photos liked=false.
+
+## 프론트 contract (변경)
+```json
+{ "results": {
+    "photos": [
+      { "id": 100, ..., "likeCount": 3, "liked": true },
+      { "id": 101, ..., "likeCount": 1, "liked": false },
+      ...
+    ]
+  }
+}
+```
+- 비로그인 → 모든 항목 `liked: false`.
+- 같은 페이지 내 photoIds 묶어 1회 쿼리 → N+1 free.
+
+## 마이그레이션 안전성
+- 스키마 변경 없음. 기존 `photo_like` 테이블만 조회.
+- 응답에 필드 추가 — 기존 클라이언트 무영향.
+
+## 테스트
+- `./gradlew build` (WSL 우회) → BUILD SUCCESSFUL (3m 42s)
+- 281 tests / 0 failures / 0 errors. 이전 278 → +3 (GalleryControllerTest 3건 추가, 기존 3건은 영향 없음).
+
+## 의사결정
+1. **`currentUserIdOrNull()` 사용**: GalleryService 의 viewerId 는 기존대로 `currentUserId()` (PRIVATE/FOLLOWERS 필터 + 데모 fallback). like 플래그는 별도 의미라 `currentUserIdOrNull()` 분기로 비로그인 = 0 쿼리 + 모두 false.
+2. **빈 페이지 skip**: photos 가 0건이면 photoLikeRepository 호출 자체를 skip. `IN ()` 쿼리 보호.
+3. **N+1 free**: 기존 `findPhotoIdsLikedByUser(userId, Collection<Long>)` 메서드 그대로 재사용 — placeId 기반 페이지 조회 후 그 페이지의 photoIds 만 IN 절로 1회 batch.
+4. **commit 보류**: task #25 까지 끝나면 묶음 commit.
+
+---
+
+# Task #26 — `placeId` filter on `/api/feed` (feat/trip-route-frontend)
+
+## 작업 범위
+`/api/feed` 에 optional `placeId` query param 추가. contentId 필터 패턴 그대로 — 모든 tab 의 query 에 `(:placeId IS NULL OR pl.id = :placeId)` 절을 더해 직교 필터로 동작.
+
+## 변경된 파일
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/domain/place/PlacePhotoRepository.java`
+  - `findFeedRecent`, `findFeedPopular`, `findFeedByFollowedUsers` 시그니처에 `@Param("placeId") Long placeId` 추가.
+  - 각 JPQL 의 WHERE 절에 `AND (:placeId IS NULL OR pl.id = :placeId)` 끼움.
+- `src/main/java/com/filmroad/api/domain/feed/FeedService.java`
+  - `getFeed(...)` 에 `Long placeId` 파라미터 추가, 각 tab 분기 query 호출에 thread.
+  - `fetchNearby(...)` 시그니처에도 placeId 추가 (NEARBY 탭의 candidate fetch 도 placeId 필터 일관 적용).
+- `src/main/java/com/filmroad/api/domain/feed/FeedController.java`
+  - `@RequestParam(required = false) Long placeId` 추가, 그대로 service 로 패스.
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/feed/FeedControllerTest.java`
+  - `getFeed_placeIdFilter_returnsOnlyThatPlacesPhotos` — `placeId=10` → posts 모두 place 10, 첫 row id=105 (RECENT 정렬, place 10 photo 100..105 중 max).
+  - `getFeed_placeIdAndPopular_combinesFilters` — `placeId=10&tab=POPULAR` → 첫 row id=100 (place 10 의 like_count 최상위).
+
+## 프론트 contract
+요청만 변경:
+```
+GET /api/feed?placeId=72&limit=20
+GET /api/feed?placeId=72&tab=POPULAR
+```
+응답 shape (`FeedResponse`) 변화 없음 — `placeId` 옵션 미지정 시 기존 흐름 그대로.
+
+## 마이그레이션 안전성
+- 스키마 변경 없음.
+- Repository 메서드 시그니처에 positional parameter 추가 — 모든 호출처(FeedService 내부) 함께 갱신. 테스트 회귀 없음.
+- 응답 호환성 100% (placeId 미지정 = 기존 동작).
+
+## 테스트
+- `./gradlew build` (WSL 우회) → BUILD SUCCESSFUL (3m 35s)
+- 283 tests / 0 failures / 0 errors. 이전 281 → +2.
+
+## 의사결정
+1. **시그니처 확장 vs 새 메서드**: 기존 메서드에 `placeId` positional param 을 추가했다. 새 메서드(`findFeedRecentByPlaceId` 등) 분리하면 `getFeed` 내부 분기가 (tab × placeId presence) 매트릭스로 폭증. JPQL 의 `(:p IS NULL OR …)` 패턴은 contentId 에서 이미 검증된 형태로 유지비 낮음.
+2. **모든 tab 에 적용**: spec 은 RECENT/POPULAR 만 명시했지만 FOLLOWING/NEARBY/BY_CONTENT 도 같은 placeId 절을 포함시켜 조합 가능. 프론트에서 어떤 탭이 들어와도 일관 동작 — `tab=POPULAR&placeId=10` 같은 케이스에서 의외 결과 안 나오게 함.
+3. **NEARBY 적용**: NEARBY 의 candidate fetch 도 placeId 필터를 거쳐, 한 place 가 다른 곳 추천에 섞이지 않게. lat/lng 미지정 시에도 동일.
+4. **commit 보류**: task #27 까지 끝나면 묶음 commit.
+

@@ -966,7 +966,7 @@ async function onGoHome(): Promise<void> {
   const placeId = uploadStore.lastResult?.placeId;
   uploadStore.reset();
   stage.value = 'compose';
-  await router.replace(placeId != null ? `/gallery/${placeId}` : '/home');
+  await router.replace(placeId != null ? `/feed/detail?placeId=${placeId}` : '/home');
 }
 
 onMounted(async () => {

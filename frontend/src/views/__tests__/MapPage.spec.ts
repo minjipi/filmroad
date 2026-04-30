@@ -283,7 +283,7 @@ describe('MapPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith(expected);
   });
 
-  it('인증샷 stat icon click pushes /gallery/:id', async () => {
+  it('인증샷 stat icon click pushes /feed/detail?placeId=:id (task #23)', async () => {
     const { wrapper } = mountMapPage();
     await flushPromises();
     pushSpy.mockClear();
@@ -292,7 +292,7 @@ describe('MapPage.vue', () => {
     expect(photoStat.exists()).toBe(true);
     await photoStat.trigger('click');
     await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith(`/gallery/${fixture.selected!.id}`);
+    expect(pushSpy).toHaveBeenCalledWith(`/feed/detail?placeId=${fixture.selected!.id}`);
   });
 
   it('heart icon click dispatches mapStore.toggleLike', async () => {

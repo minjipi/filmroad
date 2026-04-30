@@ -45,6 +45,7 @@ function makePhoto(id: number): GalleryPhoto {
     likeCount: 120,
     commentCount: 3,
     sceneCompare: id === 1,
+    liked: false,
   };
 }
 

@@ -822,13 +822,16 @@ async function onCapture(): Promise<void> {
 
 async function onOpenGallery(): Promise<void> {
   if (!place.value) return;
-  await router.push(`/gallery/${place.value.id}`);
+  await router.push(`/feed/detail?placeId=${place.value.id}`);
 }
 
-// 갤러리 셀(개별 인증샷) 클릭 → /shot/:id. "전체 보기" 또는 +N more 셀은
-// 위의 onOpenGallery 가 처리하고, 일반 사진 셀만 이 핸들러로 진입한다.
+// 갤러리 셀(개별 인증샷) 클릭 → `/feed/detail?placeId=...&shotId=...` (task #23 통합).
+// place 컨텍스트(이 장소의 photos 만 무한스크롤) + 클릭한 shot 으로 anchor 스크롤.
+// shotId 단독으로 넘기면 전체 feed 컨텍스트가 되어 사용자가 "이 장소 다른 사진"
+// 으로 자연스럽게 이어보지 못하니 placeId 도 함께 전달.
 async function onOpenShot(photoId: number): Promise<void> {
-  await router.push(`/shot/${photoId}`);
+  if (!place.value) return;
+  await router.push(`/feed/detail?placeId=${place.value.id}&shotId=${photoId}`);
 }
 
 async function onOpenContent(): Promise<void> {

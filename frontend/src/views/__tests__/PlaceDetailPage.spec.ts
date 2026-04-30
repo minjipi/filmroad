@@ -589,7 +589,7 @@ describe('PlaceDetailPage.vue', () => {
     expect(wrapper.findAll('.gallery .cell.more').length).toBe(1);
   });
 
-  it('갤러리 사진 셀 click → /shot/:id 라우팅 (more 셀은 /gallery 로 그대로)', async () => {
+  it('갤러리 사진 셀 click → /feed/detail?shotId=:id (more 셀은 /feed/detail?placeId=) — task #23', async () => {
     const { wrapper } = mountPlaceDetailPage();
     await flushPromises();
     pushSpy.mockClear();
@@ -599,14 +599,18 @@ describe('PlaceDetailPage.vue', () => {
     expect(photoCells.length).toBe(fixture.photos.length);
     await photoCells[0].trigger('click');
     await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith(`/shot/${fixture.photos[0].id}`);
+    // task #23 + UX 보강: place 컨텍스트도 같이 보내 새 페이지가 place 모드로
+    // 카드를 보여줄 수 있게.
+    expect(pushSpy).toHaveBeenCalledWith(
+      `/feed/detail?placeId=${fixture.place.id}&shotId=${fixture.photos[0].id}`,
+    );
 
-    // more 셀은 그대로 /gallery 진입.
+    // more 셀은 place 모드로 진입.
     pushSpy.mockClear();
     const moreCell = wrapper.find('.gallery .cell.more');
     await moreCell.trigger('click');
     await flushPromises();
-    expect(pushSpy).toHaveBeenCalledWith(`/gallery/${fixture.place.id}`);
+    expect(pushSpy).toHaveBeenCalledWith(`/feed/detail?placeId=${fixture.place.id}`);
   });
 
   it('renders one .rel-card per related place', async () => {

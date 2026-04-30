@@ -549,8 +549,8 @@ describe('ProfilePage.vue', () => {
 
     await wrapper.find('[data-testid="shot-cell"]').trigger('click');
     await flushPromises();
-    // Now pushes the real photo id (777), not the grid position.
-    expect(pushSpy).toHaveBeenCalledWith('/shot/777');
+    // Now pushes the real photo id (777), not the grid position. task #23 unified.
+    expect(pushSpy).toHaveBeenCalledWith('/feed/detail?shotId=777');
   });
 
   it('page entry triggers profileStore.fetch + fetchMyPhotos (task #41 refresh-on-enter)', async () => {

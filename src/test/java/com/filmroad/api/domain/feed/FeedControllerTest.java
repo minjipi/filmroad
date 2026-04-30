@@ -97,6 +97,27 @@ class FeedControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/feed?placeId=10 — posts 가 place 10 의 photos 만, 다른 place 영향 없음")
+    void getFeed_placeIdFilter_returnsOnlyThatPlacesPhotos() throws Exception {
+        mockMvc.perform(get("/api/feed").param("placeId", "10").param("limit", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.posts", not(empty())))
+                .andExpect(jsonPath("$.results.posts[*].place.id", everyItem(is(10))))
+                // place 10 은 시드상 photo 100..105 (6 photos). RECENT 정렬이라 첫 row 가 가장 큰 id 105.
+                .andExpect(jsonPath("$.results.posts[0].id", is(105)));
+    }
+
+    @Test
+    @DisplayName("GET /api/feed?placeId=10&tab=POPULAR — like_count DESC, place 10 만")
+    void getFeed_placeIdAndPopular_combinesFilters() throws Exception {
+        // 시드상 place 10 의 photo 100 이 like_count=128 로 가장 큼.
+        mockMvc.perform(get("/api/feed").param("placeId", "10").param("tab", "POPULAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.posts[*].place.id", everyItem(is(10))))
+                .andExpect(jsonPath("$.results.posts[0].id", is(100)));
+    }
+
+    @Test
     @DisplayName("GET /api/feed/recommended-users?contentId=1&limit=4 returns at most 4 users")
     void getRecommendedUsers_respectsLimit() throws Exception {
         mockMvc.perform(get("/api/feed/recommended-users")

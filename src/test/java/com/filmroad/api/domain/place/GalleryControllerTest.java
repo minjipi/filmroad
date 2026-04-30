@@ -99,4 +99,37 @@ class GalleryControllerTest {
                 .andExpect(jsonPath("$.results.photos[*].id",
                         hasItem(privatePhoto.getId().intValue())));
     }
+
+    @Test
+    @DisplayName("liked: user=1 (시드 photo_like 보유) → photo 100 liked=true, 나머지 false")
+    void getPhotos_loggedInOwnerLikes_setsLikedTrueForLikedRows() throws Exception {
+        // 시드: photo_like 에 (user 1, photo 100) 레코드. place 10 사진 100/101/102/103 중 100 만 liked.
+        mockMvc.perform(get("/api/places/10/photos")
+                        .param("size", "50")
+                        .cookie(new Cookie("ATOKEN", jwtTokenService.issueAccess(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.photos[?(@.id == 100)].liked", hasItem(true)))
+                .andExpect(jsonPath("$.results.photos[?(@.id == 101)].liked", hasItem(false)))
+                .andExpect(jsonPath("$.results.photos[?(@.id == 102)].liked", hasItem(false)));
+    }
+
+    @Test
+    @DisplayName("liked: 다른 유저 like 는 viewer 에게 영향 없음 (user=2 viewer → photo 100 liked=false)")
+    void getPhotos_otherUserLikes_dontLeakAcrossViewers() throws Exception {
+        // photo 100 은 user 1 이 좋아요. user 2 가 viewer 면 100 도 liked=false 여야 한다.
+        mockMvc.perform(get("/api/places/10/photos")
+                        .param("size", "50")
+                        .cookie(new Cookie("ATOKEN", jwtTokenService.issueAccess(2L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.photos[?(@.id == 100)].liked", hasItem(false)));
+    }
+
+    @Test
+    @DisplayName("liked: 비로그인 viewer → 모든 photos 의 liked=false")
+    void getPhotos_anonymous_allLikedFalse() throws Exception {
+        mockMvc.perform(get("/api/places/10/photos").param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.photos[*].liked",
+                        everyItem(is(false))));
+    }
 }

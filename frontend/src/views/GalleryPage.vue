@@ -296,7 +296,7 @@ async function onMore(p: GalleryPhoto): Promise<void> {
         text: '수정',
         icon: createOutline,
         handler: () => {
-          void router.push(`/shot/${p.id}`);
+          void router.push(`/feed/detail?shotId=${p.id}`);
         },
       },
       {

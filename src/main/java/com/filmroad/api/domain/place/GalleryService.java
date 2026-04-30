@@ -3,6 +3,7 @@ package com.filmroad.api.domain.place;
 import com.filmroad.api.common.auth.CurrentUser;
 import com.filmroad.api.common.exception.BaseException;
 import com.filmroad.api.common.model.BaseResponseStatus;
+import com.filmroad.api.domain.like.PhotoLikeRepository;
 import com.filmroad.api.domain.place.dto.GalleryPhotoDto;
 import com.filmroad.api.domain.place.dto.GalleryPlaceHeaderDto;
 import com.filmroad.api.domain.place.dto.PlacePhotoPageResponse;
@@ -13,6 +14,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 public class GalleryService {
@@ -21,6 +26,7 @@ public class GalleryService {
 
     private final PlacePhotoRepository placePhotoRepository;
     private final PlaceRepository placeRepository;
+    private final PhotoLikeRepository photoLikeRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
@@ -50,9 +56,22 @@ public class GalleryService {
                 .totalPhotoCount(placePhotoRepository.countByPlaceId(placeId))
                 .build();
 
+        // 비로그인 (currentUserIdOrNull == null) 또는 빈 페이지 → 외부 호출 없이 빈 셋.
+        // 로그인 + photoIds 가 있을 때만 1회 batch 쿼리로 좋아요 여부 한 번에 조회.
+        Long likeViewerId = currentUser.currentUserIdOrNull();
+        Set<Long> likedIds = (likeViewerId == null || photoPage.getContent().isEmpty())
+                ? Set.of()
+                : new HashSet<>(photoLikeRepository.findPhotoIdsLikedByUser(
+                        likeViewerId,
+                        photoPage.getContent().stream().map(PlacePhoto::getId).toList()));
+
+        List<GalleryPhotoDto> photoDtos = photoPage.getContent().stream()
+                .map(p -> GalleryPhotoDto.from(p, likedIds.contains(p.getId())))
+                .toList();
+
         return PlacePhotoPageResponse.builder()
                 .place(header)
-                .photos(photoPage.getContent().stream().map(GalleryPhotoDto::from).toList())
+                .photos(photoDtos)
                 .total(photoPage.getTotalElements())
                 .page(safePage)
                 .size(safeSize)

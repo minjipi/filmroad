@@ -240,7 +240,7 @@ async function onInfinite(ev: Event): Promise<void> {
 }
 
 async function onOpenShot(id: number): Promise<void> {
-  await router.push(`/shot/${id}`);
+  await router.push(`/feed/detail?shotId=${id}`);
 }
 
 async function onOpenDetailFeed(): Promise<void> {
