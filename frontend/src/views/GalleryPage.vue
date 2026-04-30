@@ -89,7 +89,7 @@
                 <ion-icon :icon="chatbubbleOutline" class="ic-20" />{{ formatCount(p.commentCount) }}
               </span>
               <span class="a">
-                <ion-icon :icon="shareSocialOutline" class="ic-20" />
+                <ion-icon :icon="paperPlaneOutline" class="ic-20" />
               </span>
               <span
                 class="save-r"
@@ -153,7 +153,7 @@ import {
   ellipsisHorizontal,
   heartOutline,
   chatbubbleOutline,
-  shareSocialOutline,
+  paperPlaneOutline,
   bookmarkOutline,
   bookmark,
 } from 'ionicons/icons';
