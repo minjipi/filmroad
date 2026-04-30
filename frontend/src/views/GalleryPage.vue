@@ -151,12 +151,19 @@
       @close="activeCommentPhotoId = null"
       @created="onCommentCreated"
     />
+    <PostMoreSheet
+      :open="moreSheetOpen"
+      :is-own="moreSheetIsOwn"
+      @close="onCloseMoreSheet"
+      @edit="onEditFromSheet"
+      @delete="onDeleteFromSheet"
+    />
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon, actionSheetController, alertController } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, alertController } from '@ionic/vue';
 import {
   chevronBack,
   mapOutline,
@@ -171,8 +178,6 @@ import {
   paperPlaneOutline,
   bookmarkOutline,
   bookmark,
-  createOutline,
-  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -186,6 +191,7 @@ import { useSavedStore } from '@/stores/saved';
 import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
+import PostMoreSheet from '@/components/post/PostMoreSheet.vue';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ placeId: string | number }>();
@@ -279,38 +285,39 @@ async function onLoadMore(): Promise<void> {
   await galleryStore.loadMore();
 }
 
-// 카드 더보기 — /shot/:id 의 onCardMore 와 동일 contract. 본인 인증샷이면
-// 수정/삭제 ActionSheet, 타인이면 placeholder 토스트. 수정은 별도 모달 대신
-// /shot/:id 라우팅 → 거기서 primary 의 edit modal 재사용.
-async function onMore(p: GalleryPhoto): Promise<void> {
+// 카드 더보기 — Teleport 기반 PostMoreSheet 로 통일. 헤더 우상단 X 아이콘
+// 으로 닫고, 본인 인증샷이면 수정/삭제 행, 타인이면 placeholder 메시지.
+// 수정은 별도 모달 대신 /shot/:id 라우팅 → primary 의 edit modal 재사용.
+const moreSheetOpen = ref(false);
+const moreSheetTarget = ref<GalleryPhoto | null>(null);
+
+function onMore(p: GalleryPhoto): void {
+  moreSheetTarget.value = p;
+  moreSheetOpen.value = true;
+}
+
+function onCloseMoreSheet(): void {
+  moreSheetOpen.value = false;
+}
+
+const moreSheetIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
-  const isMe = myId != null && p.authorUserId === myId;
-  if (!isMe) {
-    await showInfo('더보기 메뉴는 곧 공개됩니다');
-    return;
-  }
-  const sheet = await actionSheetController.create({
-    header: '인증샷',
-    buttons: [
-      {
-        text: '수정',
-        icon: createOutline,
-        handler: () => {
-          void router.push(`/shot/${p.id}`);
-        },
-      },
-      {
-        text: '삭제',
-        role: 'destructive',
-        icon: trashOutline,
-        handler: () => {
-          void confirmDelete(p.id);
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
+  const t = moreSheetTarget.value;
+  return myId != null && t != null && t.authorUserId === myId;
+});
+
+async function onEditFromSheet(): Promise<void> {
+  const t = moreSheetTarget.value;
+  moreSheetOpen.value = false;
+  if (!t) return;
+  await router.push(`/shot/${t.id}`);
+}
+
+function onDeleteFromSheet(): void {
+  const t = moreSheetTarget.value;
+  moreSheetOpen.value = false;
+  if (!t) return;
+  void confirmDelete(t.id);
 }
 
 async function confirmDelete(photoId: number): Promise<void> {

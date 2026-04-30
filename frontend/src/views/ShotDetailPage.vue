@@ -280,6 +280,23 @@
       @created="onCommentCreated"
     />
 
+    <!-- Primary 카드 더보기 시트 — 본인이면 수정/삭제, 타인이면 placeholder. -->
+    <PostMoreSheet
+      :open="primaryMoreOpen"
+      :is-own="primaryMoreIsOwn"
+      @close="onClosePrimaryMoreSheet"
+      @edit="onPrimaryEditFromSheet"
+      @delete="onPrimaryDeleteFromSheet"
+    />
+    <!-- Appended 카드 더보기 시트. 수정 → /shot/:id 라우팅. -->
+    <PostMoreSheet
+      :open="appendedMoreOpen"
+      :is-own="appendedMoreIsOwn"
+      @close="onCloseAppendedMoreSheet"
+      @edit="onAppendedEditFromSheet"
+      @delete="onAppendedDeleteFromSheet"
+    />
+
     <!-- 인증샷 수정 모달 — Teleport 로 body 에 띄워 ion-page 레이아웃 영향 없이
          iOS 시트 톤. 닫기 X 는 헤더 우상단, 저장은 footer primary. -->
     <Teleport to="body">
@@ -367,7 +384,6 @@ import {
   IonPage,
   IonContent,
   IonIcon,
-  actionSheetController,
   alertController,
 } from '@ionic/vue';
 import {
@@ -383,8 +399,6 @@ import {
   bookmarkOutline,
   paperPlaneOutline,
   closeOutline,
-  createOutline,
-  trashOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -394,6 +408,7 @@ import { useUiStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
 import CommentSheet from '@/components/comment/CommentSheet.vue';
+import PostMoreSheet from '@/components/post/PostMoreSheet.vue';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
 const props = defineProps<{ id: string | number }>();
@@ -563,35 +578,29 @@ async function onSaveEdit(): Promise<void> {
 
 // 작성자 더보기 메뉴: 본인 인증샷에는 수정 / 삭제 행 노출, 남 인증샷에는
 // 아직 부여할 메뉴가 없어 placeholder 토스트 유지(추후 신고 등이 들어갈 자리).
-async function onCardMore(): Promise<void> {
-  const s = shot.value;
-  if (!s) return;
-  if (!s.author.isMe) {
-    await showInfo('더보기 메뉴는 곧 공개됩니다');
-    return;
-  }
-  const sheet = await actionSheetController.create({
-    header: '인증샷',
-    buttons: [
-      {
-        text: '수정',
-        icon: createOutline,
-        handler: () => {
-          openEditModal();
-        },
-      },
-      {
-        text: '삭제',
-        role: 'destructive',
-        icon: trashOutline,
-        handler: () => {
-          void confirmDelete();
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
+// Primary 카드 더보기 — Teleport 기반 PostMoreSheet 통일 (헤더 우상단 X 아이콘).
+// 본인이면 수정/삭제 행, 타인이면 placeholder. 수정 → inline edit modal,
+// 삭제 → confirm alert → DELETE → router.back.
+const primaryMoreOpen = ref(false);
+const primaryMoreIsOwn = computed<boolean>(() => shot.value?.author.isMe === true);
+
+function onCardMore(): void {
+  if (!shot.value) return;
+  primaryMoreOpen.value = true;
+}
+
+function onClosePrimaryMoreSheet(): void {
+  primaryMoreOpen.value = false;
+}
+
+function onPrimaryEditFromSheet(): void {
+  primaryMoreOpen.value = false;
+  openEditModal();
+}
+
+function onPrimaryDeleteFromSheet(): void {
+  primaryMoreOpen.value = false;
+  void confirmDelete();
 }
 
 // 삭제 확인 → API 호출 → 성공 시 ShotDetail 자체가 의미 없으므로 router.back.
@@ -632,42 +641,44 @@ function isAppendedOwn(post: { author: { userId: number } }): boolean {
   return myId != null && post.author.userId === myId;
 }
 
-// 추가 카드의 작성자가 본인이면 primary 와 동일한 수정/삭제 ActionSheet 를
-// 띄운다. 수정은 별도 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서
-// primary 가 되어 기존 edit 모달 플로우 그대로 재사용. 본인 아니면 placeholder
-// 토스트 유지(추후 신고/숨기기 자리).
-async function onAppendedCardMore(post: {
+// Appended 카드 더보기 — primary 와 동일한 PostMoreSheet 사용. 수정은 별도
+// 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서 primary 가 되어
+// 기존 edit 모달 플로우 재사용. 본인 아니면 placeholder.
+const appendedMoreOpen = ref(false);
+const appendedMoreTarget = ref<{
   id: number;
   author: { userId: number };
-}): Promise<void> {
+} | null>(null);
+const appendedMoreIsOwn = computed<boolean>(() => {
   const myId = authStore.user?.id ?? null;
-  const isMe = myId != null && post.author.userId === myId;
-  if (!isMe) {
-    await showInfo('더보기 메뉴는 곧 공개됩니다');
-    return;
-  }
-  const sheet = await actionSheetController.create({
-    header: '인증샷',
-    buttons: [
-      {
-        text: '수정',
-        icon: createOutline,
-        handler: () => {
-          void router.push(`/shot/${post.id}`);
-        },
-      },
-      {
-        text: '삭제',
-        role: 'destructive',
-        icon: trashOutline,
-        handler: () => {
-          void confirmDeleteAppended(post.id);
-        },
-      },
-      { text: '취소', role: 'cancel' },
-    ],
-  });
-  await sheet.present();
+  const t = appendedMoreTarget.value;
+  return myId != null && t != null && t.author.userId === myId;
+});
+
+function onAppendedCardMore(post: {
+  id: number;
+  author: { userId: number };
+}): void {
+  appendedMoreTarget.value = post;
+  appendedMoreOpen.value = true;
+}
+
+function onCloseAppendedMoreSheet(): void {
+  appendedMoreOpen.value = false;
+}
+
+async function onAppendedEditFromSheet(): Promise<void> {
+  const t = appendedMoreTarget.value;
+  appendedMoreOpen.value = false;
+  if (!t) return;
+  await router.push(`/shot/${t.id}`);
+}
+
+function onAppendedDeleteFromSheet(): void {
+  const t = appendedMoreTarget.value;
+  appendedMoreOpen.value = false;
+  if (!t) return;
+  void confirmDeleteAppended(t.id);
 }
 
 async function confirmDeleteAppended(postId: number): Promise<void> {
