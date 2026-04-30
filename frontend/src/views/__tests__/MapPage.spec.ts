@@ -267,6 +267,22 @@ describe('MapPage.vue', () => {
     expect(pushSpy).toHaveBeenCalledWith(`/place/${fixture.selected!.id}`);
   });
 
+  it('시트의 title-row / sheet-thumb 클릭도 /place/:id 로 진입 ("인증하러 가기" 와 동일)', async () => {
+    const { wrapper } = mountMapPage();
+    await flushPromises();
+    const expected = `/place/${fixture.selected!.id}`;
+
+    pushSpy.mockClear();
+    await wrapper.find('[data-testid="map-sheet-title"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith(expected);
+
+    pushSpy.mockClear();
+    await wrapper.find('[data-testid="map-sheet-thumb"]').trigger('click');
+    await flushPromises();
+    expect(pushSpy).toHaveBeenCalledWith(expected);
+  });
+
   it('인증샷 stat icon click pushes /gallery/:id', async () => {
     const { wrapper } = mountMapPage();
     await flushPromises();
