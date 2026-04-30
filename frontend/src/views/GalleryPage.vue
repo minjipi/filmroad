@@ -49,10 +49,10 @@
             class="post"
           >
             <div class="post-head">
-              <!-- ava + handle-block 둘 다 작성자 프로필(/user/:id) 진입 트리거.
+              <!-- avatar + meta 둘 다 작성자 프로필(/user/:id) 진입 트리거.
                    authorUserId 가 null 인 anonymous 시드 사진은 클릭 disable. -->
               <div
-                :class="['ava', p.authorUserId != null ? 'clickable' : '']"
+                :class="['avatar', p.authorUserId != null ? 'clickable' : '']"
                 :role="p.authorUserId != null ? 'button' : undefined"
                 :tabindex="p.authorUserId != null ? 0 : undefined"
                 :data-testid="p.authorUserId != null ? 'gal-post-author' : undefined"
@@ -61,50 +61,64 @@
                 <img v-if="p.authorAvatarUrl" :src="p.authorAvatarUrl" :alt="p.authorHandle" />
               </div>
               <div
-                :class="['handle-block', p.authorUserId != null ? 'clickable' : '']"
+                :class="['meta', p.authorUserId != null ? 'clickable' : '']"
                 :role="p.authorUserId != null ? 'button' : undefined"
                 :tabindex="p.authorUserId != null ? 0 : undefined"
                 @click="onOpenAuthor(p.authorUserId)"
               >
-                <div class="n">
+                <div class="nm">
                   @{{ p.authorHandle }}
-                  <ion-icon v-if="p.authorVerified" :icon="checkmarkCircle" class="ic-16 verify" />
+                  <ion-icon v-if="p.authorVerified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
-                <div class="s">{{ formatRelative(p.createdAt) }}</div>
+                <div v-if="placeHeader" class="loc">
+                  <span class="drama">{{ placeHeader.contentTitle }}</span>·{{ placeHeader.name }}
+                </div>
               </div>
-              <ion-icon :icon="ellipsisHorizontal" class="ic-20 more" />
+              <button class="more" type="button" aria-label="more" @click="onMore">
+                <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
+              </button>
             </div>
-            <div class="post-img">
-              <img :src="p.imageUrl" :alt="p.caption ?? ''" />
-              <div v-if="p.sceneCompare" class="scene-marker">
-                <span class="d"><ion-icon :icon="sparklesOutline" class="ic-16" /></span>
-                <span class="t">드라마 장면과 비교</span>
+            <div class="post-image">
+              <!-- 갤러리는 dramaSceneImageUrl 이 사진 단위로 없어 compare-wrap 미사용.
+                   sceneCompare 플래그가 있으면 좌하단 드라마 비교 칩으로 표기. -->
+              <div class="single-img">
+                <img :src="p.imageUrl" :alt="p.caption ?? ''" />
+                <div v-if="p.sceneCompare" class="drama-badge">
+                  <ion-icon :icon="sparklesOutline" class="ic-16" />드라마 장면 비교
+                </div>
+                <div v-else-if="placeHeader?.contentEpisode" class="drama-badge dark">
+                  <ion-icon :icon="filmOutline" class="ic-16" />{{ placeHeader.contentEpisode }}
+                </div>
               </div>
             </div>
             <div class="post-actions">
+              <!-- 백엔드 GalleryPhotoDto 에 liked 필드가 없어 정적 회색. liked 토글
+                   필요해지면 DTO 보강 + viewer-id 별 계산 추가. -->
               <span class="a">
-                <ion-icon :icon="heartOutline" class="ic-20" />{{ formatCount(p.likeCount) }}
+                <ion-icon :icon="heartOutline" class="ic-22" />
+                {{ formatCount(p.likeCount) }}
               </span>
               <span class="a" @click="onComment(p.id)">
-                <ion-icon :icon="chatbubbleOutline" class="ic-20" />{{ formatCount(p.commentCount) }}
+                <ion-icon :icon="chatbubbleOutline" class="ic-22" />
+                {{ formatCount(p.commentCount) }}
               </span>
-              <span class="a">
-                <ion-icon :icon="paperPlaneOutline" class="ic-20" />
+              <span class="a" data-testid="feed-share">
+                <ion-icon :icon="paperPlaneOutline" class="ic-22" />
               </span>
-              <span
-                class="save-r"
-                data-testid="gallery-save"
-                @click="onToggleSave"
-              >
+              <span class="spacer" />
+              <span class="a" data-testid="feed-save" @click="onToggleSave">
                 <ion-icon
                   :icon="placeSaved ? bookmark : bookmarkOutline"
-                  class="ic-20"
+                  class="ic-22"
                 />
               </span>
             </div>
-            <div v-if="p.caption" class="caption">
-              <b>@{{ p.authorHandle }}</b> {{ p.caption }}
+            <div class="post-caption">
+              <div v-if="p.caption" class="caption-text">
+                <b>@{{ p.authorHandle }}</b> {{ p.caption }}
+              </div>
             </div>
+            <div class="post-time">{{ formatRelative(p.createdAt) }}</div>
           </article>
           <p v-if="photos.length === 0 && !loading" class="empty-note">인증샷이 아직 없어요</p>
         </div>
@@ -149,6 +163,7 @@ import {
   listOutline,
   gridOutline,
   sparklesOutline,
+  filmOutline,
   checkmarkCircle,
   ellipsisHorizontal,
   heartOutline,
@@ -176,7 +191,7 @@ const galleryStore = useGalleryStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const { placeHeader, photos, total, sort, viewMode, loading, error } = storeToRefs(galleryStore);
-const { showError } = useToast();
+const { showError, showInfo } = useToast();
 
 // All photos on a gallery page share the same underlying place — bookmarks
 // on any photo row save that place (not the individual photo).
@@ -257,6 +272,10 @@ function onSelectView(m: GalleryViewMode): void {
 
 async function onLoadMore(): Promise<void> {
   await galleryStore.loadMore();
+}
+
+async function onMore(): Promise<void> {
+  await showInfo('메뉴는 곧 공개됩니다');
 }
 
 async function load(): Promise<void> {
@@ -367,113 +386,142 @@ ion-content.gl-content {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
+/* ---------- Card style — /feed/detail 와 동일 (디자인 통일) ---------- */
 .gal-feed {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
-.post { background: #ffffff; }
+.post {
+  background: #ffffff;
+  padding: 18px 0 16px;
+  border-bottom: 8px solid var(--fr-line-soft);
+}
 .post-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 0 20px 12px;
 }
-.ava {
-  width: 34px; height: 34px;
+.avatar {
+  width: 38px; height: 38px;
   border-radius: 50%;
   overflow: hidden;
-  background: #fce7f3;
   flex-shrink: 0;
+  background: #eee;
 }
-.ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.handle-block { min-width: 0; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.post-head .meta { flex: 1; min-width: 0; }
 /* author 행 클릭 → /user/:id. authorUserId 가 있을 때만 .clickable 부여. */
-.ava.clickable,
-.handle-block.clickable { cursor: pointer; }
-.ava.clickable:focus-visible,
-.handle-block.clickable:focus-visible {
+.avatar.clickable,
+.meta.clickable { cursor: pointer; }
+.avatar.clickable:focus-visible,
+.meta.clickable:focus-visible {
   outline: 2px solid var(--fr-primary);
   outline-offset: 2px;
   border-radius: 6px;
 }
-.post-head .n {
-  font-size: 13px; font-weight: 800;
+.post-head .nm {
+  font-size: 13.5px;
+  font-weight: 800;
   letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: 4px;
   color: var(--fr-ink);
 }
-.post-head .verify { color: var(--fr-primary); }
-.post-head .s {
-  font-size: 10.5px;
-  color: var(--fr-ink-3);
-  margin-top: 1px;
-}
-.post-head .more {
-  margin-left: auto;
-  color: var(--fr-ink-4);
-}
-
-.post-img {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  background: #000;
-}
-.post-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.scene-marker {
-  position: absolute;
-  left: 12px; bottom: 12px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  color: #ffffff;
-  padding: 5px 10px 5px 5px;
-  border-radius: 999px;
+.post-head .verified { color: var(--fr-primary); }
+.post-head .loc {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
 }
-.scene-marker .d {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: var(--fr-primary);
+.post-head .loc .drama {
+  color: var(--fr-primary);
+  font-weight: 700;
+}
+.post-head .more {
+  width: 28px; height: 28px;
+  color: var(--fr-ink-3);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
-.scene-marker .t { font-size: 10.5px; font-weight: 800; }
+
+.post-image {
+  position: relative;
+  background: #000;
+}
+.single-img {
+  aspect-ratio: 4 / 5;
+  position: relative;
+}
+.single-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.drama-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  background: rgba(20, 188, 237, 0.95);
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(6px);
+}
+.drama-badge.dark {
+  background: rgba(15, 23, 42, 0.85);
+}
 
 .post-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 16px 4px;
+  gap: 18px;
+  padding: 12px 20px 6px;
+  color: var(--fr-ink-2);
 }
 .post-actions .a {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--fr-ink-2);
+  cursor: pointer;
 }
-.post-actions .a.liked { color: var(--fr-coral); }
-.post-actions .save-r {
-  margin-left: auto;
-  color: var(--fr-ink-2);
-}
+.post-actions .a.on { color: var(--fr-coral); }
+.post-actions .spacer { flex: 1; }
 
-.caption {
-  padding: 4px 16px 14px;
-  font-size: 12.5px;
+.post-caption {
+  padding: 6px 20px 4px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--fr-ink-2);
-  letter-spacing: -0.01em;
 }
-.caption b { color: var(--fr-ink); }
+.post-caption b {
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+.post-time {
+  padding: 8px 20px 0;
+  font-size: 11px;
+  color: var(--fr-ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .grid-view {
   display: grid;

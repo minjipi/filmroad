@@ -346,160 +346,103 @@
           class="sd-feed"
           data-testid="sd-feed"
         >
+          <!-- /feed/detail 와 동일한 카드 마크업 (디자인 통일). primary 카드는
+               carousel + inline cmt-input + sticky compare-toggle 같은 detail
+               화면 정체성이 있어 그대로 유지하고, append 되는 피드만 통일 톤. -->
           <article
             v-for="s in appendedShots"
             :key="s.id"
-            class="sd-feed-card"
+            class="post"
             data-testid="sd-feed-card"
           >
-            <!-- 1. compare hero (single-image only — feed posts 는 multi-image carousel 없음) -->
-            <section class="compare" :data-mode="feedCardMode(s.id)">
-              <img
-                v-if="s.dramaSceneImageUrl"
-                :src="s.dramaSceneImageUrl"
-                class="compare-img is-guide"
-                alt="드라마 원본 장면"
-              />
-              <img
-                :src="s.imageUrl"
-                class="compare-img is-shot"
-                :alt="s.place.name"
-              />
-              <span v-if="s.dramaSceneImageUrl" class="lbl-chip l">드라마 원본</span>
-              <!-- task #26: 우상단 "내 인증샷" 라벨 → 카드별 more 버튼 (appended) -->
-              <button
-                type="button"
-                class="card-more"
-                aria-label="더보기"
-                @click="onAppendedCardMore(s)"
-              >
-                <ion-icon :icon="ellipsisHorizontal" class="ic-18" />
-              </button>
-              <div class="scene-meta">
-                <ion-icon :icon="filmOutline" class="ic-16" />{{ s.content.title }}
-                <template v-if="s.content.contentEpisode"> · {{ s.content.contentEpisode }}</template>
-                <template v-if="s.content.sceneTimestamp">
-                  <span class="sep" />
-                  <ion-icon :icon="timeOutline" class="ic-16" />{{ s.content.sceneTimestamp }}
-                </template>
-              </div>
-              <button
-                v-if="s.dramaSceneImageUrl"
-                type="button"
-                class="compare-toggle"
-                :aria-pressed="feedCardMode(s.id) === 'guide'"
-                @click="onToggleFeedCard(s.id)"
-              >
-                <ion-icon :icon="eyeOutline" class="ic-16" />
-                <span class="compare-toggle-lbl">{{ feedCardMode(s.id) === 'guide' ? '원본으로' : '가이드 보기' }}</span>
-              </button>
-            </section>
-
-            <!-- 2. sd-user (task #18: 닉네임/팔로우, #21: avatar/sub 클릭) -->
-            <section class="sd-user">
-              <button
-                type="button"
-                class="avatar"
-                :aria-label="`${s.author.nickname} 프로필 보기`"
-                @click="onOpenAppendedAuthor(s)"
-              >
+            <div class="post-head">
+              <div class="avatar clickable" @click="onOpenAppendedAuthor(s)">
                 <img
                   v-if="s.author.avatarUrl"
                   :src="s.author.avatarUrl"
                   :alt="s.author.nickname"
                 />
-              </button>
-              <div class="meta">
-                <button
-                  type="button"
-                  class="nm"
-                  @click="onOpenAppendedAuthor(s)"
-                >
-                  {{ s.author.nickname }}
-                  <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="verified" />
-                </button>
-                <button
-                  type="button"
-                  class="sub"
-                  :aria-label="`${s.place.name} 지도에서 보기`"
-                  @click="onOpenAppendedPlaceMap(s)"
-                >
-                  <ion-icon :icon="locationOutline" class="ic-16" />
-                  {{ s.place.name }} · {{ formatVisitDate(s.createdAt) }}
-                </button>
+              </div>
+              <div class="meta clickable" @click="onOpenAppendedAuthor(s)">
+                <div class="nm">
+                  @{{ s.author.handle }}
+                  <ion-icon v-if="s.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
+                </div>
+                <div class="loc">
+                  <span class="drama">{{ s.content.title }}</span>·{{ s.place.name }}
+                </div>
               </div>
               <button
+                v-if="!isAppendedOwn(s)"
                 type="button"
-                :class="['follow', s.author.following ? 'on' : '']"
+                :class="['author-follow', s.author.following ? 'on' : '']"
                 @click="onToggleAppendedFollow(s)"
-              >
-                {{ s.author.following ? '팔로잉' : '팔로우' }}
-              </button>
-            </section>
-
-            <!-- 3. sd-stats (task #18: 좋아요/댓글/저장 인터랙티브) -->
-            <section class="sd-stats">
+              >{{ s.author.following ? '팔로잉' : '팔로우' }}</button>
               <button
                 type="button"
-                :class="['sd-stat-btn', s.liked ? 'liked' : '']"
+                class="more"
+                aria-label="more"
+                @click="onAppendedCardMore(s)"
+              >
+                <ion-icon :icon="ellipsisHorizontal" class="ic-20" />
+              </button>
+            </div>
+
+            <div class="post-image">
+              <div v-if="s.dramaSceneImageUrl" class="compare-wrap">
+                <img :src="s.dramaSceneImageUrl" class="compare-top" alt="드라마 원본 장면" />
+                <img :src="s.imageUrl" :alt="s.place.name" />
+                <div class="compare-divider" />
+                <div class="compare-lbl-top">드라마 원본</div>
+                <div class="compare-lbl-bot">내 인증샷</div>
+                <div class="drama-badge">
+                  <ion-icon :icon="filmOutline" class="ic-16" />
+                  <template v-if="s.content.contentEpisode">{{ s.content.contentEpisode }}</template>
+                  <template v-if="s.content.sceneTimestamp"> {{ s.content.sceneTimestamp }}</template>
+                </div>
+              </div>
+              <div v-else class="single-img">
+                <img :src="s.imageUrl" :alt="s.place.name" />
+                <div class="drama-badge dark">
+                  <ion-icon :icon="locationOutline" class="ic-16" />{{ s.place.regionLabel }}
+                </div>
+              </div>
+            </div>
+
+            <div class="post-actions">
+              <span
+                :class="['a', s.liked ? 'on' : '']"
                 @click="onToggleAppendedLike(s)"
               >
-                <span class="stat-inner">
-                  <ion-icon :icon="s.liked ? heart : heartOutline" class="ic-22" />
-                  <span class="n">{{ formatCount(s.likeCount) }}</span>
-                  <span class="l">좋아요</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                class="sd-stat-btn"
-                @click="onOpenAppendedComments(s)"
-              >
-                <span class="stat-inner">
-                  <ion-icon :icon="chatbubbleOutline" class="ic-22" />
-                  <span class="n">{{ formatCount(s.commentCount) }}</span>
-                  <span class="l">댓글</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                :class="['sd-stat-btn', feedCardSaved(s) ? 'saved' : '']"
+                <ion-icon :icon="s.liked ? heart : heartOutline" class="ic-22" />
+                {{ formatCount(s.likeCount) }}
+              </span>
+              <span class="a" @click="onOpenAppendedComments(s)">
+                <ion-icon :icon="chatbubbleOutline" class="ic-22" />
+                {{ formatCount(s.commentCount) }}
+              </span>
+              <span class="a" data-testid="feed-share">
+                <ion-icon :icon="paperPlaneOutline" class="ic-22" />
+              </span>
+              <span class="spacer" />
+              <span
+                class="a"
+                data-testid="feed-save"
                 @click="onToggleAppendedSave(s)"
               >
-                <span class="stat-inner">
-                  <ion-icon :icon="feedCardSaved(s) ? bookmark : bookmarkOutline" class="ic-22" />
-                  <span class="l">저장</span>
-                </span>
-              </button>
-              <button type="button" class="sd-stat-btn" disabled>
-                <span class="stat-inner">
-                  <ion-icon :icon="paperPlaneOutline" class="ic-22" />
-                  <span class="l">공유</span>
-                </span>
-              </button>
-            </section>
-
-            <!-- 4. sd-caption (FeedPost 는 tags 미포함 — caption + date 만) -->
-            <section class="sd-caption">
-              <p v-if="s.caption" class="body">{{ s.caption }}</p>
-              <div class="date">{{ formatRelativeTime(s.createdAt) }}</div>
-            </section>
-
-            <!-- 5. cmt-input-wrap (task #18: 클릭 시 그 카드의 댓글 시트 열기) -->
-            <button
-              type="button"
-              class="cmt-input-wrap"
-              aria-label="댓글 작성"
-              @click="onOpenAppendedComments(s)"
-            >
-              <span class="me-av">
-                <img v-if="meAvatarUrl" :src="meAvatarUrl" alt="me" />
+                <ion-icon
+                  :icon="feedCardSaved(s) ? bookmark : bookmarkOutline"
+                  class="ic-22"
+                />
               </span>
-              <span class="box">댓글을 남겨보세요…</span>
-              <span class="send" aria-hidden="true">
-                <ion-icon :icon="paperPlaneOutline" class="ic-18" />
-              </span>
-            </button>
+            </div>
+
+            <div class="post-caption">
+              <div v-if="s.caption" class="caption-text">
+                <b>@{{ s.author.handle }}</b> {{ s.caption }}
+              </div>
+            </div>
+            <div class="post-time">{{ formatRelativeTime(s.createdAt) }}</div>
           </article>
         </section>
 
@@ -681,21 +624,6 @@ type CompareMode = 'shot' | 'guide';
 const compareMode = ref<CompareMode>('shot');
 function onToggleCompare(): void {
   compareMode.value = compareMode.value === 'guide' ? 'shot' : 'guide';
-}
-
-// task #15: per-card compare mode for the infinite-scroll feed below the
-// primary shot. Keyed by shot id. Default 'shot' (user's photo). Reactive
-// via a Map exposed through a getter/setter so template lookups don't
-// trigger reactivity issues on the Map itself.
-const feedCardModes = ref<Record<number, CompareMode>>({});
-function feedCardMode(id: number): CompareMode {
-  return feedCardModes.value[id] ?? 'shot';
-}
-function onToggleFeedCard(id: number): void {
-  feedCardModes.value = {
-    ...feedCardModes.value,
-    [id]: feedCardMode(id) === 'guide' ? 'shot' : 'guide',
-  };
 }
 
 // IntersectionObserver-driven infinite scroll. The sentinel sits below
@@ -940,6 +868,13 @@ async function performDelete(): Promise<void> {
   router.back();
 }
 
+// /feed/detail 의 follow 버튼과 동일 — 작성자가 본인이면 follow 버튼 자체를
+// 숨김. author.userId 가 viewer.id 와 같으면 본인.
+function isAppendedOwn(post: { author: { userId: number } }): boolean {
+  const myId = authStore.user?.id ?? null;
+  return myId != null && post.author.userId === myId;
+}
+
 // 추가 카드의 작성자가 본인이면 primary 와 동일한 수정/삭제 ActionSheet 를
 // 띄운다. 수정은 별도 모달을 띄우는 대신 해당 카드의 detail 로 라우팅 — 거기서
 // primary 가 되어 기존 edit 모달 플로우 그대로 재사용. 본인 아니면 placeholder
@@ -1126,14 +1061,12 @@ watch(
 
 // Reset the carousel to the first slide whenever a new shot lands, so
 // navigating between posts doesn't keep the old index. Also reset the
-// compare toggle to "shot" + clear any feed-card toggle states so each
-// fresh primary post starts clean.
+// compare toggle to "shot" so each fresh primary post starts clean.
 watch(
   () => shot.value?.id,
   () => {
     currentSlide.value = 0;
     compareMode.value = 'shot';
-    feedCardModes.value = {};
     if (carouselEl.value) carouselEl.value.scrollLeft = 0;
   },
 );
@@ -1677,21 +1610,199 @@ ion-content.sd-content {
    so the inner styles inherit from primary's rules. This block only
    adds the outer separator + the read-only disabled-state look.
    ==================================================================== */
+/* ====================================================================
+   Appended feed (task #17/#18) — /feed/detail 와 동일 카드 마크업.
+   primary 카드(.compare/.sd-user/.sd-stats/.sd-caption)와 분리된 .post
+   클래스 트리. 디자인 통일 후 추출 시 PostCard.vue 로 빼낼 자리.
+   ==================================================================== */
 .sd-feed {
   border-top: 8px solid var(--fr-line-soft);
 }
-.sd-feed-card {
+.post {
+  background: #ffffff;
+  padding: 18px 0 16px;
   border-bottom: 8px solid var(--fr-line-soft);
 }
-.sd-feed-card:last-child { border-bottom: none; }
-
-/* task #18 — appended card buttons are now interactive. Only 공유 stays
-   disabled (matches primary which has no real share endpoint either). The
-   disabled-state look stays identical to enabled (opacity:1) so the layout
-   doesn't shift between cards. */
-.sd-feed-card .sd-stat-btn:disabled {
-  cursor: default;
-  opacity: 1;
+.post:last-child { border-bottom: none; }
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 12px;
+}
+.post-head .avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #eee;
+}
+.post-head .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.post-head .avatar.clickable,
+.post-head .meta.clickable { cursor: pointer; }
+.post-head .meta { flex: 1; min-width: 0; }
+.post-head .nm {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fr-ink);
+}
+.post-head .verified { color: var(--fr-primary); }
+.post-head .loc {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+  margin-top: 2px;
+}
+.post-head .loc .drama {
+  color: var(--fr-primary);
+  font-weight: 700;
+}
+.post-head .more {
+  width: 28px; height: 28px;
+  color: var(--fr-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.post-head .author-follow {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--fr-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.post-head .author-follow.on {
+  background: #ffffff;
+  border-color: var(--fr-line);
+  color: var(--fr-ink-2);
+}
+.post-image {
+  position: relative;
+  background: #000;
+}
+.compare-wrap {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+}
+.compare-wrap img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.compare-top { clip-path: inset(0 0 50% 0); }
+.compare-divider {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  height: 2px;
+  background: #ffffff;
+  z-index: 2;
+}
+.compare-divider::before,
+.compare-divider::after {
+  content: '';
+  position: absolute;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  top: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.compare-divider::before { left: -12px; }
+.compare-divider::after { right: -12px; }
+.compare-lbl-top,
+.compare-lbl-bot {
+  position: absolute;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+  backdrop-filter: blur(6px);
+}
+.compare-lbl-top { top: 12px; left: 12px; }
+.compare-lbl-bot { bottom: 12px; left: 12px; }
+.drama-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 3;
+  background: rgba(20, 188, 237, 0.95);
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(6px);
+}
+.drama-badge.dark { background: rgba(15, 23, 42, 0.85); }
+.single-img {
+  aspect-ratio: 4 / 5;
+  position: relative;
+}
+.single-img img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px 6px;
+  color: var(--fr-ink-2);
+}
+.post-actions .a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.post-actions .a.on { color: var(--fr-coral); }
+.post-actions .spacer { flex: 1; }
+.post-caption {
+  padding: 6px 20px 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fr-ink-2);
+}
+.post-caption b {
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+.post-time {
+  padding: 8px 20px 0;
+  font-size: 11px;
+  color: var(--fr-ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .sd-infinite-sentinel {
