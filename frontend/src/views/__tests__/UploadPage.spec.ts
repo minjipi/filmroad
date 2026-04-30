@@ -203,8 +203,41 @@ describe('UploadPage.vue', () => {
     const cta = wrapper.find('[data-testid="pick-place-cta"]');
     expect(cta.exists()).toBe(true);
     expect(cta.text()).toContain('장소를 선택해 주세요');
-    // Share button disabled until a place is picked.
-    expect((wrapper.find('button.post').element as HTMLButtonElement).disabled).toBe(true);
+    // Share button disabled-style until a place is picked. native disabled 속성은
+    // 떼고 aria-disabled + 시각 흐림(.post-disabled) 만 — 클릭은 onShareClick 가
+    // 받아 누락 안내 토스트 + picker 자동 오픈을 처리.
+    const shareBtn = wrapper.find('button.post');
+    expect(shareBtn.attributes('aria-disabled')).toBe('true');
+    expect(shareBtn.classes()).toContain('post-disabled');
+  });
+
+  it('장소 없이 공유하기 클릭 → "장소를 선택해 주세요" 토스트 + picker 자동 오픈', async () => {
+    const { wrapper } = mountUpload({ targetPlace: null, photos: [photoA] });
+    await flushPromises();
+    toastCreateSpy.mockClear();
+
+    expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(false);
+    await wrapper.find('button.post').trigger('click');
+    await flushPromises();
+
+    // 토스트가 안내 문구와 함께 떴는지
+    expect(toastCreateSpy).toHaveBeenCalledTimes(1);
+    expect(toastCreateSpy.mock.calls[0][0].message).toContain('장소를 선택');
+    // picker 자동 오픈 — 한 번 더 누르는 수고 절약
+    expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(true);
+  });
+
+  it('사진 없이 공유하기 클릭 → "사진을 한 장 이상 추가" 토스트 (picker 는 안 열림)', async () => {
+    const { wrapper } = mountUpload({ targetPlace: target, photos: [] });
+    await flushPromises();
+    toastCreateSpy.mockClear();
+
+    await wrapper.find('button.post').trigger('click');
+    await flushPromises();
+
+    expect(toastCreateSpy).toHaveBeenCalledTimes(1);
+    expect(toastCreateSpy.mock.calls[0][0].message).toContain('사진을 한 장');
+    expect(wrapper.find('[data-testid="picker-backdrop"]').exists()).toBe(false);
   });
 
   it('tapping the place CTA opens the picker sheet with home places; selecting one calls setTargetPlace and closes it', async () => {
@@ -353,6 +386,9 @@ describe('UploadPage.vue', () => {
           previousLevel: 5,
           levelName: '성지 순례자',
           newBadges: [],
+          newTrophyTier: null,
+          newTrophyContentTitle: null,
+          newTrophyContentPosterUrl: null,
         },
       };
       vi.spyOn(store, 'submit').mockImplementation(async () => {
@@ -555,9 +591,11 @@ describe('UploadPage.vue', () => {
       expect(banner.exists()).toBe(true);
       expect(banner.text()).toContain('인터넷 연결');
 
-      // Share button disabled — even with a valid place + photos.
-      const shareBtn = wrapper.find('button.post').element as HTMLButtonElement;
-      expect(shareBtn.disabled).toBe(true);
+      // Share button disabled-style — even with a valid place + photos.
+      // aria-disabled + .post-disabled 시각 흐림으로 표현 (native disabled 아님).
+      const shareBtn = wrapper.find('button.post');
+      expect(shareBtn.attributes('aria-disabled')).toBe('true');
+      expect(shareBtn.classes()).toContain('post-disabled');
     } finally {
       if (originalDescriptor) {
         Object.defineProperty(window.navigator, 'onLine', originalDescriptor);
@@ -667,6 +705,9 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
           previousLevel: 3,
           levelName: '성실 순례자',
           newBadges: [],
+          newTrophyTier: null,
+          newTrophyContentTitle: null,
+          newTrophyContentPosterUrl: null,
         },
       }));
 
@@ -831,6 +872,7 @@ describe('UploadPage.vue — 단계 B 인증완료 (task #9)', () => {
         reward: {
           pointsEarned: 50, currentPoints: 350, streakDays: 7,
           level: 3, previousLevel: 3, levelName: '성실 순례자', newBadges: [],
+          newTrophyTier: null, newTrophyContentTitle: null, newTrophyContentPosterUrl: null,
         },
       });
       vi.spyOn(store, 'submit').mockImplementation(async () => {

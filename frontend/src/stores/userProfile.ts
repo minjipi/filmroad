@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
+import type { ContentTrophy } from '@/stores/profile';
 
 // Matches backend `GET /api/users/:id` final shape (task #42). Endpoint
 // is permitAll — anonymous viewers get { isMe: false, following: false }.
@@ -46,6 +47,8 @@ export interface UserProfile {
   following: boolean;
   topPhotos: UserProfilePhoto[];
   recentCollectedContents: UserProfileCollectedContent[];
+  /** 작품 컴플리트 트로피 — 사회 증명. 비로그인 viewer 에게도 노출. */
+  trophies: ContentTrophy[];
 }
 
 interface State {

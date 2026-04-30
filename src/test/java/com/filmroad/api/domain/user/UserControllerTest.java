@@ -57,6 +57,19 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/users/me — trophies 4개 (4작품 MASTER), tier 와 percent=100 동반")
+    void getMe_returnsTrophies() throws Exception {
+        mockMvc.perform(get("/api/users/me").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(4)))
+                .andExpect(jsonPath("$.results.trophies[0].tier", is("MASTER")))
+                .andExpect(jsonPath("$.results.trophies[0].percent", is(100)))
+                .andExpect(jsonPath("$.results.trophies[0].contentTitle", notNullValue()))
+                .andExpect(jsonPath("$.results.trophies[0].collectedCount", is(2)))
+                .andExpect(jsonPath("$.results.trophies[0].totalCount", is(2)));
+    }
+
+    @Test
     @DisplayName("GET /api/users/me/photos → 본인 업로드 사진만 최신순(id DESC), 10개 이하면 nextCursor=null")
     void getMyPhotos_returnsOwnPhotosNewestFirst() throws Exception {
         // 시드상 user=1 의 사진 id: 100, 105, 113, 122, 131, 140, 145, 153, 162, 171 (10개). DESC 선두는 171.
@@ -218,6 +231,23 @@ class UserControllerTest {
                 // 시드상 user=1 stamp 8개 (place 10,11,12,13,14,15,16,17 전부), 4개 작품 수집.
                 .andExpect(jsonPath("$.results.stats.visitedCount", is(8)))
                 .andExpect(jsonPath("$.results.stats.collectedContentsCount", is(4)));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/1 (공개 프로필) — trophies 도 함께 노출 (사회 증명)")
+    void getPublicProfile_includesTrophies() throws Exception {
+        mockMvc.perform(get("/api/users/1").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(4)))
+                .andExpect(jsonPath("$.results.trophies[0].tier", is("MASTER")));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/2 — stamp/trophy 없는 유저는 trophies=빈 배열")
+    void getPublicProfile_noTrophies_returnsEmptyArray() throws Exception {
+        mockMvc.perform(get("/api/users/2").cookie(demoAccessCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results.trophies", hasSize(0)));
     }
 
     @Test

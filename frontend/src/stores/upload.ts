@@ -59,6 +59,14 @@ export interface RewardDelta {
   previousLevel: number;
   levelName: string;
   newBadges: RewardBadge[];
+  /**
+   * 작품 컴플리트 트로피 — 이번 업로드로 새 마일스톤 진입 시 백엔드가 채워준다.
+   * MASTER 면 풀스크린 오버레이, 그 외(QUARTER/HALF/THREE_Q)는 토스트로.
+   * null = 변동 없음 (초기화 / 같은 tier 재진입 / 25% 미만).
+   */
+  newTrophyTier: 'QUARTER' | 'HALF' | 'THREE_Q' | 'MASTER' | null;
+  newTrophyContentTitle: string | null;
+  newTrophyContentPosterUrl: string | null;
 }
 
 // A single image inside a multi-image post (task #45a/b 1:N model). The lead

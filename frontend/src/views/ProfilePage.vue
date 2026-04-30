@@ -34,6 +34,9 @@
 
         <VisitMap :pins="miniMapPins" @open="onOpenMap" />
 
+        <!-- 작품 컴플리트 트로피 — 본인 프로필이라 빈 상태 surface 도 노출 (CTA). -->
+        <TrophyShelf :trophies="trophies" :show-empty="true" />
+
         <nav class="local-tabs">
           <div
             v-for="t in localTabs"
@@ -318,6 +321,7 @@ import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useProfileStore } from '@/stores/profile';
 import VisitMap from '@/components/profile/VisitMap.vue';
+import TrophyShelf from '@/components/profile/TrophyShelf.vue';
 import { useStampbookStore } from '@/stores/stampbook';
 import { useSavedStore } from '@/stores/saved';
 import { useAuthStore } from '@/stores/auth';
@@ -334,7 +338,7 @@ const stampbookStore = useStampbookStore();
 const savedStore = useSavedStore();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
-const { user, stats, miniMapPins, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
+const { user, stats, miniMapPins, trophies, error, myPhotos, myPhotosLoading, myPhotosLoaded } = storeToRefs(profileStore);
 const { contents: stampbookContents } = storeToRefs(stampbookStore);
 const { collections: savedCollections, items: savedItems } = storeToRefs(savedStore);
 const { showError, showInfo } = useToast();

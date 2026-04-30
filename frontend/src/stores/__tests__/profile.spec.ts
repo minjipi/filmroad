@@ -39,6 +39,7 @@ const fixture: ProfileResponse = {
     { latitude: 37.5658, longitude: 126.9751, variant: 'VIOLET' },
     { latitude: 35.1796, longitude: 129.0756, variant: 'MINT' },
   ],
+  trophies: [],
 };
 
 describe('profile store', () => {
