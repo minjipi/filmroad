@@ -111,12 +111,19 @@ function buildPinContent(m: MapMarker, isVisited: boolean, isActive: boolean): H
   bubble.className = 'bubble';
   const dot = document.createElement('span');
   dot.className = 'dot';
-  // 우선순위: visited(✓) > orderIndex(숫자) > 기본 `●`. visited 인 코스 마커는
-  // "방문 완료" 가 더 강한 시각 신호라 번호보다 체크를 우선.
-  if (isVisited) {
-    dot.textContent = '✓';
-  } else if (m.orderIndex != null) {
+  // task #21 — orderIndex 와 visited 가 동시에 있으면 둘 다 노출. 메인 dot
+  // 텍스트는 순번, 우하단에 작은 ✓ tick 배지를 얹음(.tick absolute).
+  // orderIndex 없는 일반 마커는 기존 visited(✓) / 기본(●) 분기 그대로.
+  if (m.orderIndex != null) {
     dot.textContent = String(m.orderIndex);
+    if (isVisited) {
+      const tick = document.createElement('span');
+      tick.className = 'tick';
+      tick.textContent = '✓';
+      dot.appendChild(tick);
+    }
+  } else if (isVisited) {
+    dot.textContent = '✓';
   } else {
     dot.textContent = '●';
   }
@@ -614,6 +621,7 @@ onBeforeUnmount(() => {
   box-shadow: 1px 1px 0 rgba(15, 23, 42, 0.06);
 }
 .kakao-map .pin .dot {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -627,6 +635,25 @@ onBeforeUnmount(() => {
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
+}
+/* task #21 — orderIndex 와 visited 동시 노출 시 우하단에 작은 mint ✓ 배지.
+   tick 은 dot 의 absolute 자식. 작은 흰 외곽으로 dot 색과 분리. */
+.kakao-map .pin .dot .tick {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--fr-mint, #10b981);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #ffffff;
 }
 .kakao-map .pin.visited .dot { background: var(--fr-mint); }
 .kakao-map .pin.active { z-index: 5; }

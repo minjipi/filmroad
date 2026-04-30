@@ -14,6 +14,8 @@ import com.filmroad.api.domain.route.dto.RouteInitResponse;
 import com.filmroad.api.domain.route.dto.RouteItemRequest;
 import com.filmroad.api.domain.route.dto.RouteResponse;
 import com.filmroad.api.domain.route.dto.RouteSummaryDto;
+import com.filmroad.api.domain.stamp.Stamp;
+import com.filmroad.api.domain.stamp.StampRepository;
 import com.filmroad.api.domain.user.User;
 import com.filmroad.api.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +47,7 @@ public class RouteCrudService {
     private final PlaceRepository placeRepository;
     private final ContentRepository contentRepository;
     private final UserRepository userRepository;
+    private final StampRepository stampRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
@@ -53,12 +57,30 @@ public class RouteCrudService {
 
         List<Place> places = placeRepository.findByContentIdOrderByIdAsc(contentId);
 
+        // 비로그인 (currentUserIdOrNull == null) 이면 빈 맵 → 모든 place 가 visited=false.
+        // 로그인 상태면 콘텐츠 단위로 stamp 1 회 조회 (N+1 free).
+        Long userId = currentUser.currentUserIdOrNull();
+        Map<Long, Stamp> stampByPlaceId = userId == null
+                ? Collections.emptyMap()
+                : indexStamps(stampRepository.findByUserIdAndContentId(userId, contentId));
+
         return RouteInitResponse.builder()
                 .content(RouteInitContentDto.from(content))
                 .suggestedName(content.getTitle() + " 코스")
                 .suggestedStartTime(DEFAULT_START_TIME)
-                .places(places.stream().map(RouteInitPlaceDto::from).toList())
+                .places(places.stream()
+                        .map(p -> RouteInitPlaceDto.from(p, stampByPlaceId.get(p.getId())))
+                        .toList())
                 .build();
+    }
+
+    /** placeId → Stamp 매핑. 동일 (user, place) 는 stamp 유니크 제약상 1건이지만 안전한 merge. */
+    private static Map<Long, Stamp> indexStamps(List<Stamp> stamps) {
+        Map<Long, Stamp> map = new HashMap<>(stamps.size());
+        for (Stamp s : stamps) {
+            map.put(s.getPlace().getId(), s);
+        }
+        return map;
     }
 
     @Transactional
@@ -90,7 +112,7 @@ public class RouteCrudService {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.ROUTE_NOT_FOUND));
         ensureOwner(route, userId);
-        return RouteResponse.from(route);
+        return RouteResponse.from(route, ownerStamps(route, userId));
     }
 
     @Transactional(readOnly = true)
@@ -113,9 +135,15 @@ public class RouteCrudService {
         validateOrderIndex(request.getItems());
 
         route.updateMeta(request.getName(), request.getStartTime(), content);
-        route.replacePlaces(buildRoutePlaces(request.getItems(), placeMap));
+        // Hibernate 의 default flush 순서는 INSERT 먼저, DELETE 나중. 한 트랜잭션에서
+        // places 를 통째 교체하면 `(route_id, order_index)` 유니크 제약과 충돌한다.
+        // clearPlaces → flush → addPlaces 로 쪼개 orphan 삭제를 먼저 DB 에 반영.
+        List<RoutePlace> newPlaces = buildRoutePlaces(request.getItems(), placeMap);
+        route.clearPlaces();
+        routeRepository.flush();
+        route.addPlaces(newPlaces);
 
-        return RouteResponse.from(route);
+        return RouteResponse.from(route, ownerStamps(route, userId));
     }
 
     @Transactional
@@ -183,5 +211,19 @@ public class RouteCrudService {
         if (!route.getUser().getId().equals(userId)) {
             throw BaseException.of(BaseResponseStatus.ROUTE_FORBIDDEN);
         }
+    }
+
+    /**
+     * 코스 소유자의 stamp 를 한 번에 batch 조회. 빈 places 면 외부 호출 없이 빈 맵.
+     */
+    private Map<Long, Stamp> ownerStamps(Route route, Long userId) {
+        if (route.getPlaces().isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<Long> placeIds = new HashSet<>(route.getPlaces().size());
+        for (RoutePlace rp : route.getPlaces()) {
+            placeIds.add(rp.getPlace().getId());
+        }
+        return indexStamps(stampRepository.findByUserIdAndPlaceIdIn(userId, placeIds));
     }
 }

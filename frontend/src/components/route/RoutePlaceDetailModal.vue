@@ -1,7 +1,7 @@
 <template>
   <!-- 82% 높이 bottom sheet — 디자인의 PlaceDetail. 사진 hero(scene/cover 우선,
-       없으면 그라데이션 폴백) + 정보/내 메모 두 탭. "길찾기 시작" 은 카카오맵
-       deeplink 로 바로 점프(PlaceDetailPage 의 onKakaoNavigate 와 동일 패턴).
+       없으면 그라데이션 폴백) + 정보/내 메모 두 탭. CTA "인증하기" 는 PlaceDetailPage
+       의 onCapture 와 동일 — uploadStore.beginCapture 후 /camera 로 점프.
 
        task #19 — Teleport(to body) + Transition 으로 mount/unmount race 차단.
        부모 컴포넌트 트리 안에서 v-if 토글하면 sibling vnode 와 patching 순서가
@@ -75,13 +75,20 @@
               <RoutePlaceInfoRow v-if="place.openHours" icon="🕐" label="운영시간" :value="place.openHours" />
               <RoutePlaceInfoRow v-if="place.price" icon="💵" label="가격" :value="place.price" />
               <RoutePlaceInfoRow icon="⏱" label="추천 체류" :value="`${place.durationMin}분`" />
+              <RoutePlaceInfoRow
+                v-if="place.visited"
+                icon="✓"
+                label="방문 인증"
+                :value="visitedLabel"
+              />
               <button
                 type="button"
                 class="rt-detail-cta"
-                data-testid="rt-detail-navigate"
-                @click="onKakaoNavigate"
+                data-testid="rt-detail-capture"
+                @click="onCapture"
               >
-                길찾기 시작
+                <ion-icon :icon="cameraOutline" class="ic-20" />
+                {{ place.visited ? '다시 인증하기' : '인증하기' }}
               </button>
             </template>
 
@@ -106,10 +113,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { IonIcon } from '@ionic/vue';
-import { closeOutline } from 'ionicons/icons';
+import { cameraOutline, closeOutline } from 'ionicons/icons';
 import FrChip from '@/components/ui/FrChip.vue';
 import RoutePlaceInfoRow from './RoutePlaceInfoRow.vue';
+import { useUploadStore } from '@/stores/upload';
 import type { TripPlace } from '@/stores/tripRoute';
 
 const props = defineProps<{
@@ -143,6 +152,19 @@ const heroImage = computed<string | null>(
   () => props.place?.sceneImageUrl ?? props.place?.coverImageUrl ?? null,
 );
 
+/** "방문 인증 — YYYY-MM-DD" 우측 값. visitedAt 이 ISO 가 아닐 때 fallback "기록됨". */
+const visitedLabel = computed<string>(() => {
+  const at = props.place?.visitedAt;
+  if (!at) return '기록됨';
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) return '기록됨';
+  const d = new Date(t);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+});
+
 function onSaveNote(): void {
   const p = props.place;
   if (!p) return;
@@ -151,17 +173,28 @@ function onSaveNote(): void {
   emit('save-note', { placeId: p.id, note: trimmed });
 }
 
+const router = useRouter();
+const uploadStore = useUploadStore();
+
 /**
- * 카카오맵 길찾기 deeplink — PlaceDetailPage 의 onKakaoNavigate 와 동일 포맷.
- * 모바일 카카오맵 앱 설치 시 앱이 catch, 미설치면 모바일/데스크톱 웹으로 폴백.
+ * 인증샷 진입 — PlaceDetailPage 의 onCapture 와 동일 패턴. uploadStore 에 캡처
+ * 컨텍스트(placeId / contentId / contentTitle / sceneImageUrl) 를 채우고 /camera
+ * 로 이동. 라우트 코스의 TripPlace 는 contentEpisode 를 별도로 들고 있지 않으므로
+ * null 로 둔다(채점은 sceneImageUrl 기준).
  */
-function onKakaoNavigate(): void {
+async function onCapture(): Promise<void> {
   const p = props.place;
   if (!p) return;
-  if (typeof window === 'undefined') return;
-  const name = encodeURIComponent(p.name);
-  const url = `https://map.kakao.com/link/to/${name},${p.latitude},${p.longitude}`;
-  window.open(url, '_blank', 'noopener');
+  uploadStore.beginCapture({
+    placeId: p.id,
+    contentId: p.contentId,
+    contentTitle: p.contentTitle,
+    contentEpisode: null,
+    placeName: p.name,
+    sceneImageUrl: p.sceneImageUrl,
+  });
+  emit('close');
+  await router.push('/camera');
 }
 </script>
 
@@ -288,6 +321,10 @@ function onKakaoNavigate(): void {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 6px 16px rgba(20, 188, 237, 0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .rt-detail-note {

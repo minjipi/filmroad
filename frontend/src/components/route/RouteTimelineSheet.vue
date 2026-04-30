@@ -66,6 +66,15 @@
             {{ roleLabel(i, places.length) }} · {{ i + 1 }}/{{ places.length }}
           </span>
           <span class="rt-arrive-badge">{{ arrivalTime(i) }}</span>
+          <span
+            v-if="p.visited"
+            class="rt-visited-badge"
+            :data-testid="`rt-visited-badge-${p.id}`"
+            aria-label="인증 완료"
+          >
+            <ion-icon :icon="checkmarkOutline" class="ic-12" />
+            인증
+          </span>
         </div>
         <div class="rt-card-body">
           <FrChip variant="primary">{{ p.contentTitle }}</FrChip>
@@ -96,7 +105,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { IonIcon } from '@ionic/vue';
-import { mapOutline, optionsOutline, shareOutline, star } from 'ionicons/icons';
+import { checkmarkOutline, mapOutline, optionsOutline, shareOutline, star } from 'ionicons/icons';
 import FrChip from '@/components/ui/FrChip.vue';
 import type { TripPlace } from '@/stores/tripRoute';
 
@@ -500,6 +509,23 @@ function onScroll(e: Event): void {
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+/* 인증 완료 배지 — arrive-badge 좌측에 mint 톤. visited 인 카드에만 노출. */
+.rt-visited-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--fr-mint, #10b981);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
 .rt-card-body {
