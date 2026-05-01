@@ -47,7 +47,7 @@
                   class="handle"
                   data-testid="cs-author-handle"
                   @click="onOpenAuthor(parent.author.userId)"
-                >{{ parent.author.handle }}</span>
+                >{{ parent.author.nickname || `@${parent.author.handle}` }}</span>
                 <ion-icon v-if="parent.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
                 <span class="time">{{ formatRelativeTime(parent.createdAt) }}</span>
               </div>
@@ -109,7 +109,7 @@
                   class="handle"
                   data-testid="cs-author-handle"
                   @click="onOpenAuthor(r.author.userId)"
-                >{{ r.author.handle }}</span>
+                >{{ r.author.nickname || `@${r.author.handle}` }}</span>
                 <ion-icon v-if="r.author.verified" :icon="checkmarkCircle" class="ic-16 verify" />
                 <span class="time">{{ formatRelativeTime(r.createdAt) }}</span>
               </div>
@@ -156,7 +156,7 @@
         -->
         <div v-if="replyTarget" class="cs-reply-banner" data-testid="cs-reply-banner">
           <span class="cs-reply-text">
-            <b>{{ replyTarget.handle }}</b>에게 답글 작성 중
+            <b>{{ replyTarget.nickname || `@${replyTarget.handle}` }}</b>에게 답글 작성 중
           </span>
           <button
             type="button"
@@ -300,7 +300,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const textInput = ref<HTMLInputElement | null>(null);
 const viewerSrc = ref<string | null>(null);
 // 답글 컨텍스트 — 사용자가 "답글 달기" 를 누른 댓글의 id + handle. null 이면 일반 댓글.
-const replyTarget = ref<{ id: number; handle: string } | null>(null);
+const replyTarget = ref<{ id: number; handle: string; nickname: string } | null>(null);
 // 어떤 부모 댓글의 답글 리스트가 펼쳐져 있는지. Set 자체는 Vue 가 deep 추적
 // 하지만 add/delete 만으론 trigger 가 안 잡히는 케이스가 있어 매번 새 Set 으로
 // 교체한다.
@@ -541,7 +541,11 @@ async function onSubmit(): Promise<void> {
 
 function onStartReply(c: Comment): void {
   if (!authReady.value) return;
-  replyTarget.value = { id: c.id, handle: c.author.handle };
+  replyTarget.value = {
+    id: c.id,
+    handle: c.author.handle,
+    nickname: c.author.nickname,
+  };
   // 답글 모드 진입 시 그 부모의 기존 답글들도 자동으로 펼침 — 컨텍스트 보면서
   // 작성하게.
   if (!expandedParents.value.has(c.id)) {

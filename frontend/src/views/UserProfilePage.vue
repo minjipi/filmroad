@@ -17,7 +17,11 @@
           <ion-icon :icon="chevronBackOutline" class="ic-22" />
         </button>
         <span class="title">
-          <template v-if="user">@{{ user.handle }}</template>
+          <!-- 헤더 타이틀은 nickname 우선 — handle 은 OAuth 자동 생성 시
+               '@test01-635ed5' 처럼 hash 가 붙어 식별자로 부적합. nickname 이
+               비어있는 극단 케이스에서만 @handle 폴백 (.up-handle 서브라벨은
+               그대로 @handle 유지). -->
+          <template v-if="user">{{ user.nickname || `@${user.handle}` }}</template>
         </span>
         <div class="right">
           <button type="button" class="ic-btn" aria-label="notifications" @click="onNotifs">

@@ -196,7 +196,9 @@ describe('FeedDetailPage.vue', () => {
     // It should render 2 reco cards matching fixture length.
     const cards = recoStrips[0].findAll('.reco-card');
     expect(cards.length).toBe(2);
-    expect(cards[0].find('.t').text()).toBe('reco10');
+    // 추천 유저 카드의 이름은 nickname 우선 — handle (`reco10`) 이 아닌
+    // `추천10` (makeUser fixture) 이 표시되어야 한다.
+    expect(cards[0].find('.t').text()).toBe('추천10');
   });
 
   it('reco-strip is suppressed when recommendedUsers is empty', async () => {
