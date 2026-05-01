@@ -287,7 +287,13 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
-import { IonPage, IonContent, IonIcon, IonSkeletonText } from '@ionic/vue';
+import {
+  IonPage,
+  IonContent,
+  IonIcon,
+  IonSkeletonText,
+  onIonViewWillEnter,
+} from '@ionic/vue';
 import {
   locationOutline,
   searchOutline,
@@ -513,8 +519,8 @@ function posterInitial(title: string): string {
   return c || '?';
 }
 
-onMounted(async () => {
-  // task #25: URL query 로 첫 진입 시 store 시드 — 새로고침/공유 URL 복원.
+async function loadHome(): Promise<void> {
+  // task #25: URL query 로 진입 시 store 시드 — 새로고침/공유 URL 복원.
   // query 가 비어있으면 store 기본값 / 외부 시드를 그대로 존중. 명시적 query
   // 값(null 이 아닌 값)만 override 한다.
   const seedScope = pickQueryScope();
@@ -523,7 +529,21 @@ onMounted(async () => {
   if (seedContent !== null && seedContent !== homeStore.selectedContentId) homeStore.selectedContentId = seedContent;
   await homeStore.fetchHome();
   if (error.value) await showError(error.value);
-});
+}
+
+onMounted(loadHome);
+
+// Ionic 의 IonRouterOutlet 은 한 번 마운트된 페이지를 stack 에 캐시해
+// 재진입 시 같은 컴포넌트 인스턴스를 재사용 → onMounted 가 다시 안 돌아감.
+// `/onboarding` 의 "로그인 없이 둘러보기" 같은 경로로 돌아왔을 때 logout 이
+// 모든 user-scoped store 를 \$reset 한 직후라면 places=[]/hero=null 로 빈
+// 화면이 그대로 보이므로 ionViewWillEnter 에서 항상 재 fetch.
+//
+// fetchHome 안의 loading guard 가 동시 호출은 자연스럽게 처리하므로 첫 마운트
+// + ionViewWillEnter 가 거의 동시에 호출되어도 중복 요청 우려 없음 (loading
+// 자체는 가드 안 하지만 Pinia 가 같은 user 의 결과로 덮어쓸 뿐 기능 영향 X.
+// 동일 패턴이 ProfilePage 에도 적용돼 있음).
+onIonViewWillEnter(loadHome);
 </script>
 
 <style scoped>
