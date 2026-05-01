@@ -205,8 +205,9 @@ describe('ProfilePage.vue', () => {
 
     expect(wrapper.find('.profile-card').exists()).toBe(true);
     expect(wrapper.text()).toContain('김미루');
-    // Handle is rendered at the top bar as "@miru".
-    expect(wrapper.find('.top-bar h1').text()).toBe('@miru');
+    // Top bar shows the nickname (handle 은 OAuth 자동 생성 hash 가 붙어
+    // 사용자 식별에 부적합 — nickname 우선, 없을 때만 @handle 폴백).
+    expect(wrapper.find('.top-bar h1').text()).toBe('김미루');
     expect(wrapper.text()).toContain('성지 순례자');
     expect(wrapper.text()).toContain('LV.5');
   });

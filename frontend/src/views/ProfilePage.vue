@@ -11,7 +11,7 @@
         >
           <ion-icon :icon="chevronBack" class="ic-22" />
         </button>
-        <h1>{{ handleLabel }}</h1>
+        <h1>{{ headerTitle }}</h1>
         <div class="r">
           <button type="button" aria-label="menu" @click="onMenu">
             <ion-icon :icon="menuOutline" class="ic-20" />
@@ -392,8 +392,15 @@ const localTabs: Array<{ key: LocalTab; label: string; icon: string }> = [
   { key: 'saved', label: '저장', icon: bookmarkOutline },
 ];
 
-const handleLabel = computed(() => {
+// 헤더 타이틀은 사용자 nickname 으로 표시. handle (@xxx) 은 OAuth 자동 생성
+// 시 `@test01-635ed5` 처럼 임의 hash 가 붙어 식별자로 적합하지 않고, 사용자
+// 본인이 보는 화면에선 nickname 이 더 자연스럽다. nickname 이 비어있는
+// 극단 케이스에선 handle 로 폴백.
+const headerTitle = computed(() => {
+  const nickname = user.value?.nickname?.trim();
+  if (nickname) return nickname;
   const h = user.value?.handle ?? '';
+  if (!h) return '';
   return h.startsWith('@') ? h : `@${h}`;
 });
 
