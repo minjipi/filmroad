@@ -188,6 +188,64 @@
             </div>
           </section>
 
+          <!-- 혼잡도 예측 — 한국관광공사 TatsCnctrRateService 기반. 백엔드의
+               /api/places/:id/congestion 이 available=true + forecasts 채워줄
+               때만 노출. 디자인은 design/pages/03-place-detail.html 의
+               '언제 가면 좋을까?' 섹션을 따른다. 카카오 섹션과는 별도 출처
+               (한국관광공사) 라 형제 섹션으로 분리. -->
+          <section
+            v-if="congestion?.available && congestion.forecasts.length > 0"
+            class="section crowd-section"
+            data-testid="pd-crowd-section"
+          >
+            <div class="section-head">
+              <h2>언제 가면 좋을까?</h2>
+              <span
+                class="link"
+                data-testid="pd-crowd-see-all"
+                @click="onSeeAllCongestion"
+              >10일 전체 보기</span>
+            </div>
+            <p class="crowd-sub">{{ congestion.source ?? '한국관광공사' }} 관광지 집중률 · 실시간 예측</p>
+            <div class="crowd-chips">
+              <div
+                v-for="f in congestion.forecasts"
+                :key="f.key"
+                :class="['crowd-chip', `crowd-tx-${f.state.toLowerCase()}`]"
+                :data-testid="`pd-crowd-${f.key.toLowerCase()}`"
+              >
+                <div class="lbl">
+                  {{ f.label }}
+                  <span class="sub">· {{ f.dateLabel }}</span>
+                </div>
+                <div class="row">
+                  <span class="pct">
+                    {{ f.percent }}<span class="pct-unit">%</span>
+                  </span>
+                  <span class="state">{{ stateLabel(f.state) }}</span>
+                </div>
+                <div class="meter">
+                  <i
+                    :class="`crowd-bg-${f.state.toLowerCase()}`"
+                    :style="{ width: `${f.percent}%` }"
+                  />
+                </div>
+              </div>
+            </div>
+            <!-- 가장 한가한 시점 추천. forecasts 중 percent 최저값을 골라
+                 사용자에게 "셋 중 X 가 가장 한가해요" 형태로 안내. -->
+            <div
+              v-if="congestionHint"
+              class="crowd-hint"
+              data-testid="pd-crowd-hint"
+            >
+              <ion-icon :icon="bulbOutline" class="ic-16 hint-ic" />
+              <span class="hint-text">
+                셋 중 <strong>{{ congestionHint.label }}</strong>이 가장 한가해요 (예상 {{ congestionHint.percent }}%).
+              </span>
+            </div>
+          </section>
+
           <section v-if="photos.length > 0" class="section">
             <div class="section-head">
               <h2>방문객 인증샷</h2>
@@ -337,48 +395,6 @@
             <div class="kakao-foot">카카오맵 정보 제공 · 실시간 동기화</div>
           </section>
 
-          <!-- 혼잡도 예측 — 백엔드 /api/places/:id/congestion 응답 (한국관광공사
-               TatsCnctrRateService) 가 available=true 일 때만 노출. 카카오 섹션
-               과는 별도 출처라 카카오 섹션 안에 끼워 넣지 않고 형제 섹션으로
-               분리. -->
-          <section
-            v-if="congestion?.available && congestion.forecasts.length > 0"
-            class="crowd-section"
-            data-testid="pd-crowd-section"
-          >
-            <div class="crowd-head">
-              <span class="crowd-title">
-                <ion-icon :icon="peopleOutline" class="ic-16" />혼잡도 예측
-              </span>
-              <span class="crowd-source">{{ congestion.source ?? '한국관광공사' }}</span>
-            </div>
-            <div class="crowd-chips">
-              <div
-                v-for="f in congestion.forecasts"
-                :key="f.key"
-                :class="['crowd-chip', `crowd-tx-${f.state.toLowerCase()}`]"
-                :data-testid="`pd-crowd-${f.key.toLowerCase()}`"
-              >
-                <div class="lbl">
-                  {{ f.label }}
-                  <span class="sub">· {{ f.dateLabel }}</span>
-                </div>
-                <div class="row">
-                  <span class="pct">
-                    {{ f.percent }}<span class="pct-unit">%</span>
-                  </span>
-                  <span class="state">{{ stateLabel(f.state) }}</span>
-                </div>
-                <div class="meter">
-                  <i
-                    :class="`crowd-bg-${f.state.toLowerCase()}`"
-                    :style="{ width: `${f.percent}%` }"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
           <div class="tail" />
         </div>
       </div>
@@ -431,7 +447,7 @@ import {
   globeOutline,
   openOutline,
   restaurantOutline,
-  peopleOutline,
+  bulbOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -487,6 +503,18 @@ function stateLabel(s: CongestionState): string {
   if (s === 'BUSY') return '혼잡';
   return '보통';
 }
+// 추천 hint — forecasts 중 percent 가 가장 낮은 항목을 가장 한가한 시점으로
+// 안내. 동률이면 forecasts 배열 순서(오늘→내일→주말)대로 처음 만나는 것.
+// forecasts 가 비었을 때는 null 을 반환해 hint 자체가 안 보이게.
+const congestionHint = computed<{ label: string; percent: number } | null>(() => {
+  const fs = congestion.value?.forecasts ?? [];
+  if (fs.length === 0) return null;
+  let best = fs[0];
+  for (const f of fs) {
+    if (f.percent < best.percent) best = f;
+  }
+  return { label: best.label, percent: best.percent };
+});
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
   if (!at) return '';
@@ -897,6 +925,12 @@ async function onCapture(): Promise<void> {
 async function onOpenGallery(): Promise<void> {
   if (!place.value) return;
   await router.push(`/feed/detail?placeId=${place.value.id}`);
+}
+
+// 디자인의 "10일 전체 보기" 링크는 별도 03b-congestion.html 화면을 가리키지만
+// frontend 에는 아직 해당 페이지가 없어서 stub 토스트로 노출만 가시화.
+async function onSeeAllCongestion(): Promise<void> {
+  await showInfo('10일 예측 보기는 곧 공개됩니다');
 }
 
 // 갤러리 셀(개별 인증샷) 클릭 → `/feed/detail?placeId=...&shotId=...` (task #23 통합).
@@ -1587,32 +1621,18 @@ ion-content.pd-content {
   text-align: center;
 }
 
-/* ---------- 혼잡도 예측 (한국관광공사 TatsCnctrRateService) ---------- */
-.crowd-section {
-  padding: 22px 20px;
-  border-top: 1px solid var(--fr-line);
-}
-.crowd-head {
-  display: flex;
-  justify-content: space-between;
+/* ---------- 혼잡도 예측 (한국관광공사 TatsCnctrRateService) ----------
+   .section 클래스를 그대로 재사용해 페이지 다른 섹션 (이 장면, 방문객 인증샷,
+   비슷한 장소) 과 동일한 padding/구분선 톤을 가져간다. .section-head 도
+   같이 차용 — h2 + 우측 link 의 위계가 이미 이 페이지에서 표준화돼 있음. */
+.crowd-section .section-head {
+  margin-bottom: 4px;
   align-items: baseline;
-  margin-bottom: 10px;
 }
-.crowd-title {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--fr-ink);
-}
-.crowd-title .ic-16 {
+.crowd-sub {
+  margin: 0 0 12px;
+  font-size: 11.5px;
   color: var(--fr-ink-3);
-}
-.crowd-source {
-  font-size: 10.5px;
-  color: var(--fr-ink-4);
 }
 .crowd-chips {
   display: grid;
@@ -1707,5 +1727,29 @@ ion-content.pd-content {
 }
 .crowd-bg-pack {
   background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+/* 가장 한가한 시점 추천 hint 박스 */
+.crowd-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fr-bg-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fr-ink-2);
+}
+.crowd-hint .hint-ic {
+  color: var(--fr-amber, #f59e0b);
+  flex-shrink: 0;
+}
+.crowd-hint .hint-text {
+  line-height: 1.4;
+}
+.crowd-hint .hint-text strong {
+  font-weight: 800;
+  color: var(--fr-ink);
 }
 </style>
