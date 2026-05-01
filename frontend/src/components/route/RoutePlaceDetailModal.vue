@@ -81,6 +81,48 @@
                 label="방문 인증"
                 :value="visitedLabel"
               />
+
+              <!-- 혼잡도 — 한국관광공사 응답 (오늘/내일/주말 3 카드).
+                   PlaceDetailPage 의 '언제 가면 좋을까?' 섹션과 동일 패턴.
+                   available=false 또는 fetch 전이면 v-if 로 통째 숨김. -->
+              <section
+                v-if="congestion?.available && congestion.forecasts.length > 0"
+                class="rt-detail-crowd"
+                data-testid="rt-detail-crowd"
+              >
+                <div class="rt-detail-crowd-head">
+                  <span class="rt-detail-crowd-ttl">언제 가면 좋을까?</span>
+                </div>
+                <p class="rt-detail-crowd-sub">
+                  {{ congestion.source ?? '한국관광공사' }} 관광지 집중률 · 실시간 예측
+                </p>
+                <div class="rt-detail-crowd-chips">
+                  <div
+                    v-for="f in congestion.forecasts"
+                    :key="f.key"
+                    :class="['rt-detail-crowd-chip', `crowd-tx-${stateLowerClass(f.state)}`]"
+                    :data-testid="`rt-detail-crowd-${f.key.toLowerCase()}`"
+                  >
+                    <div class="lbl">
+                      {{ f.label }}
+                      <span class="sub">· {{ f.dateLabel }}</span>
+                    </div>
+                    <div class="row">
+                      <span class="pct">
+                        {{ f.percent }}<span class="pct-unit">%</span>
+                      </span>
+                      <span class="state">{{ stateLabel(f.state) }}</span>
+                    </div>
+                    <div class="meter">
+                      <i
+                        :class="`crowd-bg-${stateLowerClass(f.state)}`"
+                        :style="{ width: `${f.percent}%` }"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               <button
                 type="button"
                 class="rt-detail-cta"
@@ -126,6 +168,7 @@ import FrChip from '@/components/ui/FrChip.vue';
 import RoutePlaceInfoRow from './RoutePlaceInfoRow.vue';
 import { useUploadStore } from '@/stores/upload';
 import type { TripPlace } from '@/stores/tripRoute';
+import { useCongestionStore, type CongestionState } from '@/stores/congestion';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{
@@ -144,6 +187,8 @@ type Tab = 'info' | 'note';
 const tab = ref<Tab>('info');
 const noteDraft = ref('');
 
+const congestionStore = useCongestionStore();
+
 /** 모달이 새로 열릴 때마다 store note 로 동기화. 같은 place 에 재진입해도 깔끔. */
 watch(
   () => [props.open, props.place?.id] as const,
@@ -151,9 +196,27 @@ watch(
     if (!isOpen) return;
     tab.value = 'info';
     noteDraft.value = props.note ?? '';
-    void id;
+    // 부모(TripRoutePage)가 mount 시 모든 placeId 의 congestion 을 prefetch
+    // 하지만, 사용자가 search 로 새 place 를 추가하고 바로 모달을 열면 부모의
+    // watch 가 아직 트리거 안 됐을 수 있음. 모달 열릴 때 한 번 더 fetch — store
+    // 의 hasOwnProperty 가드가 동일 id 재호출을 자동 skip 하므로 중복 안전.
+    if (typeof id === 'number') void congestionStore.fetch(id);
   },
 );
+
+const congestion = computed(() => {
+  const id = props.place?.id;
+  return id == null ? null : congestionStore.infoFor(id);
+});
+
+function stateLowerClass(state: CongestionState | undefined): string {
+  return (state ?? 'OK').toLowerCase();
+}
+function stateLabel(state: CongestionState | undefined): string {
+  if (state === 'PACK') return '매우혼잡';
+  if (state === 'BUSY') return '혼잡';
+  return '보통';
+}
 
 const heroImage = computed<string | null>(
   () => props.place?.sceneImageUrl ?? props.place?.coverImageUrl ?? null,
@@ -363,6 +426,110 @@ async function onCapture(): Promise<void> {
   appearance: none;
 }
 .rt-detail-cta:active { opacity: 0.88; }
+
+/* ---------- 혼잡도 섹션 (정보 탭) ---------- */
+.rt-detail-crowd {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--fr-line);
+}
+.rt-detail-crowd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.rt-detail-crowd-ttl {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+}
+.rt-detail-crowd-sub {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+}
+.rt-detail-crowd-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.rt-detail-crowd-chip {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rt-detail-crowd-chip .lbl {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rt-detail-crowd-chip .lbl .sub {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--fr-ink-4);
+  opacity: 0.85;
+}
+.rt-detail-crowd-chip .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+.rt-detail-crowd-chip .pct {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.rt-detail-crowd-chip .pct-unit {
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-left: 1px;
+  opacity: 0.7;
+}
+.rt-detail-crowd-chip .state {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.rt-detail-crowd-chip .meter {
+  margin-top: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  overflow: hidden;
+}
+.rt-detail-crowd-chip .meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* state 색상 — TimelineSheet / PlaceDetailPage / MapPage 와 통일. */
+.rt-detail-crowd .crowd-tx-ok .pct,
+.rt-detail-crowd .crowd-tx-ok .state { color: #16a34a; }
+.rt-detail-crowd .crowd-tx-busy .pct,
+.rt-detail-crowd .crowd-tx-busy .state { color: #f59e0b; }
+.rt-detail-crowd .crowd-tx-pack .pct,
+.rt-detail-crowd .crowd-tx-pack .state { color: #ef4444; }
+.rt-detail-crowd .crowd-bg-ok { background: linear-gradient(90deg, #4ade80, #16a34a); }
+.rt-detail-crowd .crowd-bg-busy { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.rt-detail-crowd .crowd-bg-pack { background: linear-gradient(90deg, #f87171, #ef4444); }
 
 .rt-detail-note {
   width: 100%;
