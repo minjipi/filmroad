@@ -132,12 +132,19 @@ public class SavedService {
 
         Map<Long, Date> visitedAtByPlace = new HashMap<>();
         Set<Long> certifiedPlaceIds = new HashSet<>();
+        Map<Long, Long> photoCountByPlace = new HashMap<>();
         if (!placeIds.isEmpty()) {
             for (Stamp s : stampRepository.findByUserIdAndPlaceIdIn(userId, placeIds)) {
                 visitedAtByPlace.put(s.getPlace().getId(), s.getAcquiredAt());
             }
             certifiedPlaceIds.addAll(
                     placePhotoRepository.findDistinctPlaceIdsByUserIdAndPlaceIdIn(userId, placeIds));
+            // Place.photo_count 컬럼이 stale 한 케이스를 우회 — viewer-visible 사진
+            // 수를 한 번에 batch 카운트. count==0 인 place 는 결과에 안 들어오므로
+            // 호출부에서 getOrDefault(id, 0L) 로 폴백.
+            for (Object[] row : placePhotoRepository.countVisibleByPlaceIds(placeIds, userId)) {
+                photoCountByPlace.put((Long) row[0], (Long) row[1]);
+            }
         }
 
         List<CollectionItemDto> items = new ArrayList<>();
@@ -172,7 +179,7 @@ public class SavedService {
                     .contentTitle(p.getContent().getTitle())
                     .contentEpisode(formatContentEpisode(p.getPrimaryContentEpisode(), p.getPrimarySceneTimestamp()))
                     .likeCount(p.getLikeCount())
-                    .photoCount(p.getPhotoCount())
+                    .photoCount(photoCountByPlace.getOrDefault(p.getId(), 0L).intValue())
                     .distanceKm(GeoUtils.distanceKmOrNull(lat, lng, p.getLatitude(), p.getLongitude()))
                     .visited(visitedAt != null)
                     .visitedAt(visitedAt)

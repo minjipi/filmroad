@@ -9,6 +9,7 @@ import com.filmroad.api.domain.map.dto.MapMarkerDto;
 import com.filmroad.api.domain.map.dto.MapResponse;
 import com.filmroad.api.domain.map.dto.PlaceDetailDto;
 import com.filmroad.api.domain.place.Place;
+import com.filmroad.api.domain.place.PlacePhotoRepository;
 import com.filmroad.api.domain.place.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,7 @@ public class MapService {
 
     private final PlaceRepository placeRepository;
     private final PlaceLikeRepository placeLikeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
@@ -95,7 +97,11 @@ public class MapService {
         Long viewerId = currentUser.currentUserIdOrNull();
         boolean liked = viewerId != null
                 && placeLikeRepository.existsByUserIdAndPlaceId(viewerId, chosen.getId());
-        return PlaceDetailDto.of(chosen, distanceKm(lat, lng, chosen), liked);
+        // Place.photo_count 컬럼은 stale (denormalized 미갱신). visibility-aware
+        // 실시간 카운트로 대체 — 지도 시트의 인증샷 수가 PlaceDetailPage 와
+        // 일치하도록.
+        long photoCount = placePhotoRepository.countVisibleByPlaceId(chosen.getId(), viewerId);
+        return PlaceDetailDto.of(chosen, distanceKm(lat, lng, chosen), liked, photoCount);
     }
 
     private static Double distanceKm(Double lat, Double lng, Place place) {

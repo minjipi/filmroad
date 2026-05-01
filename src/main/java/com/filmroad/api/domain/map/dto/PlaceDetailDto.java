@@ -30,7 +30,13 @@ public class PlaceDetailDto {
      */
     private boolean liked;
 
-    public static PlaceDetailDto of(Place place, Double distanceKm, boolean liked) {
+    /**
+     * @param photoCount viewer 가 볼 수 있는 사진 수. Place.photo_count 컬럼은
+     *     denormalized 라 갱신되지 않아 stale (대부분 0) — Service 가
+     *     PlacePhotoRepository.countVisibleByPlaceId 로 실시간 카운트해 명시적
+     *     으로 넣어준다.
+     */
+    public static PlaceDetailDto of(Place place, Double distanceKm, boolean liked, long photoCount) {
         return PlaceDetailDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -42,7 +48,7 @@ public class PlaceDetailDto {
                 .contentEpisode(place.getPrimaryContentEpisode())
                 .coverImageUrls(place.getCoverImages().stream().map(PlaceCoverImage::getImageUrl).toList())
                 .sceneImageUrl(place.getPrimarySceneImageUrl())
-                .photoCount(place.getPhotoCount())
+                .photoCount((int) photoCount)
                 .likeCount(place.getLikeCount())
                 .rating(place.getRating())
                 .distanceKm(distanceKm)
