@@ -137,92 +137,137 @@
         </div>
 
         <div class="sheet-body no-scrollbar">
-          <!-- 시트 헤더(작품칩 + 장소명 + 지역) 와 썸네일은 "인증하러 가기"
-               버튼과 동일하게 /place/:id 로 진입하는 클릭 영역. 한 번에 큰
-               타깃을 누를 수 있게 두 row 모두 트리거. role=button + Enter
-               키 핸들러로 a11y 보강. -->
-          <div
-            class="title-row clickable"
-            role="button"
-            tabindex="0"
-            data-testid="map-sheet-title"
-            @click="onOpenDetail"
-            @keydown.enter="onOpenDetail"
-            @keydown.space.prevent="onOpenDetail"
-          >
-            <div>
-              <FrChip variant="soft">{{ workBadge }}</FrChip>
-              <div class="t1">{{ selected.name }}</div>
-              <div class="t2">
-                {{ selected.regionLabel }}<span v-if="distanceLabel"> · {{ distanceLabel }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="sheet-preview">
+          <!-- 1) Primary info — 시트 헤더(작품칩 + 장소명 + 지역) + 썸네일/스탯
+               + 인증하러 가기 CTA 까지 한 묶음으로 sheet 의 첫 섹션. 두 row
+               (title-row, sheet-thumb) 모두 /place/:id 로 진입하는 클릭 영역
+               (큰 타깃). role=button + Enter 키 핸들러로 a11y 보강. -->
+          <section class="map-sheet-section primary-section">
             <div
-              class="sheet-thumb clickable"
+              class="title-row clickable"
               role="button"
               tabindex="0"
-              data-testid="map-sheet-thumb"
-              :aria-label="`${selected.name} 상세 보기`"
+              data-testid="map-sheet-title"
               @click="onOpenDetail"
               @keydown.enter="onOpenDetail"
               @keydown.space.prevent="onOpenDetail"
             >
-              <img
-                v-if="selected.sceneImageUrl"
-                :src="selected.sceneImageUrl"
-                :alt="selected.name"
-              />
-            </div>
-            <div class="sheet-meta">
-              <div class="stat-row">
-                <button
-                  type="button"
-                  class="s"
-                  data-testid="sheet-photo-stat"
-                  aria-label="인증샷 갤러리 보기"
-                  @click="onOpenGallery"
-                >
-                  <ion-icon :icon="cameraOutline" class="ic-16" />{{ formatCount(selected.photoCount) }}
-                </button>
-                <button
-                  type="button"
-                  :class="['s', selected.liked ? 'liked' : '']"
-                  data-testid="sheet-like-stat"
-                  :aria-label="selected.liked ? '좋아요 취소' : '좋아요'"
-                  @click="onToggleLike"
-                >
-                  <ion-icon :icon="selected.liked ? heart : heartOutline" class="ic-16" />{{ formatCount(selected.likeCount) }}
-                </button>
-                <span class="s star">
-                  <ion-icon :icon="star" class="ic-16" />{{ selected.rating.toFixed(1) }}
-                </span>
-              </div>
-              <div v-if="workBadge" class="preview-sub">
-                이 곳에서 {{ workBadge }} 촬영
+              <div>
+                <FrChip variant="soft">{{ workBadge }}</FrChip>
+                <div class="t1">{{ selected.name }}</div>
+                <div class="t2">
+                  {{ selected.regionLabel }}<span v-if="distanceLabel"> · {{ distanceLabel }}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="cta-row">
-            <button
-              class="save-inline"
-              :class="{ on: isSaved(selected.id) }"
-              type="button"
-              aria-label="save"
-              @click="onToggleSave"
-            >
-              <ion-icon
-                :icon="isSaved(selected.id) ? bookmark : bookmarkOutline"
-                class="ic-20"
-              />
-            </button>
-            <button class="go-btn" type="button" @click="onOpenDetail">
-              인증하러 가기 <ion-icon :icon="arrowForward" class="ic-16" />
-            </button>
-          </div>
+            <div class="sheet-preview">
+              <div
+                class="sheet-thumb clickable"
+                role="button"
+                tabindex="0"
+                data-testid="map-sheet-thumb"
+                :aria-label="`${selected.name} 상세 보기`"
+                @click="onOpenDetail"
+                @keydown.enter="onOpenDetail"
+                @keydown.space.prevent="onOpenDetail"
+              >
+                <img
+                  v-if="selected.sceneImageUrl"
+                  :src="selected.sceneImageUrl"
+                  :alt="selected.name"
+                />
+              </div>
+              <div class="sheet-meta">
+                <div class="stat-row">
+                  <button
+                    type="button"
+                    class="s"
+                    data-testid="sheet-photo-stat"
+                    aria-label="인증샷 갤러리 보기"
+                    @click="onOpenGallery"
+                  >
+                    <ion-icon :icon="cameraOutline" class="ic-16" />{{ formatCount(selected.photoCount) }}
+                  </button>
+                  <button
+                    type="button"
+                    :class="['s', selected.liked ? 'liked' : '']"
+                    data-testid="sheet-like-stat"
+                    :aria-label="selected.liked ? '좋아요 취소' : '좋아요'"
+                    @click="onToggleLike"
+                  >
+                    <ion-icon :icon="selected.liked ? heart : heartOutline" class="ic-16" />{{ formatCount(selected.likeCount) }}
+                  </button>
+                  <span class="s star">
+                    <ion-icon :icon="star" class="ic-16" />{{ selected.rating.toFixed(1) }}
+                  </span>
+                </div>
+                <div v-if="workBadge" class="preview-sub">
+                  이 곳에서 {{ workBadge }} 촬영
+                </div>
+              </div>
+            </div>
+
+            <div class="cta-row">
+              <button
+                class="save-inline"
+                :class="{ on: isSaved(selected.id) }"
+                type="button"
+                aria-label="save"
+                @click="onToggleSave"
+              >
+                <ion-icon
+                  :icon="isSaved(selected.id) ? bookmark : bookmarkOutline"
+                  class="ic-20"
+                />
+              </button>
+              <button class="go-btn" type="button" @click="onOpenDetail">
+                인증하러 가기 <ion-icon :icon="arrowForward" class="ic-16" />
+              </button>
+            </div>
+          </section>
+
+          <!-- 2) 혼잡도 예측 — 한국관광공사 TatsCnctrRateService 기반.
+               PlaceDetailPage 와 동일한 backend (/api/places/:id/congestion)
+               응답 사용하지만 map sheet 라 더 컴팩트하게: 헤더 + 3 chips만.
+               PlaceDetailPage 의 풀 섹션 ('언제 가면 좋을까?' + '10일 보기'
+               링크 + 추천 hint) 보다 가벼운 변형. -->
+          <section
+            v-if="congestion?.available && congestion.forecasts.length > 0"
+            class="map-sheet-section crowd-section"
+            data-testid="map-crowd-section"
+          >
+            <div class="crowd-head">
+              <span class="crowd-title">
+                <ion-icon :icon="peopleOutline" class="ic-16" />혼잡도 예측
+              </span>
+              <span class="crowd-source">{{ congestion.source ?? '한국관광공사' }}</span>
+            </div>
+            <div class="crowd-chips">
+              <div
+                v-for="f in congestion.forecasts"
+                :key="f.key"
+                :class="['crowd-chip', `crowd-tx-${f.state.toLowerCase()}`]"
+                :data-testid="`map-crowd-${f.key.toLowerCase()}`"
+              >
+                <div class="lbl">
+                  {{ f.label }}
+                  <span class="sub">· {{ f.dateLabel }}</span>
+                </div>
+                <div class="row">
+                  <span class="pct">
+                    {{ f.percent }}<span class="pct-unit">%</span>
+                  </span>
+                  <span class="state">{{ congestionStateLabel(f.state) }}</span>
+                </div>
+                <div class="meter">
+                  <i
+                    :class="`crowd-bg-${f.state.toLowerCase()}`"
+                    :style="{ width: `${f.percent}%` }"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
 
           <!-- 카카오 정보 — sheet 가 FULL 로 펼쳐질 때 노출. 백엔드
                /api/places/:id/kakao-info 가 available=true 일 때만 그린다.
@@ -383,6 +428,7 @@ import {
   locate,
   openOutline,
   restaurantOutline,
+  peopleOutline,
 } from 'ionicons/icons';
 import { storeToRefs } from 'pinia';
 import {
@@ -400,6 +446,7 @@ import {
 } from '@/stores/kakaoInfo';
 // task #29: 카카오 nearby → 한국관광공사 TourAPI 기반 신규 store.
 import { useTourNearbyStore, type TourNearbyRestaurant } from '@/stores/tourNearby';
+import { useCongestionStore, type CongestionState } from '@/stores/congestion';
 import FrChip from '@/components/ui/FrChip.vue';
 import FrTabBar from '@/components/layout/FrTabBar.vue';
 import MapFilterSheet from '@/components/map/MapFilterSheet.vue';
@@ -429,6 +476,7 @@ const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
 const tourNearbyStore = useTourNearbyStore();
+const congestionStore = useCongestionStore();
 const isSaved = (id: number): boolean => savedStore.isSaved(id);
 
 // 현재 선택된 marker(=place) 의 카카오 정보. selected 가 바뀌면 watch 가
@@ -445,6 +493,19 @@ const tourNearbyItems = computed<TourNearbyRestaurant[]>(() => {
   if (id == null) return [];
   return tourNearbyStore.itemsFor(id);
 });
+
+// 한국관광공사 혼잡도 예측 — selected 가 바뀌면 watch 가 fetch 트리거,
+// 응답 도착 시 store 캐시에서 자동 갱신. available=false 또는 fetch 전이면
+// null → 섹션 v-if 로 숨김.
+const congestion = computed(() => {
+  const id = selected.value?.id;
+  return id == null ? null : congestionStore.infoFor(id);
+});
+function congestionStateLabel(s: CongestionState): string {
+  if (s === 'PACK') return '매우혼잡';
+  if (s === 'BUSY') return '혼잡';
+  return '보통';
+}
 
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
@@ -795,6 +856,9 @@ watch(selected, (next, prev) => {
     void kakaoInfoStore.fetch(next.id);
     // task #29: 한국관광공사 nearby 도 같이 로드 — 보조 정보 병렬 fetch.
     void tourNearbyStore.fetch(next.id);
+    // 혼잡도 예측 — 선택한 place 의 오늘/내일/주말 카드를 받아온다. 매핑
+    // 실패 / 외부 API 실패 시 store 가 null 박고 섹션 자체가 v-if 로 숨겨짐.
+    void congestionStore.fetch(next.id);
   }
 });
 
@@ -1202,6 +1266,128 @@ ion-content.map-content {
   gap: 6px;
   padding: 0 14px;
   cursor: pointer;
+}
+
+/* ---------- 혼잡도 예측 (한국관광공사 TatsCnctrRateService) ----------
+   sheet 안의 보조 섹션. PlaceDetailPage 의 풀 섹션 ('언제 가면 좋을까?') 보다
+   컴팩트한 변형 — 헤더 + 3 chips. kakao-section 과 동일 톤의 border-top
+   분리자로 시각적 구분. */
+.crowd-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--fr-line);
+}
+.crowd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.crowd-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fr-ink);
+}
+.crowd-title .ic-16 {
+  color: var(--fr-ink-3);
+}
+.crowd-source {
+  font-size: 10.5px;
+  color: var(--fr-ink-4);
+}
+.crowd-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.crowd-chip {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.crowd-chip .lbl {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crowd-chip .lbl .sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fr-ink-4);
+  opacity: 0.85;
+}
+.crowd-chip .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+.crowd-chip .pct {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.crowd-chip .pct-unit {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 1px;
+  opacity: 0.7;
+}
+.crowd-chip .state {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.crowd-chip .meter {
+  margin-top: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  overflow: hidden;
+}
+.crowd-chip .meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.crowd-tx-ok .pct,
+.crowd-tx-ok .state {
+  color: #16a34a;
+}
+.crowd-tx-busy .pct,
+.crowd-tx-busy .state {
+  color: #f59e0b;
+}
+.crowd-tx-pack .pct,
+.crowd-tx-pack .state {
+  color: #ef4444;
+}
+.crowd-bg-ok {
+  background: linear-gradient(90deg, #4ade80, #16a34a);
+}
+.crowd-bg-busy {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.crowd-bg-pack {
+  background: linear-gradient(90deg, #f87171, #ef4444);
 }
 
 /* ---------- Kakao info (full mode) ---------- */
