@@ -25,3 +25,8 @@ korea-tourism:
     timeout-ms: 3000
     num-of-rows: 10
     radius-meters: 5000
+
+app:
+  congestion:
+    # 한국관광공사 혼잡도 예측 API 의 캐시 TTL (시간). 일별 예측이라 6시간이면 충분.
+    ttl-hours: 6

@@ -77,6 +77,8 @@ korea-tourism:
     radius-meters: 200000
 
 app:
+  congestion:
+    ttl-hours: 6
   domain:
     server: "http://localhost:8080"
     cookie: "localhost"
