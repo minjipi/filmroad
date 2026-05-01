@@ -65,7 +65,10 @@ public class AuthController {
     }
 
     /**
-     * RTOKEN 쿠키로 access+refresh 재발급. 실패 시 401 + 쿠키 Max-Age=0 으로 클라이언트 정리 유도.
+     * RTOKEN 쿠키로 access+refresh 재발급. 실패 시 401 + 클라이언트가 보냈던 쿠키만
+     * Max-Age=0 으로 정리. 요청에 ATOKEN/RTOKEN 자체가 없는 (= 익명) 호출은 정리할
+     * 게 없으므로 Set-Cookie 헤더를 추가하지 않는다 — 응답을 깨끗이 유지하고
+     * DevTools 에서 "왜 미로그인인데 쿠키 헤더가 붙지?" 혼동을 막기 위함.
      * body 는 signup/login 과 동일한 AuthResponse shape.
      */
     @PostMapping("/refresh")
@@ -77,8 +80,7 @@ public class AuthController {
             writeTokenCookies(response, tokens);
             return ResponseEntity.ok(BaseResponse.success(tokens.toResponse()));
         } catch (BaseException ex) {
-            // 실패 시 클라이언트가 들고 있을 수 있는 오래된 쿠키도 즉시 무효화.
-            clearTokenCookies(response);
+            clearTokenCookiesIfPresent(request, response);
             throw ex;
         }
     }
@@ -89,9 +91,9 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletResponse response) {
-        // 빈 값 + Max-Age=0 으로 쿠키 무효화.
-        clearTokenCookies(response);
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        // 빈 값 + Max-Age=0 으로 쿠키 무효화. 요청에 쿠키가 없으면 (= 이미 익명) 무동작.
+        clearTokenCookiesIfPresent(request, response);
         return ResponseEntity.noContent().build();
     }
 
@@ -101,9 +103,20 @@ public class AuthController {
         response.addHeader("Set-Cookie", String.format(refreshFormat, tokens.refreshToken(), refreshMs / 1000));
     }
 
-    private void clearTokenCookies(HttpServletResponse response) {
-        response.addHeader("Set-Cookie", String.format(accessFormat, "", 0));
-        response.addHeader("Set-Cookie", String.format(refreshFormat, "", 0));
+    /**
+     * 요청에 들어온 ATOKEN/RTOKEN 쿠키만 골라서 Max-Age=0 으로 무효화한다. 둘 다
+     * 없으면 응답에 Set-Cookie 헤더 자체를 추가하지 않아 — 익명 클라이언트의
+     * /refresh, /logout 응답이 깨끗하게 유지된다.
+     */
+    private void clearTokenCookiesIfPresent(HttpServletRequest request, HttpServletResponse response) {
+        boolean hasAccess = extractCookie(request, ACCESS_COOKIE) != null;
+        boolean hasRefresh = extractCookie(request, REFRESH_COOKIE) != null;
+        if (hasAccess) {
+            response.addHeader("Set-Cookie", String.format(accessFormat, "", 0));
+        }
+        if (hasRefresh) {
+            response.addHeader("Set-Cookie", String.format(refreshFormat, "", 0));
+        }
     }
 
     private String extractCookie(HttpServletRequest request, String name) {
