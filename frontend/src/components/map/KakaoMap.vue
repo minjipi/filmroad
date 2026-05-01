@@ -192,15 +192,18 @@ function renderOverlays(): void {
       const isVisited = visitedSet.has(m.id);
       const content = buildPinContent(m, isVisited, isActive);
       // CustomOverlay 끼리 stacking — 카카오 기본은 생성 순서라 늦게 그려진 마커가
-      // 활성 마커를 가린다. 명시적 zIndex 로 활성(100) > 클러스터(2) > 방문(5) > 일반(1)
-      // 순서로 고정. CSS `.pin.active { z-index: 5 }` 는 같은 overlay 내부 .bubble/.dot
-      // 간 stacking 보강용으로 그대로 둔다(overlay 끼리에는 영향 없음).
+      // 활성 마커를 가린다. 명시적 zIndex 로 활성(100) > 방문(12) > 일반(10) > 클러스터(11)
+      // > 화살표(3) > 사용자 위치(1) 순으로 고정. 모든 pin 계층이 chevron(3) 위에
+      // 떠야 /route 의 코스 화살표가 마커를 가리지 않는다 — 이전엔 일반 pin(1)/
+      // 클러스터(2) 가 chevron 아래에 깔려 가시성이 깨졌음.
+      // CSS `.pin.active { z-index: 5 }` 는 같은 overlay 내부 .bubble/.dot 간 stacking
+      // 보강용으로 그대로 둔다(overlay 끼리에는 영향 없음).
       const overlay = new k.maps.CustomOverlay({
         position,
         content,
         yAnchor: 1,
         clickable: true,
-        zIndex: isActive ? 100 : isVisited ? 5 : 1,
+        zIndex: isActive ? 100 : isVisited ? 12 : 10,
       });
       const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
       setMap.call(overlay, mapInstance);
@@ -208,7 +211,7 @@ function renderOverlays(): void {
       return;
     }
 
-    // Cluster overlay — 활성 마커(100) 보다 뒤로.
+    // Cluster overlay — 활성 마커(100) 보다 뒤이지만 chevron(3) 위에 떠야 함.
     const position = new k.maps.LatLng(r.latitude, r.longitude);
     const content = buildClusterContent(r.count, () => {
       emit('clusterClick', {
@@ -223,7 +226,7 @@ function renderOverlays(): void {
       yAnchor: 0.5,
       xAnchor: 0.5,
       clickable: true,
-      zIndex: 2,
+      zIndex: 11,
     });
     const setMap = (overlay as unknown as { setMap: (v: unknown) => void }).setMap;
     setMap.call(overlay, mapInstance);
