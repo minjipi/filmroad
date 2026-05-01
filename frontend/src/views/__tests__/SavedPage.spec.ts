@@ -76,7 +76,7 @@ const savedState = {
     },
   ],
   totalCount: 2,
-  suggestion: null,
+  suggestion: null as null | { title: string; subtitle: string; placeCount: number },
   loading: false,
   error: null as string | null,
 };

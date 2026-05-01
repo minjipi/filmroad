@@ -1,6 +1,31 @@
-import { defineStore } from 'pinia';
+import { defineStore, getActivePinia, type Pinia } from 'pinia';
 import api, { ApiError } from '@/services/api';
 import type { ProfileUser } from '@/stores/profile';
+
+/**
+ * 다른 사용자로 로그인하거나 로그아웃 했을 때 이전 사용자의 데이터(좋아요/저장/
+ * 피드/프로필 등) 가 화면에 잔류하지 않도록 auth 외 모든 store 를 $reset.
+ *
+ * Pinia 의 `_s` 는 활성 store 들을 담은 Map 으로, 공식 plugin 가이드에서도
+ * 사용되는 안정적인 internal API. 매 호출 시점에 등록돼 있는 store 만 리셋
+ * 하므로 lazy-load 된 store 도 자연스럽게 포함된다.
+ *
+ * `auth` 자체는 호출자(login/signup/logout 액션)가 직후에 user/token 을
+ * 명시적으로 갱신하므로 제외 — 여기서 함께 리셋하면 진행 중인 액션의 결과를
+ * 곧바로 덮어쓰는 race 가 발생.
+ *
+ * `ui` 는 진행 중인 모달/시트 상태를 담고 있어 로그아웃 직후 사라지면 사용자
+ * 입장에서 "방금 누른 액션이 그냥 닫혔다" 처럼 보임. 모달 자체가 인증 의존
+ * 이라면 컴포넌트가 자체 처리하도록 두고 여기선 보존.
+ */
+function resetUserScopedStores(): void {
+  const pinia = getActivePinia() as (Pinia & { _s?: Map<string, { $reset?: () => void }> }) | null;
+  if (!pinia?._s) return;
+  for (const [id, store] of pinia._s) {
+    if (id === 'auth' || id === 'ui') continue;
+    if (typeof store.$reset === 'function') store.$reset();
+  }
+}
 
 interface State {
   user: ProfileUser | null;
@@ -167,6 +192,10 @@ export const useAuthStore = defineStore('auth', {
       this.error = null;
       try {
         const { data } = await api.post<AuthResponse>('/api/auth/signup', payload);
+        // 직전 익명 / 다른 사용자 세션이 남긴 store 데이터를 먼저 비우고 신규
+        // 가입자 user 를 set — 후속 fetch 가 stale 데이터를 덮지 못하는 race
+        // 차단.
+        resetUserScopedStores();
         this.setToken(data.accessToken);
         this.user = asProfileUser(data.user);
       } catch (e) {
@@ -183,6 +212,10 @@ export const useAuthStore = defineStore('auth', {
       this.error = null;
       try {
         const { data } = await api.post<AuthResponse>('/api/auth/login', payload);
+        // 다른 사용자로 갈아탔을 때 직전 사용자의 home/feed/saved/profile 등이
+        // 그대로 남아있으면 신규 fetch 가 끝나기 전까지 화면이 stale 한 채로
+        // 보임. 명시적으로 비운 뒤 새 user 를 set.
+        resetUserScopedStores();
         this.setToken(data.accessToken);
         this.user = asProfileUser(data.user);
       } catch (e) {
@@ -222,8 +255,16 @@ export const useAuthStore = defineStore('auth', {
           this.error = e instanceof Error ? e.message : 'Failed to logout';
         }
       } finally {
+        // 모든 user-scoped store 초기화. 직전 사용자의 home places, saved
+        // 컬렉션, feed posts, profile 사진 등이 다음 user (또는 익명 viewer)
+        // 화면에 잔류하지 않도록.
+        resetUserScopedStores();
         this.user = null;
         this.setToken(null);
+        // 다음 사용자가 로그인했을 때 fetchMe 가 새로 트리거되도록 sessionReady
+        // memoization 도 비운다 (로그아웃 후 재로그인 시 첫 진입에서 stale
+        // promise 가 anonymous 결과를 캐시한 채로 남아있는 것 방지).
+        this.sessionReady = null;
       }
     },
   },

@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSavedStore, type SavedCollection } from '@/stores/saved';
@@ -52,4 +52,18 @@ onMounted(async () => {
     void savedStore.fetch();
   }
 });
+
+// 같은 세션에서 로그아웃→다른 사용자로 재로그인하는 흐름. App.vue 의 onMounted
+// 는 첫 마운트 시 한 번만 실행되므로, 이후 user 가 null→non-null 로 바뀌어도
+// savedStore 가 자동 갱신되지 않아 이전 사용자(또는 비로그인) 의 빈 상태가
+// 남아있던 문제를 보정. user id 변경(같은 세션에서 다른 계정 진입) 도 같은
+// 동일 흐름.
+watch(
+  () => authStore.user?.id ?? null,
+  (next, prev) => {
+    if (next !== null && next !== prev) {
+      void savedStore.fetch();
+    }
+  },
+);
 </script>
