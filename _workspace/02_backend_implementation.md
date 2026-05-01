@@ -1177,3 +1177,151 @@ BUILD SUCCESSFUL in 2m 39s
 4. **테스트 갱신 vs 추가**: 기존 anonymous 호출이 user=1 의 liked=true 를 기대하던 두 케이스(HomeControllerTest, PlaceControllerTest)는 이번 fix 의 정확한 회귀 대상이라 갱신. 인증된 user=1 의 liked=true 는 새 케이스로 분리해 의미 보존.
 5. **frontend 변경 불필요**: `liked: false` 가 일관되게 떨어지면 PlaceCard 등 기존 렌더가 자동으로 회색 하트로 그려진다. (작업 지시서대로)
 
+---
+
+# Backend Implementation — feat/place-congestion (2026-04-30)
+
+## 작업 범위
+PlaceDetailPage 의 새 혼잡도 섹션 — 한국관광공사 `TatsCnctrRateService` (관광지 혼잡도 예측 API) 연동.
+- 오늘 / 내일 / 이번 주말 3건의 forecast 를 반환
+- Place 별 1:1 캐시 (TTL 6시간)
+- 매핑 실패 / 외부 API 장애 시 200 + `available=false` 응답으로 페이지 안 깨짐
+
+## 옵션 결정 — B (RegionCodeLookup 재사용) 채택
+지시서의 옵션 A (Place 에 area_cd / signgu_cd 컬럼 추가 + backfill) 와 B (in-memory lookup) 중 **옵션 B** 선택.
+
+이유:
+1. **기존 인프라 100% 재사용**: `integration/koreatourism/RegionCodeLookup` 가 이미 부팅 시 `data/koreaTourism-region-codes-raw.json` 으로부터 264 시군구 매핑을 메모리에 로드하고 `lookup(regionLabel, address)` 메서드를 제공. 동일한 keyword 토큰 매칭 로직이 이미 검증된 상태로 NearbyRestaurantService 에서 사용 중이다. 옵션 A 의 backfill 도 결국 같은 keyword 매칭으로 area_cd/signgu_cd 를 채워야 하므로 정확도는 동일.
+2. **Place 엔티티 침범 X**: 기존 도메인의 다른 사용처에 영향 없음. 마이그레이션 / 시드 작업 비용 0.
+3. **혼잡도 API 코드 형식 호환성**: 사용자 매핑(서울 종로구 = areaCd=11, signguCd=11110) 은 KorService2 의 (lDongRegnCd=11, lDongSignguCd=110) 두 값을 결합한 형태와 정확히 일치 (11+110=11110). service 가 결합만 하면 변환 끝.
+4. **lookup 비용**: 캐시 hit 시 lookup 자체가 무관, miss 시에도 in-memory HashMap 조회는 O(1) (token fallback 만 O(N) 264 entries).
+5. **CSV 시드 보존**: 사용자 메시지의 매핑표를 유지보수용으로 `_workspace/region-codes.txt` 에 264 행 CSV 로 저장 (검증/디버깅 시 참고). 향후 옵션 A 로 전환할 일이 생기면 그대로 백필 시드로 사용 가능.
+
+## 변경된 파일
+
+### 신규 (production)
+- `src/main/java/com/filmroad/api/integration/koreatourism/CongestionApiClient.java` — TatsCnctrRateService `tatsCnctrRatedList` 호출 클라이언트. RestClient 기반, 키 비활성/장애 시 빈 리스트 반환 (KoreaTourismClient 와 동일 정책).
+- `src/main/java/com/filmroad/api/integration/koreatourism/CongestionForecast.java` — 외부 응답 한 항목의 정규화 record (baseDate: LocalDate, rate: Integer).
+- `src/main/java/com/filmroad/api/domain/congestion/PlaceCongestionCache.java` — Place 와 1:1 (`@MapsId`, place_id PK) 캐시 엔티티. `payload_json` TEXT 컬럼에 forecast 배열을 직렬화 보관 + `fetched_at` TTL 비교용. KakaoPlaceInfo 와 동일한 1:1 패턴.
+- `src/main/java/com/filmroad/api/domain/congestion/PlaceCongestionCacheRepository.java` — `findByPlaceId(Long)`.
+- `src/main/java/com/filmroad/api/domain/congestion/CongestionService.java` — 핵심 로직: regionLabel/address → RegionCode lookup → (areaCd=lDongRegnCd, signguCd=lDongRegnCd+lDongSignguCd 결합) 변환 → 캐시 hit/miss → 외부 호출 → KST 기준 오늘/내일/주말 산출. Clock 주입(테스트 결정성), state 임계값 `stateOf` package-private 메서드로 노출(boundary 단위 테스트용).
+- `src/main/java/com/filmroad/api/domain/congestion/CongestionConfig.java` — `Clock systemClock()` 빈 (KST). 테스트에서 fixed clock 으로 새 인스턴스 생성하여 결정적 검증.
+- `src/main/java/com/filmroad/api/domain/congestion/CongestionController.java` — `GET /api/places/{id}/congestion`. permitAll, BaseResponse 래핑, Operation/ApiResponses 메타.
+- `src/main/java/com/filmroad/api/domain/congestion/dto/CongestionResponse.java` — `{ available, source, forecasts[] }`.
+- `src/main/java/com/filmroad/api/domain/congestion/dto/CongestionItemDto.java` — `{ key, label, dateLabel, percent, state }`.
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/config/SecurityConfig.java` — GET permitAll 매처에 `/api/places/*/congestion` 추가.
+- `src/main/resources/application.yml` — `app.congestion.ttl-hours: 6` 추가.
+
+### 신규 (테스트)
+- `src/test/java/com/filmroad/api/domain/congestion/CongestionServiceTest.java` — Pure Mockito 단위 테스트 12 케이스. Clock 을 KST 2026-04-30 (목) 12:00 으로 fixed.
+  - placeId 없음 → `BaseException(PLACE_NOT_FOUND)`
+  - regionLabel 매핑 실패 → available=false, 외부 호출 안 함
+  - 정상: 오늘/내일/주말 3건 + state 임계값 (44=OK / 82=PACK / 72=PACK)
+  - state 경계 0/50/51/70/71/100 → OK/OK/BUSY/BUSY/PACK/PACK
+  - 응답에 오늘 데이터 없음 → forecast 누락, 다른 항목만 채움
+  - 외부 API 빈 결과 + 캐시 없음 → available=false
+  - 응답에 매칭 날짜 전혀 없음 (지난 날짜만) → available=false
+  - 캐시 hit (TTL 안) → 외부 호출 안 함 + 캐시 payload 직렬화 검증
+  - 캐시 miss → save 호출 + payload JSON 검증
+  - 캐시 expired → 외부 호출 + 기존 엔티티 update (save 안 부름, dirty checking)
+  - 외부 빈 결과 + stale 캐시 → 캐시 데이터로 응답 (stale-better-than-nothing)
+  - 일요일 today → 다음 주 토·일 사용 (지난 어제 토 안 씀)
+- `src/test/java/com/filmroad/api/domain/congestion/CongestionControllerTest.java` — `@SpringBootTest` 통합 테스트 5 케이스. `@MockBean CongestionApiClient` 로 외부 경계만 stub, 시드 데이터 + 실제 RegionCodeLookup 사용.
+  - place id=13 (서울 용산구 이태원동) 정상 → available=true + forecasts 1건 이상
+  - 외부 API 빈 결과 → 200 + available=false
+  - 미존재 placeId → success=false (PLACE_NOT_FOUND)
+  - place id=10 ("강릉시 주문진읍" — 광역 토큰 없음) 매핑 실패 → 200 + available=false
+  - 익명 viewer permitAll 검증
+
+### 수정 (테스트)
+- `src/test/resources/application-test.yml` — `app.congestion.ttl-hours: 6` 추가.
+
+### 산출물 (workspace)
+- `_workspace/region-codes.txt` — 264 행 CSV (areaCd, areaNm, signguCd, signguNm). koreaTourism-region-codes-raw.json 으로부터 derive (areaCd=lDongRegnCd, signguCd=lDongRegnCd+lDongSignguCd). 향후 옵션 A 로 전환 시 그대로 시드 가능.
+
+## API 스펙
+
+### 엔드포인트
+`GET /api/places/{id}/congestion` (permitAll, no auth)
+
+### 응답 — 성공 (available=true)
+```json
+{
+  "success": true,
+  "code": 20000,
+  "message": "요청에 성공하였습니다.",
+  "results": {
+    "available": true,
+    "source": "한국관광공사",
+    "forecasts": [
+      { "key": "TODAY",    "label": "오늘",        "dateLabel": "4/30 목",       "percent": 44, "state": "OK" },
+      { "key": "TOMORROW", "label": "내일",        "dateLabel": "5/1 금",        "percent": 82, "state": "PACK" },
+      { "key": "WEEKEND",  "label": "이번 주말",  "dateLabel": "토·일 평균",  "percent": 72, "state": "PACK" }
+    ]
+  }
+}
+```
+
+### 응답 — 매핑/외부 API 실패 (available=false)
+```json
+{
+  "success": true,
+  "code": 20000,
+  "message": "요청에 성공하였습니다.",
+  "results": {
+    "available": false,
+    "source": "한국관광공사",
+    "forecasts": []
+  }
+}
+```
+
+### state 임계값
+| percent      | state |
+|--------------|-------|
+| 0–50         | OK    |
+| 51–70        | BUSY  |
+| 71–100       | PACK  |
+
+## 캐시 / TTL 정책
+- **테이블**: `place_congestion_cache` (place_id PK, payload_json TEXT, fetched_at TIMESTAMP). Place 와 1:1 (`@MapsId`).
+- **TTL**: `app.congestion.ttl-hours` 설정 (기본 6). 일별 예측이라 자주 갱신할 필요 없음.
+- **hit**: TTL 안이면 외부 호출 X. payload_json 역직렬화 → 오늘/내일/주말 산출.
+- **miss / expired**: 외부 호출 → 응답이 비어 있지 않으면 upsert (`fetched_at = now`).
+- **외부 빈 응답 + 기존 캐시 (stale)**: 기존 캐시 데이터로 응답 — stale-better-than-nothing (KakaoPlaceInfoService 와 동일 정책).
+- **외부 빈 응답 + 캐시 없음**: `available=false`.
+- **payload 형식**: `[{"date":"2026-04-30","rate":44}, ...]` — LocalDate.toString() 으로 ISO-8601 직렬화. 외부 응답 그대로가 아니라 service 가 정규화한 후 저장 (외부 raw 응답 형식 변경에 영향 안 받음).
+
+## 매핑 흐름 (regionLabel → 혼잡도 API 파라미터)
+1. `regionCodeLookup.lookup(place.getRegionLabel(), place.getAddress())` → `Optional<RegionCode>` (lDongRegnCd, lDongSignguCd)
+2. miss → 즉시 `available=false` 반환. 외부 호출 안 함.
+3. hit → 변환:
+   - `areaCd = lDongRegnCd` (2자리, 예: "11")
+   - `signguCd = lDongRegnCd + lDongSignguCd` (5자리, 예: "11110" — 종로구)
+4. `congestionApiClient.fetchForecasts(areaCd, signguCd, place.getName())` 호출. tAtsNm 으로 place.name 동봉 (정확도 향상, 미일치 시에도 다른 결과로 fallback).
+
+## 외부 API 호출 명세
+- URL: `https://apis.data.go.kr/B551011/TatsCnctrRateService/tatsCnctrRatedList`
+- Method: GET
+- Service key: 환경변수 `KOREA_TOURISM_KEY` (이미 NearbyRestaurantService 와 공유)
+- 고정 파라미터: `MobileOS=ETC, MobileApp=Filmroad, _type=json, numOfRows=100, pageNo=1`
+- 동적: `serviceKey, areaCd, signguCd, tAtsNm`
+- Timeout: `korea-tourism.api.timeout-ms` (3000ms)
+- 실패 시: 빈 리스트. 예외 전파 X.
+
+## 테스트 결과
+- `./gradlew build` — BUILD SUCCESSFUL (3m 10s, 8 actionable tasks)
+- 새 테스트 17 / 17 통과 (단위 12 + 통합 5)
+- 기존 회귀 테스트 모두 통과 (영향 없음)
+
+## 의사결정
+1. **옵션 B 선택**: 위 "옵션 결정" 섹션 참조. 기존 RegionCodeLookup 인프라가 이미 모든 요건을 만족.
+2. **regionCode 결합 규칙**: KorService2 의 `lDongRegnCd + lDongSignguCd` 가 혼잡도 API 의 `areaCd / signguCd` 와 정확히 매칭됨을 사용자 매핑표(서울 종로구=11+11110)와 koreaTourism JSON(서울 종로구=11/110)을 대조하여 확인. service 안에서 단순 문자열 결합으로 변환.
+3. **TTL 6시간**: 일별 예측이라 너무 짧으면 외부 호출 빈도 증가, 너무 길면 같은 날 자정 즈음 갱신 안 됨. 6시간이면 하루 4회 갱신으로 균형. 환경변수 override 가능.
+4. **payload_json 캐시 vs 정규화 컬럼**: 외부 응답은 1회에 여러 날짜 동봉이라 행 N 개로 풀어서 보관하면 cleanup 정책이 필요해 복잡. 1:1 행에 forecast 배열을 JSON 으로 보관 + service 가 in-memory 에서 오늘/내일/주말 추출 — 단순 + KakaoPlaceInfo 와 동일 패턴.
+5. **Clock 빈**: 다른 도메인이 Clock 을 직접 사용하지 않아 새 빈 등록. service 단위 테스트에서 fixed Clock 으로 결정적 검증 가능. 향후 다른 도메인이 Clock 을 쓰게 되면 공용 config 로 이동 검토.
+6. **state 임계값 메서드 visibility**: 단순 임계값을 단위 테스트로 직접 검증하고 싶어 `stateOf(int) → String` 을 package-private static 으로 노출. 공개 API 가 아니라 도메인 내부 헬퍼 — same-package 테스트에서만 사용.
+7. **frontend 변경 불필요**: 응답 DTO 가 의도된 shape 으로 즉시 사용 가능. frontend 가 `available=false` 면 섹션 숨김, true 면 forecasts[] 의 각 항목을 카드로 렌더하면 됨.
+
