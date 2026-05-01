@@ -102,6 +102,26 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     long countByPlaceId(Long placeId);
 
     /**
+     * Place 의 viewer 가 실제로 볼 수 있는 사진 수 (PUBLIC + 본인 비공개 + 팔로워-only).
+     * `findByPlaceIdOrderByOrderIndexDescIdDesc` 와 같은 visibility 규칙을 따른다 —
+     * 디테일 헤더의 "인증샷 N" chip 이 노출되는 갤러리와 같은 수를 보여주도록.
+     * Place 의 denormalized photo_count 컬럼은 업로드 시 갱신되지 않아 stale (대부분 0).
+     * 익명 viewer 는 viewerId=null 로 호출하면 PUBLIC 만 카운트된다.
+     */
+    @Query("""
+            SELECT COUNT(p) FROM PlacePhoto p
+            WHERE p.place.id = :placeId
+              AND (
+                p.visibility = com.filmroad.api.domain.place.PhotoVisibility.PUBLIC
+                OR (p.user IS NOT NULL AND p.user.id = :viewerId)
+                OR (p.visibility = com.filmroad.api.domain.place.PhotoVisibility.FOLLOWERS
+                    AND p.user IS NOT NULL
+                    AND p.user.id IN (SELECT f.followee.id FROM UserFollow f WHERE f.follower.id = :viewerId))
+              )
+            """)
+    long countVisibleByPlaceId(@Param("placeId") Long placeId, @Param("viewerId") Long viewerId);
+
+    /**
      * 유저 본인 업로드 사진 목록 (ProfilePage 인증샷 grid 용). visibility 무관 — 본인은 전부 볼 수 있음.
      * `cursor` 보다 id 가 작은 것부터 — cursor 기반 페이지네이션 (null 이면 첫 페이지).
      * Place + Content JOIN FETCH 로 ProfilePage 에 필요한 contentTitle/placeName 을 같이 로드.

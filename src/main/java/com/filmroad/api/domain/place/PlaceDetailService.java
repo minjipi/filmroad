@@ -49,6 +49,12 @@ public class PlaceDetailService {
                 .map(PlacePhotoDto::from)
                 .toList();
 
+        // Place.photo_count 는 업로드 시 갱신되지 않는 denormalized 컬럼이라 거의
+        // 항상 stale (대부분 0). viewer 가 실제로 볼 수 있는 사진 수를 매 요청마다
+        // 카운트해 정확한 값을 응답한다 — 헤더 chip 이 갤러리(아래 photos 섹션)
+        // 와 동일 수를 보장.
+        long photoCount = placePhotoRepository.countVisibleByPlaceId(place.getId(), viewerId);
+
         List<RelatedPlaceDto> related = placeRepository
                 .findByContentIdAndIdNotOrderByTrendingScoreDescIdAsc(place.getContent().getId(), place.getId())
                 .stream()
@@ -57,7 +63,7 @@ public class PlaceDetailService {
                 .toList();
 
         return PlaceDetailResponse.builder()
-                .place(PlaceFullDto.of(place, distanceKm, driveTimeMin, liked))
+                .place(PlaceFullDto.of(place, distanceKm, driveTimeMin, liked, photoCount))
                 .photos(photos)
                 .related(related)
                 .build();

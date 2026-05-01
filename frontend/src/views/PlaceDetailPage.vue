@@ -169,8 +169,13 @@
                 <div class="n">{{ formatCount(place.photoCount) }}</div>
                 <div class="l">인증샷</div>
               </div>
+              <!-- 주변 맛집 chip — 백엔드의 Place.nearby_restaurant_count 는
+                   denormalized 컬럼이 갱신되지 않아 stale (0 고정). 같은
+                   페이지에서 이미 fetch 한 한국관광공사 tourNearby 응답의
+                   .length 를 그대로 사용 — 아래 .k-nearby 섹션과 동일 수치
+                   보장. -->
               <div class="stat-chip">
-                <div class="n">{{ place.nearbyRestaurantCount }}곳</div>
+                <div class="n">{{ tourNearbyItems.length }}곳</div>
                 <div class="l">주변 맛집</div>
               </div>
               <div v-if="place.recommendedTimeLabel" class="stat-chip">
