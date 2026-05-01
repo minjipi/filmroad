@@ -188,6 +188,64 @@
             </div>
           </section>
 
+          <!-- 혼잡도 예측 — 한국관광공사 TatsCnctrRateService 기반. 백엔드의
+               /api/places/:id/congestion 이 available=true + forecasts 채워줄
+               때만 노출. 디자인은 design/pages/03-place-detail.html 의
+               '언제 가면 좋을까?' 섹션을 따른다. 카카오 섹션과는 별도 출처
+               (한국관광공사) 라 형제 섹션으로 분리. -->
+          <section
+            v-if="congestion?.available && congestion.forecasts.length > 0"
+            class="section crowd-section"
+            data-testid="pd-crowd-section"
+          >
+            <div class="section-head">
+              <h2>언제 가면 좋을까?</h2>
+              <span
+                class="link"
+                data-testid="pd-crowd-see-all"
+                @click="onSeeAllCongestion"
+              >10일 전체 보기</span>
+            </div>
+            <p class="crowd-sub">{{ congestion.source ?? '한국관광공사' }} 관광지 집중률 · 실시간 예측</p>
+            <div class="crowd-chips">
+              <div
+                v-for="f in congestion.forecasts"
+                :key="f.key"
+                :class="['crowd-chip', `crowd-tx-${f.state.toLowerCase()}`]"
+                :data-testid="`pd-crowd-${f.key.toLowerCase()}`"
+              >
+                <div class="lbl">
+                  {{ f.label }}
+                  <span class="sub">· {{ f.dateLabel }}</span>
+                </div>
+                <div class="row">
+                  <span class="pct">
+                    {{ f.percent }}<span class="pct-unit">%</span>
+                  </span>
+                  <span class="state">{{ stateLabel(f.state) }}</span>
+                </div>
+                <div class="meter">
+                  <i
+                    :class="`crowd-bg-${f.state.toLowerCase()}`"
+                    :style="{ width: `${f.percent}%` }"
+                  />
+                </div>
+              </div>
+            </div>
+            <!-- 가장 한가한 시점 추천. forecasts 중 percent 최저값을 골라
+                 사용자에게 "셋 중 X 가 가장 한가해요" 형태로 안내. -->
+            <div
+              v-if="congestionHint"
+              class="crowd-hint"
+              data-testid="pd-crowd-hint"
+            >
+              <ion-icon :icon="bulbOutline" class="ic-16 hint-ic" />
+              <span class="hint-text">
+                셋 중 <strong>{{ congestionHint.label }}</strong>이 가장 한가해요 (예상 {{ congestionHint.percent }}%).
+              </span>
+            </div>
+          </section>
+
           <section v-if="photos.length > 0" class="section">
             <div class="section-head">
               <h2>방문객 인증샷</h2>
@@ -389,6 +447,7 @@ import {
   globeOutline,
   openOutline,
   restaurantOutline,
+  bulbOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -403,6 +462,7 @@ import {
 } from '@/stores/kakaoInfo';
 // task #29: 카카오 nearby → 한국관광공사 TourAPI 기반 신규 store 로 교체.
 import { useTourNearbyStore, type TourNearbyRestaurant } from '@/stores/tourNearby';
+import { useCongestionStore, type CongestionState } from '@/stores/congestion';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
@@ -416,6 +476,7 @@ const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
 const tourNearbyStore = useTourNearbyStore();
+const congestionStore = useCongestionStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError, showInfo } = useToast();
 
@@ -435,6 +496,25 @@ const kakaoInfo = computed(() => kakaoInfoStore.infoFor(placeId.value));
 const tourNearbyItems = computed<TourNearbyRestaurant[]>(() =>
   tourNearbyStore.itemsFor(placeId.value),
 );
+// 한국관광공사 혼잡도 예측 — null 또는 available=false 면 v-if 로 섹션 hide.
+const congestion = computed(() => congestionStore.infoFor(placeId.value));
+function stateLabel(s: CongestionState): string {
+  if (s === 'PACK') return '매우혼잡';
+  if (s === 'BUSY') return '혼잡';
+  return '보통';
+}
+// 추천 hint — forecasts 중 percent 가 가장 낮은 항목을 가장 한가한 시점으로
+// 안내. 동률이면 forecasts 배열 순서(오늘→내일→주말)대로 처음 만나는 것.
+// forecasts 가 비었을 때는 null 을 반환해 hint 자체가 안 보이게.
+const congestionHint = computed<{ label: string; percent: number } | null>(() => {
+  const fs = congestion.value?.forecasts ?? [];
+  if (fs.length === 0) return null;
+  let best = fs[0];
+  for (const f of fs) {
+    if (f.percent < best.percent) best = f;
+  }
+  return { label: best.label, percent: best.percent };
+});
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
   if (!at) return '';
@@ -847,6 +927,12 @@ async function onOpenGallery(): Promise<void> {
   await router.push(`/feed/detail?placeId=${place.value.id}`);
 }
 
+// 디자인의 "10일 전체 보기" 링크는 별도 03b-congestion.html 화면을 가리키지만
+// frontend 에는 아직 해당 페이지가 없어서 stub 토스트로 노출만 가시화.
+async function onSeeAllCongestion(): Promise<void> {
+  await showInfo('10일 예측 보기는 곧 공개됩니다');
+}
+
 // 갤러리 셀(개별 인증샷) 클릭 → `/feed/detail?placeId=...&shotId=...` (task #23 통합).
 // place 컨텍스트(이 장소의 photos 만 무한스크롤) + 클릭한 shot 으로 anchor 스크롤.
 // shotId 단독으로 넘기면 전체 feed 컨텍스트가 되어 사용자가 "이 장소 다른 사진"
@@ -866,11 +952,12 @@ async function onOpenRelated(id: number): Promise<void> {
 }
 
 async function load(id: number): Promise<void> {
-  // 카카오 정보 + task #29: 한국관광공사 nearby — 둘 다 메인 place fetch 와
-  // 병렬. 보조 정보라 실패/지연이 place 본문 렌더를 막지 않게 한다. 각
-  // fetch 안에서 자체 try/catch 로 swallow.
+  // 카카오 정보 + task #29: 한국관광공사 nearby + 혼잡도 예측 — 모두 메인
+  // place fetch 와 병렬. 보조 정보라 실패/지연이 place 본문 렌더를 막지
+  // 않게 한다. 각 fetch 안에서 자체 try/catch 로 swallow.
   void kakaoInfoStore.fetch(id);
   void tourNearbyStore.fetch(id);
+  void congestionStore.fetch(id);
   await detailStore.fetch(id);
   if (error.value) {
     await showError(error.value);
@@ -1532,5 +1619,137 @@ ion-content.pd-content {
   font-size: 11px;
   color: var(--fr-ink-4);
   text-align: center;
+}
+
+/* ---------- 혼잡도 예측 (한국관광공사 TatsCnctrRateService) ----------
+   .section 클래스를 그대로 재사용해 페이지 다른 섹션 (이 장면, 방문객 인증샷,
+   비슷한 장소) 과 동일한 padding/구분선 톤을 가져간다. .section-head 도
+   같이 차용 — h2 + 우측 link 의 위계가 이미 이 페이지에서 표준화돼 있음. */
+.crowd-section .section-head {
+  margin-bottom: 4px;
+  align-items: baseline;
+}
+.crowd-sub {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+}
+.crowd-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.crowd-chip {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.crowd-chip .lbl {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crowd-chip .lbl .sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fr-ink-4);
+  opacity: 0.85;
+}
+.crowd-chip .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+.crowd-chip .pct {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.crowd-chip .pct-unit {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 1px;
+  opacity: 0.7;
+}
+.crowd-chip .state {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.crowd-chip .meter {
+  margin-top: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  overflow: hidden;
+}
+.crowd-chip .meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* 상태별 텍스트(state, pct) 색상 */
+.crowd-tx-ok .pct,
+.crowd-tx-ok .state {
+  color: #16a34a;
+}
+.crowd-tx-busy .pct,
+.crowd-tx-busy .state {
+  color: #f59e0b;
+}
+.crowd-tx-pack .pct,
+.crowd-tx-pack .state {
+  color: #ef4444;
+}
+
+/* 상태별 meter 바 색상 */
+.crowd-bg-ok {
+  background: linear-gradient(90deg, #4ade80, #16a34a);
+}
+.crowd-bg-busy {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.crowd-bg-pack {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+/* 가장 한가한 시점 추천 hint 박스 */
+.crowd-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fr-bg-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fr-ink-2);
+}
+.crowd-hint .hint-ic {
+  color: var(--fr-amber, #f59e0b);
+  flex-shrink: 0;
+}
+.crowd-hint .hint-text {
+  line-height: 1.4;
+}
+.crowd-hint .hint-text strong {
+  font-weight: 800;
+  color: var(--fr-ink);
 }
 </style>
