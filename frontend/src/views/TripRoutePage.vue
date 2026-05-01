@@ -77,6 +77,7 @@
           :active-id="activeId"
           :name="name"
           :start-time="startTime"
+          :congestion-by-place="congestionByPlace"
           @activate="onActivate"
           @open-detail="onOpenDetail"
           @add-place="onOpenSearch"
@@ -140,6 +141,7 @@ import RouteEditorModal from '@/components/route/RouteEditorModal.vue';
 import RoutePlaceDetailModal from '@/components/route/RoutePlaceDetailModal.vue';
 import RouteShareSheet from '@/components/route/RouteShareSheet.vue';
 import { useTripRouteStore, type TripPlace } from '@/stores/tripRoute';
+import { useCongestionStore } from '@/stores/congestion';
 import { useToast } from '@/composables/useToast';
 import {
   requestLocation,
@@ -152,10 +154,31 @@ defineProps<{ collectionId?: string }>();
 const router = useRouter();
 const route = useRoute();
 const tripRouteStore = useTripRouteStore();
+const congestionStore = useCongestionStore();
 const { activeId, name, startTime, notes, seedContentTitle, routePath, routeSections } = storeToRefs(tripRouteStore);
 const { showInfo, showError } = useToast();
 
 const orderedPlaces = computed<TripPlace[]>(() => tripRouteStore.orderedPlaces);
+
+// orderedPlaces 의 placeId 가 추가될 때마다 congestionStore.fetch 트리거.
+// store 가 같은 placeId 재호출은 hasOwnProperty 가드로 skip 하므로 N+M 중복
+// 호출 걱정 없음. fetch 결과는 store 캐시에 누적되며 아래 congestionByPlace
+// computed 가 RouteTimelineSheet 로 흘려보낸다.
+watch(
+  orderedPlaces,
+  (places) => {
+    for (const p of places) void congestionStore.fetch(p.id);
+  },
+  { immediate: true },
+);
+
+const congestionByPlace = computed(() => {
+  const out: Record<number, ReturnType<typeof congestionStore.infoFor>> = {};
+  for (const p of orderedPlaces.value) {
+    out[p.id] = congestionStore.infoFor(p.id);
+  }
+  return out;
+});
 
 const searchOpen = ref(false);
 const editorOpen = ref(false);
