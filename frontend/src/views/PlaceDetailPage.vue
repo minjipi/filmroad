@@ -913,10 +913,18 @@ onUnmounted(() => {
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', onVisibilityChange);
   }
+  // 페이지를 떠날 때 store 비움 — 다음 진입 시 직전 place 의 hero/photos/
+  // related 가 fetch 끝나기 전까지 잔류하지 않도록.
+  detailStore.reset();
 });
 
 watch(placeId, (next, prev) => {
   if (next !== prev) {
+    // /place/A → /place/B 처럼 같은 컴포넌트 인스턴스 안에서 id 만 바뀌는
+    // 흐름. fetch 직전에 store 비워서 직전 place 데이터가 새 fetch 응답
+    // 도착 전까지 보이지 않게. (fetch 가 loading=true 를 set 하므로 skeleton
+    // 으로 자연스럽게 fallback.)
+    detailStore.reset();
     void load(next);
     // 다른 place 로 이동할 때 hero carousel 위치/인덱스를 초기화 — 이전 place 에서
     // 끝 슬라이드까지 넘긴 상태(예: heroSlide=3 등)가 그대로 남아있으면 새 place

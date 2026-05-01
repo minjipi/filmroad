@@ -493,7 +493,13 @@ onUnmounted(() => {
 watch(
   () => props.id,
   (newId, oldId) => {
-    if (newId !== oldId) void loadDetail();
+    if (newId !== oldId) {
+      // 직전 컬렉션의 hero/items/totals 가 새 fetch 응답 전까지 잔류하지
+      // 않도록 명시적으로 비움 — onUnmounted 의 reset 만으로는 같은 컴포넌트
+      // 인스턴스 안에서의 :id 전환을 못 잡음.
+      collectionStore.reset();
+      void loadDetail();
+    }
   },
 );
 </script>

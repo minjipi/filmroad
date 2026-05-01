@@ -322,7 +322,13 @@ onMounted(load);
 // progress 가 잠시 잔류하지 않도록 store 초기화.
 onUnmounted(() => contentStore.reset());
 watch(contentIdNum, (next, prev) => {
-  if (next !== prev) void load();
+  if (next !== prev) {
+    // Ionic 의 페이지 캐싱 + Vue Router 의 컴포넌트 재사용 때문에 onUnmounted
+    // 가 발동하지 않은 채 contentId 만 바뀌는 케이스. fetch 직전에 명시적으로
+    // 비워야 직전 작품 데이터가 새 응답 전까지 화면에 남지 않음.
+    contentStore.reset();
+    void load();
+  }
 });
 </script>
 

@@ -547,6 +547,11 @@ async function fetchForCurrentMode(): Promise<void> {
   if (mode.value === 'place') {
     const pid = placeIdQuery.value;
     if (pid != null && pid !== lastFetchedPlaceId) {
+      // placeId 가 바뀌는 경우 (예: ?placeId=A → ?placeId=B 또는 feed 모드
+      // → place 모드 진입) 직전 place 의 photos/header 가 새 fetch 응답
+      // 전까지 잔류하지 않도록 명시적으로 비움. 같은 placeId 재진입 시엔
+      // lastFetchedPlaceId guard 가 fetch 자체를 skip 하므로 reset 도 skip.
+      galleryStore.reset();
       lastFetchedPlaceId = pid;
       await galleryStore.fetch(pid);
       if (galleryStore.error) await showError(galleryStore.error);

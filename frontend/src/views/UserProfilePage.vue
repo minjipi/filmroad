@@ -353,7 +353,14 @@ onUnmounted(() => userStore.reset());
 watch(
   () => props.id,
   (newId, oldId) => {
-    if (newId !== oldId) void refresh();
+    if (newId !== oldId) {
+      // 직전 사용자의 프로필/사진/스탬프북이 새 fetch 응답 도착 전까지 화면에
+      // 잔류하지 않도록 store 비움. fetchUser 가 첫 줄에서 user=null 로
+      // 설정하긴 하지만 stats/topPhotos 등 다른 슬라이스는 그대로 남아 있어
+      // 이 명시적 reset 이 필요.
+      userStore.reset();
+      void refresh();
+    }
   },
 );
 </script>
