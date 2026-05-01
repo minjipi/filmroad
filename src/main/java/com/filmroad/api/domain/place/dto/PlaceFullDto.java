@@ -34,7 +34,14 @@ public class PlaceFullDto {
     private Double distanceKm;
     private Integer driveTimeMin;
 
-    public static PlaceFullDto of(Place place, Double distanceKm, Integer driveTimeMin, boolean liked) {
+    /**
+     * @param photoCount viewer 가 볼 수 있는 사진 수. Place 의 denormalized
+     *     photo_count 컬럼은 업로드 시 갱신되지 않아 stale 한 케이스가 잦음
+     *     (대부분 0) — Service 가 PlacePhotoRepository.countVisibleByPlaceId 로
+     *     실시간 카운트해 명시적으로 넣어준다.
+     */
+    public static PlaceFullDto of(Place place, Double distanceKm, Integer driveTimeMin,
+                                  boolean liked, long photoCount) {
         return PlaceFullDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -47,10 +54,12 @@ public class PlaceFullDto {
                 .scenes(place.getSceneImages().stream().map(PlaceSceneDto::from).toList())
                 .rating(place.getRating())
                 .reviewCount(place.getReviewCount())
-                .photoCount(place.getPhotoCount())
+                .photoCount((int) photoCount)
                 .likeCount(place.getLikeCount())
                 .liked(liked)
-                .nearbyRestaurantCount(place.getNearbyRestaurantCount())
+                // Place 의 nearby_restaurant_count 컬럼도 stale (0 고정) — 프론트가
+                // tourNearby 응답 .length 로 자체 표시하므로 0 으로 박아 둔다.
+                .nearbyRestaurantCount(0)
                 .recommendedTimeLabel(place.getRecommendedTimeLabel())
                 .distanceKm(distanceKm)
                 .driveTimeMin(driveTimeMin)
