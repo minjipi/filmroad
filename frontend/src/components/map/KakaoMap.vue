@@ -51,6 +51,13 @@ const props = defineProps<{
    * 분리 — 마커 클릭/검색으로 viewport 가 바뀌어도 이 점은 따라가지 않는다.
    */
   userLocation?: LatLng | null;
+  /**
+   * 선택된 마커의 "오늘" 혼잡도 state (OK / BUSY / PACK). 마커 클릭 시 부모가
+   * 한국관광공사 혼잡도 API 응답을 받아 이 prop 으로 흘려보내면 active 마커
+   * 의 bubble 색이 해당 색(녹/황/적) 으로 바뀐다. null/undefined 이면 기존
+   * 다크 네이비 active 톤 유지 — fetch 전 / 매핑 실패 / 외부 API 실패 폴백.
+   */
+  selectedCrowdState?: 'OK' | 'BUSY' | 'PACK' | null;
 }>();
 
 // task #27: 단일 마커일 때 setBounds 가 zoom level 1 까지 들어가버리는
@@ -106,6 +113,12 @@ function buildPinContent(m: MapMarker, isVisited: boolean, isActive: boolean): H
   if (isVisited) classes.push('visited');
   if (isActive) classes.push('active');
   if (m.orderIndex != null) classes.push('numbered');
+  // active 마커일 때 혼잡도 state 가 들어와 있으면 색상 클래스 부여 — CSS 가
+  // bubble 배경을 OK 녹/BUSY 황/PACK 적 으로 덮어쓴다. fetch 전이면 prop 가
+  // null 이라 클래스 없음 → 기존 active 다크 네이비 그대로.
+  if (isActive && props.selectedCrowdState) {
+    classes.push(`crowd-${props.selectedCrowdState.toLowerCase()}`);
+  }
   root.className = classes.join(' ');
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -524,6 +537,10 @@ function drawChevronsOnPath(
 
 watch(renderables, () => renderOverlays(), { deep: true });
 watch(() => props.visitedIds, () => renderOverlays(), { deep: true });
+// 혼잡도 응답이 비동기로 도착하면 active marker 색만 바뀌어야 하므로 watch
+// 후 redraw. selectedId / markers 변화는 renderables 가 이미 잡아주므로 여기
+// 서는 selectedCrowdState 만 추적.
+watch(() => props.selectedCrowdState, () => renderOverlays());
 // userLocation 이 비동기로 채워질 수 있으므로 (권한 프롬프트 후 응답) 변화
 // 시 overlays 를 다시 그려 me 점을 갱신/제거한다. deep 으로 좌표 값 추적.
 watch(() => props.userLocation, () => renderOverlays(), { deep: true });
@@ -660,6 +677,29 @@ onBeforeUnmount(() => {
 .kakao-map .pin.active .dot { background: #0f172a; transform: scale(1.1); }
 .kakao-map .pin.active .bubble { background: #0f172a; color: #ffffff; }
 .kakao-map .pin.active .bubble::after { background: #0f172a; box-shadow: none; }
+
+/* 선택된 마커 + 한국관광공사 오늘 혼잡도 state — bubble 배경 색을 덮어써
+   사용자가 한 눈에 "이 곳 오늘 한가/혼잡" 파악 가능. dot 은 화이트 (오버레이
+   가독) , bubble bg 는 OK 녹 / BUSY 황 / PACK 적 그라데이션. tail (.bubble::after)
+   도 같은 톤으로 매칭해 fade 안 보이게. */
+.kakao-map .pin.active.crowd-ok .bubble,
+.kakao-map .pin.active.crowd-ok .bubble::after {
+  background: linear-gradient(135deg, #4ade80, #16a34a);
+}
+.kakao-map .pin.active.crowd-busy .bubble,
+.kakao-map .pin.active.crowd-busy .bubble::after {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+.kakao-map .pin.active.crowd-pack .bubble,
+.kakao-map .pin.active.crowd-pack .bubble::after {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+}
+.kakao-map .pin.active.crowd-ok .dot,
+.kakao-map .pin.active.crowd-busy .dot,
+.kakao-map .pin.active.crowd-pack .dot {
+  background: #ffffff;
+  color: #0f172a;
+}
 
 /* Cluster badge — shown when overlapping pins are collapsed at low zoom.
    Intentionally smaller + translucent so a dense cluster doesn't mask the

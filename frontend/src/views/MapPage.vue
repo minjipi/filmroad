@@ -6,6 +6,7 @@
         :zoom="zoom"
         :markers="visibleMarkers"
         :selected-id="selected?.id ?? null"
+        :selected-crowd-state="selectedCrowdState"
         :visited-ids="visitedIds"
         :user-location="userLocation"
         @marker-click="onSelect"
@@ -506,6 +507,12 @@ function congestionStateLabel(s: CongestionState): string {
   if (s === 'BUSY') return '혼잡';
   return '보통';
 }
+// 선택된 마커 bubble 색 — 오늘(TODAY) forecast 의 state 를 KakaoMap 으로
+// 흘려보낸다. 응답이 아직이면 null → 마커는 기존 다크 네이비 active 톤 유지.
+const selectedCrowdState = computed<CongestionState | null>(() => {
+  const today = congestion.value?.forecasts.find((f) => f.key === 'TODAY');
+  return today?.state ?? null;
+});
 
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
