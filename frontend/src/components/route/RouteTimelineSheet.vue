@@ -38,6 +38,51 @@
       </div>
     </header>
 
+    <!-- 코스 단위 혼잡도 요약 — 모든 place 의 오늘 percent 평균을 ring 으로
+         표시하고 가장 한가한 시점 (오늘/내일/주말) 을 안내. 한 곳도 응답이
+         없으면 v-if 로 통째 숨김. -->
+    <div
+      v-if="courseAverageToday"
+      class="rt-course-crowd"
+      data-testid="rt-course-crowd"
+    >
+      <div class="rt-cc-ring">
+        <svg viewBox="0 0 48 48">
+          <circle cx="24" cy="24" r="20" fill="none" stroke="#f1f5f9" stroke-width="6" />
+          <circle
+            cx="24" cy="24" r="20" fill="none"
+            :stroke="courseRingStroke"
+            stroke-width="6"
+            stroke-linecap="round"
+            :stroke-dasharray="courseRingDash"
+            :stroke-dashoffset="courseRingOffset"
+          />
+        </svg>
+        <div class="rt-cc-num">{{ courseAverageToday.percent }}%</div>
+      </div>
+      <div class="rt-cc-info">
+        <div class="rt-cc-ttl">
+          오늘 코스 혼잡도
+          <span :class="['rt-cc-mini', `crowd-tx-${stateLowerClass(courseAverageToday.state)}`]">
+            <span :class="['rt-cc-dot', `crowd-bg-${stateLowerClass(courseAverageToday.state)}`]" />
+            {{ stateLabel(courseAverageToday.state) }}
+          </span>
+        </div>
+        <div class="rt-cc-sub">
+          {{ courseAverageToday.count }}개 장소 평균<template v-if="courseHintLabel">
+            · <strong>{{ courseHintLabel }}</strong>해요
+          </template>
+        </div>
+        <div class="rt-cc-legend">
+          <i
+            v-for="p in places"
+            :key="`leg-${p.id}`"
+            :class="`crowd-bg-${stateLowerClass(todayForecast(p.id)?.state)}`"
+          />
+        </div>
+      </div>
+    </div>
+
     <div
       ref="scrollEl"
       :class="['rt-cards', isDragging ? 'is-dragging' : '']"
@@ -75,6 +120,15 @@
             <ion-icon :icon="checkmarkOutline" class="ic-12" />
             인증
           </span>
+          <!-- 오늘 혼잡도 pill — todayForecast 가 있을 때만. arrive-badge 와
+               겹치지 않도록 thumb 좌하단(visited badge 미노출 카드 한정). -->
+          <span
+            v-if="todayForecast(p.id) && !p.visited"
+            :class="['rt-crowd-pill', `crowd-tx-${stateLowerClass(todayForecast(p.id)!.state)}`]"
+          >
+            <span :class="['rt-cc-dot', `crowd-bg-${stateLowerClass(todayForecast(p.id)!.state)}`]" />
+            오늘 {{ todayForecast(p.id)!.percent }}%
+          </span>
         </div>
         <div class="rt-card-body">
           <FrChip variant="primary">{{ p.contentTitle }}</FrChip>
@@ -85,6 +139,33 @@
               {{ p.rating.toFixed(1) }}
             </span>
             <span class="rt-duration">{{ p.durationMin }}분</span>
+          </div>
+          <!-- 오늘/내일/주말 mini cells — 한 군데라도 forecast 있을 때만 노출. -->
+          <div
+            v-if="todayForecast(p.id) || tomorrowForecast(p.id) || weekendForecast(p.id)"
+            class="rt-crowd-row"
+          >
+            <div
+              v-if="todayForecast(p.id)"
+              :class="['rt-cs', `crowd-tx-${stateLowerClass(todayForecast(p.id)!.state)}`]"
+            >
+              <span class="l">오늘</span>
+              <span class="v">{{ todayForecast(p.id)!.percent }}%</span>
+            </div>
+            <div
+              v-if="tomorrowForecast(p.id)"
+              :class="['rt-cs', `crowd-tx-${stateLowerClass(tomorrowForecast(p.id)!.state)}`]"
+            >
+              <span class="l">내일</span>
+              <span class="v">{{ tomorrowForecast(p.id)!.percent }}%</span>
+            </div>
+            <div
+              v-if="weekendForecast(p.id)"
+              :class="['rt-cs', `crowd-tx-${stateLowerClass(weekendForecast(p.id)!.state)}`]"
+            >
+              <span class="l">주말</span>
+              <span class="v">{{ weekendForecast(p.id)!.percent }}%</span>
+            </div>
           </div>
         </div>
       </article>
@@ -108,6 +189,7 @@ import { IonIcon } from '@ionic/vue';
 import { checkmarkOutline, mapOutline, optionsOutline, shareOutline, star } from 'ionicons/icons';
 import FrChip from '@/components/ui/FrChip.vue';
 import type { TripPlace } from '@/stores/tripRoute';
+import type { CongestionResponse, CongestionState } from '@/stores/congestion';
 
 const props = defineProps<{
   places: TripPlace[];
@@ -115,6 +197,11 @@ const props = defineProps<{
   name: string;
   /** 출발 시간(HH:MM) — 카드별 도착시간 계산의 기점. */
   startTime: string;
+  /**
+   * placeId → 한국관광공사 혼잡도 응답. fetch 전이거나 매핑 실패면 null.
+   * 부모(TripRoutePage)가 places 변경 시 fetch 트리거 + 응답 누적.
+   */
+  congestionByPlace?: Record<number, CongestionResponse | null>;
 }>();
 
 const emit = defineEmits<{
@@ -172,6 +259,102 @@ function roleClass(i: number, total: number): 'start' | 'end' | 'via' {
   if (i === total - 1) return 'end';
   return 'via';
 }
+
+// ---------- 혼잡도 helper ----------
+// place 단위 forecast 추출. fetch 전 / 매핑 실패 / 해당 key 없음 → null.
+function congestionForPlace(placeId: number) {
+  return props.congestionByPlace?.[placeId] ?? null;
+}
+function todayForecast(placeId: number) {
+  return (
+    congestionForPlace(placeId)?.forecasts.find((f) => f.key === 'TODAY') ?? null
+  );
+}
+function tomorrowForecast(placeId: number) {
+  return (
+    congestionForPlace(placeId)?.forecasts.find((f) => f.key === 'TOMORROW') ?? null
+  );
+}
+function weekendForecast(placeId: number) {
+  return (
+    congestionForPlace(placeId)?.forecasts.find((f) => f.key === 'WEEKEND') ?? null
+  );
+}
+function stateLowerClass(state: CongestionState | undefined): string {
+  return (state ?? 'OK').toLowerCase();
+}
+function stateLabel(state: CongestionState | undefined): string {
+  if (state === 'PACK') return '매우혼잡';
+  if (state === 'BUSY') return '혼잡';
+  return '보통';
+}
+
+// 코스 전체 오늘 평균 — 모든 place 의 TODAY percent 평균. 한 군데도 응답이
+// 없으면 null 반환 → 코스 요약 섹션 자체 숨김.
+const courseAverageToday = computed<{
+  percent: number;
+  state: CongestionState;
+  count: number;
+} | null>(() => {
+  if (props.places.length === 0) return null;
+  const todays = props.places
+    .map((p) => todayForecast(p.id)?.percent)
+    .filter((v): v is number => typeof v === 'number');
+  if (todays.length === 0) return null;
+  const avg = Math.round(todays.reduce((s, v) => s + v, 0) / todays.length);
+  const state: CongestionState = avg > 70 ? 'PACK' : avg > 50 ? 'BUSY' : 'OK';
+  return { percent: avg, state, count: todays.length };
+});
+
+// 가장 한가한 forecast key (TODAY/TOMORROW/WEEKEND). 코스 평균 percent 기준
+// 으로 셋 중 어디가 최저인지 — 사용자에게 추천 멘트로 보여준다.
+const courseBestKey = computed<'TODAY' | 'TOMORROW' | 'WEEKEND' | null>(() => {
+  const buckets: Array<{ key: 'TODAY' | 'TOMORROW' | 'WEEKEND'; values: number[] }> = [
+    { key: 'TODAY', values: [] },
+    { key: 'TOMORROW', values: [] },
+    { key: 'WEEKEND', values: [] },
+  ];
+  for (const p of props.places) {
+    const t = todayForecast(p.id)?.percent;
+    const tm = tomorrowForecast(p.id)?.percent;
+    const w = weekendForecast(p.id)?.percent;
+    if (typeof t === 'number') buckets[0].values.push(t);
+    if (typeof tm === 'number') buckets[1].values.push(tm);
+    if (typeof w === 'number') buckets[2].values.push(w);
+  }
+  const averaged = buckets
+    .filter((b) => b.values.length > 0)
+    .map((b) => ({
+      key: b.key,
+      avg: b.values.reduce((s, v) => s + v, 0) / b.values.length,
+    }));
+  if (averaged.length === 0) return null;
+  averaged.sort((a, b) => a.avg - b.avg);
+  return averaged[0].key;
+});
+
+const courseHintLabel = computed<string>(() => {
+  const k = courseBestKey.value;
+  if (k === 'TODAY') return '오늘이 가장 한가';
+  if (k === 'TOMORROW') return '내일이 가장 한가';
+  if (k === 'WEEKEND') return '이번 주말이 가장 한가';
+  return '';
+});
+
+// SVG ring 의 stroke-dashoffset 계산. circumference = 2πr, r=20 → ~125.66
+// percent=0 이면 dashoffset=125.66 (안 채움), 100 이면 0 (꽉).
+const RING_CIRCUMFERENCE = 2 * Math.PI * 20;
+const courseRingDash = computed(() => RING_CIRCUMFERENCE.toFixed(2));
+const courseRingOffset = computed(() => {
+  const p = courseAverageToday.value?.percent ?? 0;
+  return (RING_CIRCUMFERENCE * (1 - p / 100)).toFixed(2);
+});
+const courseRingStroke = computed(() => {
+  const s = courseAverageToday.value?.state ?? 'OK';
+  if (s === 'PACK') return '#ef4444';
+  if (s === 'BUSY') return '#f59e0b';
+  return '#16a34a';
+});
 
 function roleLabel(i: number, total: number): string {
   if (i === 0) return '출발';
@@ -593,4 +776,145 @@ function onScroll(e: Event): void {
   font-size: 11px;
   font-weight: 600;
 }
+
+/* ---------- 코스 단위 혼잡도 요약 (rt-course-crowd) ---------- */
+.rt-course-crowd {
+  margin: 0 16px 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--fr-line);
+  border-radius: 16px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.rt-cc-ring {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+}
+.rt-cc-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.rt-cc-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--fr-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.rt-cc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rt-cc-ttl {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rt-cc-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.rt-cc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.rt-cc-sub {
+  font-size: 11.5px;
+  color: var(--fr-ink-3);
+  letter-spacing: -0.01em;
+}
+.rt-cc-sub strong {
+  color: var(--fr-ink);
+  font-weight: 800;
+}
+.rt-cc-legend {
+  display: flex;
+  gap: 3px;
+  height: 4px;
+  margin-top: 2px;
+}
+.rt-cc-legend > i {
+  display: block;
+  flex: 1;
+  border-radius: 999px;
+}
+
+/* ---------- 카드 thumb 의 오늘 혼잡도 pill ---------- */
+.rt-crowd-pill {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* ---------- 카드 body 의 오늘/내일/주말 mini row ---------- */
+.rt-crowd-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--fr-line);
+}
+.rt-cs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.rt-cs .l {
+  color: var(--fr-ink-4);
+  font-weight: 600;
+  font-size: 9.5px;
+}
+.rt-cs .v {
+  font-weight: 800;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 상태별 색상 (PlaceDetailPage / MapPage 와 통일) ---------- */
+.crowd-tx-ok { color: #16a34a; }
+.crowd-tx-busy { color: #f59e0b; }
+.crowd-tx-pack { color: #ef4444; }
+.crowd-bg-ok { background: linear-gradient(90deg, #4ade80, #16a34a); }
+.crowd-bg-busy { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.crowd-bg-pack { background: linear-gradient(90deg, #f87171, #ef4444); }
 </style>
