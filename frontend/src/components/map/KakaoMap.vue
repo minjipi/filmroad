@@ -113,11 +113,13 @@ function buildPinContent(m: MapMarker, isVisited: boolean, isActive: boolean): H
   if (isVisited) classes.push('visited');
   if (isActive) classes.push('active');
   if (m.orderIndex != null) classes.push('numbered');
-  // active 마커일 때 혼잡도 state 가 들어와 있으면 색상 클래스 부여 — CSS 가
-  // bubble 배경을 OK 녹/BUSY 황/PACK 적 으로 덮어쓴다. fetch 전이면 prop 가
-  // null 이라 클래스 없음 → 기존 active 다크 네이비 그대로.
-  if (isActive && props.selectedCrowdState) {
-    classes.push(`crowd-${props.selectedCrowdState.toLowerCase()}`);
+  // 혼잡도 state 가 marker 자체에 박혀 있으면 (route 처럼 모든 마커가 자체
+  // forecast 를 가질 때) 그 값으로 색상 클래스 부여 — active/비활성 무관.
+  // 그렇지 않고 active 마커이면 selectedCrowdState prop fallback (map page 의
+  // 단일 marker 컬러링 흐름).
+  const crowdState = m.crowdState ?? (isActive ? props.selectedCrowdState ?? null : null);
+  if (crowdState) {
+    classes.push(`crowd-${crowdState.toLowerCase()}`);
   }
   root.className = classes.join(' ');
   const bubble = document.createElement('div');
@@ -697,6 +699,29 @@ onBeforeUnmount(() => {
 .kakao-map .pin.active.crowd-ok .dot,
 .kakao-map .pin.active.crowd-busy .dot,
 .kakao-map .pin.active.crowd-pack .dot {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* 비활성 marker 가 자체 crowdState 를 가질 때 (route page 의 코스 마커들).
+   active 변형과 동일 그라데이션이지만 선택은 안 된 상태 — 출발/경유/도착 순번
+   dot 은 그대로 color 만 흰색으로 떨어 가독 보장. 활성으로 바뀌면 위 .pin.active
+   규칙이 추가로 적용되어 시각적 강조(살짝 scale up + outer shadow). */
+.kakao-map .pin.crowd-ok .bubble,
+.kakao-map .pin.crowd-ok .bubble::after {
+  background: linear-gradient(135deg, #4ade80, #16a34a);
+}
+.kakao-map .pin.crowd-busy .bubble,
+.kakao-map .pin.crowd-busy .bubble::after {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+.kakao-map .pin.crowd-pack .bubble,
+.kakao-map .pin.crowd-pack .bubble::after {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+}
+.kakao-map .pin.crowd-ok .dot,
+.kakao-map .pin.crowd-busy .dot,
+.kakao-map .pin.crowd-pack .dot {
   background: #ffffff;
   color: #0f172a;
 }

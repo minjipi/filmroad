@@ -25,6 +25,7 @@ import { computed } from 'vue';
 import KakaoMap from '@/components/map/KakaoMap.vue';
 import type { MapMarker } from '@/stores/map';
 import type { TripPlace } from '@/stores/tripRoute';
+import type { CongestionResponse } from '@/stores/congestion';
 
 interface LatLng {
   lat: number;
@@ -57,8 +58,15 @@ const props = withDefaults(
      * offset 으로 분리해 그릴 때 사용. 빈 배열이면 routePath 1개로 폴백.
      */
     routeSections?: LatLng[][] | null;
+    /**
+     * placeId → 한국관광공사 혼잡도 응답. 각 marker 의 오늘 forecast state
+     * (OK/BUSY/PACK) 를 KakaoMap 으로 흘려보내 bubble 배경을 녹/황/적 으로
+     * 칠하게 한다. 미지정 또는 forecast 없는 place 는 기본 톤 유지.
+     */
+    congestionByPlace?: Record<number, CongestionResponse | null>;
   }>(),
-  { zoom: 7, center: null, userLocation: null, routePath: null, routeSections: null },
+  { zoom: 7, center: null, userLocation: null, routePath: null, routeSections: null,
+    congestionByPlace: () => ({}) },
 );
 
 const emit = defineEmits<{ (e: 'markerClick', id: number): void }>();
@@ -69,17 +77,25 @@ const emit = defineEmits<{ (e: 'markerClick', id: number): void }>();
  * 로 표시했지만 dot 으로 옮기면서 중복이 돼 라벨에서는 제거.
  */
 const markers = computed<MapMarker[]>(() =>
-  props.places.map((p, i) => ({
-    id: p.id,
-    name: p.name,
-    latitude: p.latitude,
-    longitude: p.longitude,
-    contentId: p.contentId,
-    contentTitle: p.contentTitle,
-    regionLabel: p.regionLabel,
-    distanceKm: null,
-    orderIndex: i + 1,
-  })),
+  props.places.map((p, i) => {
+    // 오늘 (TODAY) forecast 의 state 만 marker 에 실음. 응답이 없거나 매핑
+    // 실패면 undefined → KakaoMap 이 기본 톤으로 렌더.
+    const today = props.congestionByPlace[p.id]?.forecasts.find(
+      (f) => f.key === 'TODAY',
+    );
+    return {
+      id: p.id,
+      name: p.name,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      contentId: p.contentId,
+      contentTitle: p.contentTitle,
+      regionLabel: p.regionLabel,
+      distanceKm: null,
+      orderIndex: i + 1,
+      crowdState: today?.state ?? null,
+    };
+  }),
 );
 
 /**
