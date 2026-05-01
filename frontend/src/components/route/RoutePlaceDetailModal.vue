@@ -106,10 +106,9 @@
                 data-testid="rt-detail-note-save"
                 :disabled="!noteDirty"
                 @click="onSaveNoteExplicit"
-              >저장하기</button>
-              <p class="rt-detail-note-hint">
-                저장하기 버튼을 누르거나 입력 칸에서 벗어나면 메모가 저장돼요.
-              </p>
+              >
+                <ion-icon :icon="saveOutline" class="ic-18" />저장하기
+              </button>
             </template>
           </div>
         </div>
@@ -122,7 +121,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonIcon } from '@ionic/vue';
-import { cameraOutline, closeOutline } from 'ionicons/icons';
+import { cameraOutline, closeOutline, saveOutline } from 'ionicons/icons';
 import FrChip from '@/components/ui/FrChip.vue';
 import RoutePlaceInfoRow from './RoutePlaceInfoRow.vue';
 import { useUploadStore } from '@/stores/upload';
@@ -382,6 +381,10 @@ async function onCapture(): Promise<void> {
   font-weight: 800;
   letter-spacing: -0.02em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -390,10 +393,5 @@ async function onCapture(): Promise<void> {
   background: var(--fr-bg-muted);
   color: var(--fr-ink-4);
   cursor: default;
-}
-.rt-detail-note-hint {
-  margin: 8px 4px 0;
-  font-size: 11px;
-  color: var(--fr-ink-4);
 }
 </style>
