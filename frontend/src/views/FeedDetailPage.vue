@@ -464,6 +464,29 @@ function onCloseMoreSheet(): void {
 }
 
 /**
+ * PostMoreSheet 의 @edit 이벤트. 인증샷 편집 기능은 frontend 에 별도 화면이
+ * 아직 없어 현재는 안내 토스트만 노출. moreSheet 자체는 닫아 사용자가 다음
+ * 동작으로 자연스럽게 진행되게 한다. 추후 EditShotPage / 모달이 들어오면
+ * router.push 또는 모달 open 으로 교체.
+ */
+async function onEditFromSheet(): Promise<void> {
+  onCloseMoreSheet();
+  await showInfo('인증샷 수정은 곧 공개됩니다');
+}
+
+/**
+ * PostMoreSheet 의 @delete 이벤트. 시트 닫고 confirmDelete 가 alert 으로 한 번
+ * 더 확인 받은 뒤 performDelete → feedStore.deletePost 흐름. moreSheetTarget
+ * 이 비어있으면(이론상 시트 열림 시점에 항상 채워져야 하지만 방어) 무동작.
+ */
+async function onDeleteFromSheet(): Promise<void> {
+  const target = moreSheetTarget.value;
+  onCloseMoreSheet();
+  if (!target) return;
+  await confirmDelete(target.id);
+}
+
+/**
  * `<FeedMoreSheet>` 의 `:is-own` prop — 현재 더보기 시트가 viewer 본인 글에
  * 열린 건지 판정. true 면 시트가 "수정/삭제" 액션 노출, false 면 신고/공유 만
  * 노출. moreSheetTarget 이 비었으면 false (방어).
