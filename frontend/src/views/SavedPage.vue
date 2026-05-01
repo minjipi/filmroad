@@ -100,16 +100,23 @@
           </div>
         </div>
 
-        <!-- AI 루트 배너 — 항상 표시. 백엔드 추천 엔진 붙기 전엔 고정 문구. -->
+        <!--
+          AI 루트 배너 — 백엔드 `/api/saved` 의 nearbyRouteSuggestion 응답이
+          있을 때만 표시. 응답 조건: 요청에 lat/lng 가 실리고, 반경 내 saved
+          place 가 2곳 이상. 둘 중 하나라도 미충족이면 백엔드가 null 을 반환해
+          배너 자체가 숨겨진다 — 이전엔 "근처 성지 4곳" 고정 문구가 좌표/저장
+          상태와 무관하게 항상 표시돼 사용자에게 거짓말 하는 상태였음.
+        -->
         <div
+          v-if="suggestion"
           class="banner"
           data-testid="ai-route-banner"
           @click="onOpenSuggestion"
         >
           <div class="ico"><ion-icon :icon="routeIcon" class="ic-22" /></div>
           <div class="banner-text">
-            <div class="t">{{ aiBanner.title }}</div>
-            <div class="s">{{ aiBanner.subtitle }}</div>
+            <div class="t">{{ suggestion.title }}</div>
+            <div class="s">{{ suggestion.subtitle }}</div>
           </div>
           <ion-icon :icon="chevronForwardOutline" class="ic-20 chev" />
         </div>
@@ -241,15 +248,10 @@ const router = useRouter();
 const savedStore = useSavedStore();
 const uploadStore = useUploadStore();
 const uiStore = useUiStore();
-const { collections, items, totalCount, error, loading } = storeToRefs(savedStore);
+const { collections, items, totalCount, error, loading, suggestion } =
+  storeToRefs(savedStore);
 const { showError, showInfo } = useToast();
 
-// AI 루트 배너는 고정 문구. `savedStore.suggestion` 이 null 이 아닌 값으로
-// 오기 시작하면 computed 로 교체.
-const aiBanner = {
-  title: '근처 성지 4곳, 하루에 돌 수 있어요',
-  subtitle: 'AI가 자동으로 루트를 짜드려요',
-};
 const routeIcon = trailSignOutline;
 
 // 컬렉션 카드 카운트 아이콘 — 서버가 iconKey 를 내려주면 몇 가지 고정된
