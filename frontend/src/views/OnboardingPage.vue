@@ -88,9 +88,11 @@ import {
 } from 'ionicons/icons';
 import { useRoute, useRouter } from 'vue-router';
 import { markOnboarded } from '@/composables/useOnboarding';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 
 function onGoogle(): void {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
@@ -116,8 +118,14 @@ async function onBrowse(): Promise<void> {
   // 로그인 없이 둘러보기 — anonymous 브라우징 진입. /home, /map, /place/:id,
   // /content/:id 등 메인 surface 가 모두 requiresAuth 가 아니라 그대로 동작.
   // 좋아요/북마크처럼 인증 필요 액션은 LoginPromptModal 이 다시 /onboarding
-  // 으로 안내. markOnboarded 는 사용자 경험 보존용 로컬 플래그(현재 사용
-  // 처는 없으나 onboarding 첫 진입 여부를 구분할 향후 use case 대비).
+  // 으로 안내.
+  //
+  // 명시적 logout 호출 — 직전 dev/테스트 세션의 RTOKEN 쿠키(HttpOnly, 7일
+  // 만료)가 남아있으면 다음 페이지에서 axios 401 인터셉터가 자동 refresh 하면서
+  // 사용자 의도와 무관하게 silently 재로그인 됨. logout 은 서버에 쿠키 Max-Age=0
+  // 응답을 받아 ATOKEN/RTOKEN 을 깨끗이 비운다. 미인증 상태에서 호출해도 logout
+  // 액션이 401 을 successful path 로 처리하므로 안전.
+  await authStore.logout();
   markOnboarded();
   await router.push('/home');
 }
