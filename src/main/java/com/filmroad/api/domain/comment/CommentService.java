@@ -193,10 +193,11 @@ public class CommentService {
     public CommentListResponse listComments(Long photoId, Long cursor, int limit) {
         // create 와 같은 visibility 가드 — 다른 사람의 PRIVATE / FOLLOWERS 사진의
         // 댓글 목록을 ID 추측만으로 긁는 경로 차단. 사진 자체가 없으면 동일하게
-        // PHOTO_NOT_FOUND.
+        // PHOTO_NOT_FOUND. permitAll 엔드포인트라 viewerId 는 null 일 수 있고,
+        // 그 경우 가드는 PUBLIC 만 통과시킨다.
         PlacePhoto photo = placePhotoRepository.findById(photoId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND));
-        photoVisibilityGuard.assertViewable(photo, currentUser.currentUserId());
+        photoVisibilityGuard.assertViewable(photo, currentUser.currentUserIdOrNull());
 
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         long safeCursor = cursor == null ? 0L : cursor;

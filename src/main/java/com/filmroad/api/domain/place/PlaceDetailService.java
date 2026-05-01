@@ -36,11 +36,15 @@ public class PlaceDetailService {
 
         Double distanceKm = distanceKm(lat, lng, place);
         Integer driveTimeMin = driveTimeMin(distanceKm);
-        boolean liked = placeLikeRepository.existsByUserIdAndPlaceId(currentUser.currentUserId(), place.getId());
+        // 비로그인 viewer 는 좋아요 상태 false 고정. visibility 필터에 viewerId=null 을
+        // 그대로 넘기면 PlacePhotoRepository 의 JPQL 이 PUBLIC 만 통과시키므로 안전.
+        Long viewerId = currentUser.currentUserIdOrNull();
+        boolean liked = viewerId != null
+                && placeLikeRepository.existsByUserIdAndPlaceId(viewerId, place.getId());
 
         List<PlacePhotoDto> photos = placePhotoRepository
                 .findByPlaceIdOrderByOrderIndexAscIdAsc(place.getId(),
-                        currentUser.currentUserId(), PageRequest.of(0, PHOTO_LIMIT))
+                        viewerId, PageRequest.of(0, PHOTO_LIMIT))
                 .stream()
                 .map(PlacePhotoDto::from)
                 .toList();

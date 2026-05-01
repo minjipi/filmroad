@@ -39,10 +39,14 @@ public class ContentDetailService {
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.CONTENT_NOT_FOUND));
 
-        Long userId = currentUser.currentUserId();
+        // 비로그인 viewer 는 stamp 가 없음 → 모든 spot 이 visited=false 로,
+        // progress 는 0/total 로 표시. 데모 user_id=1 의 진행률이 새는 것을 차단.
+        Long userId = currentUser.currentUserIdOrNull();
         List<Place> places = placeRepository.findByContentIdOrderByIdAsc(contentId);
 
-        List<Stamp> userStamps = stampRepository.findByUserIdAndContentId(userId, contentId);
+        List<Stamp> userStamps = userId == null
+                ? List.of()
+                : stampRepository.findByUserIdAndContentId(userId, contentId);
         Map<Long, Stamp> stampByPlaceId = new HashMap<>();
         for (Stamp s : userStamps) {
             stampByPlaceId.put(s.getPlace().getId(), s);

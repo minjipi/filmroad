@@ -38,7 +38,9 @@ public class GalleryService {
         int safePage = Math.max(0, page);
         String normalizedSort = normalizeSort(sort);
         Pageable pageable = PageRequest.of(safePage, safeSize);
-        Long viewerId = currentUser.currentUserId();
+        // 비로그인 viewer 는 viewerId=null 로 PUBLIC 만 보이게. JPQL 의 visibility 절이
+        // null 을 받으면 본인/FOLLOWERS 분기가 모두 false 가 되어 PUBLIC 만 통과한다.
+        Long viewerId = currentUser.currentUserIdOrNull();
 
         // PRIVATE/FOLLOWERS 필터를 DB 레벨에서 적용해 pagination 정합성을 유지 (in-memory 필터는 페이지 size 가 깨짐).
         Page<PlacePhoto> photoPage = switch (normalizedSort) {
@@ -56,13 +58,12 @@ public class GalleryService {
                 .totalPhotoCount(placePhotoRepository.countByPlaceId(placeId))
                 .build();
 
-        // 비로그인 (currentUserIdOrNull == null) 또는 빈 페이지 → 외부 호출 없이 빈 셋.
+        // 비로그인 (viewerId == null) 또는 빈 페이지 → 외부 호출 없이 빈 셋.
         // 로그인 + photoIds 가 있을 때만 1회 batch 쿼리로 좋아요 여부 한 번에 조회.
-        Long likeViewerId = currentUser.currentUserIdOrNull();
-        Set<Long> likedIds = (likeViewerId == null || photoPage.getContent().isEmpty())
+        Set<Long> likedIds = (viewerId == null || photoPage.getContent().isEmpty())
                 ? Set.of()
                 : new HashSet<>(photoLikeRepository.findPhotoIdsLikedByUser(
-                        likeViewerId,
+                        viewerId,
                         photoPage.getContent().stream().map(PlacePhoto::getId).toList()));
 
         List<GalleryPhotoDto> photoDtos = photoPage.getContent().stream()

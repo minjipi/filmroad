@@ -1118,3 +1118,62 @@ GET /api/feed?placeId=72&tab=POPULAR
 3. **NEARBY 적용**: NEARBY 의 candidate fetch 도 placeId 필터를 거쳐, 한 place 가 다른 곳 추천에 섞이지 않게. lat/lng 미지정 시에도 동일.
 4. **commit 보류**: task #27 까지 끝나면 묶음 commit.
 
+
+# Backend Implementation — fix/anonymous-like-leak
+
+## 작업 범위
+익명(미로그인) 사용자가 임의 사용자(데모 user_id=1)의 personalized 데이터(좋아요·팔로우·저장·방문 진행률) 를 그대로 받던 보안/UX 버그 차단. `CurrentUser.currentUserId()` 의 데모 fallback 제거 + permitAll GET 엔드포인트들에서 호출처 정리.
+
+## 변경된 파일
+
+### 수정 (production)
+- `src/main/java/com/filmroad/api/common/auth/CurrentUser.java` — `currentUserId()` 의 `return DEMO_USER_ID;` 제거. 인증 없으면 `IllegalStateException` throw. javadoc 갱신: 인증 강제 엔드포인트 전용, permitAll 엔드포인트는 `currentUserIdOrNull()` 을 쓰라고 명시.
+- `src/main/java/com/filmroad/api/domain/home/HomeService.java` — `getHome` 의 `findPlaceIdsLikedByUser` 전 `currentUserIdOrNull()` 가드. viewer null → 좋아요 빈 셋.
+- `src/main/java/com/filmroad/api/domain/place/PlaceDetailService.java` — `getPlaceDetail` 의 `liked`, photo 페이지의 viewerId 모두 OrNull. viewer null → liked=false, JPQL visibility 절이 PUBLIC 만 통과.
+- `src/main/java/com/filmroad/api/domain/place/GalleryService.java` — `getPhotos` 의 visibility viewerId 를 OrNull 로. likedIds 변수 통합 (중복 호출 제거).
+- `src/main/java/com/filmroad/api/domain/place/PhotoDetailService.java` — `getPhoto` 의 viewerId 를 OrNull. 기존 `viewerId == null` 가드(canView/liked/saved/authorFollowing) 가 그대로 작동.
+- `src/main/java/com/filmroad/api/domain/comment/CommentService.java` — `listComments` 의 visibility 가드 viewerId 를 OrNull. PRIVATE/FOLLOWERS 사진은 익명 viewer 에게 PHOTO_NOT_FOUND.
+- `src/main/java/com/filmroad/api/domain/content/ContentDetailService.java` — `getContent` 의 userId 를 OrNull. null 이면 stamp 조회 skip → 모든 spot visited=false, progress.collectedCount=0.
+- `src/main/java/com/filmroad/api/domain/feed/FeedService.java` — `getFeed`, `getRecommendedUsers` 모두 OrNull. liked/follow/saved/stamp 조회 전부 viewer null 가드. uid.equals(viewerId) 도 null-safe (Long.equals(null) → false).
+
+### 수정 (테스트)
+- `src/test/java/com/filmroad/api/domain/home/HomeControllerTest.java` — `getHome_noParams_*` 를 anonymous viewer 검증으로 갱신 (`liked=false`). user=1 인증 시 liked=true 확인하는 새 케이스 추가.
+- `src/test/java/com/filmroad/api/domain/place/PlaceControllerTest.java` — 동일하게 anonymous → liked=false 갱신 + user=1 cookie 케이스 추가.
+- `src/test/java/com/filmroad/api/domain/content/ContentControllerTest.java` — anonymous viewer 의 `progress.collectedCount=0` / 모든 `spots[*].visited=false` 명시 검증.
+- `src/test/java/com/filmroad/api/domain/place/PhotoControllerTest.java` — 기존 “anonymous 케이스 검증 안 함” 코멘트 제거 + anonymous viewer 의 `liked=false / saved=false / author.isMe=false / following=false` 검증 케이스 신규 추가.
+
+## 인증 강제 엔드포인트 (변경 없음)
+SecurityConfig 의 `authenticated()` 매처 (POST /api/places/*/like, POST /api/users/*/follow, DELETE /api/comments/*, GET /api/users/me, /me/photos, /me/liked-places, /api/saved/**, /api/photos POST/PUT/DELETE, /api/stampbook 등) 는 `currentUserId()` 호출을 그대로 둠. JwtAuthenticationFilter 에서 인증된 principal 이 SecurityContext 에 들어와야 도달하는 경로라 IllegalStateException 발생 가능성 없음.
+
+## API 테스트 결과
+`GRADLE_USER_HOME=/tmp/gradle-home ./gradlew --project-cache-dir=/tmp/filmroad-cache test`
+
+```
+BUILD SUCCESSFUL in 2m 39s
+5 actionable tasks: 4 executed, 1 up-to-date
+```
+
+전체 테스트 통과. 기존 회귀 테스트 (e.g. `GalleryControllerTest.liked_anonymous` 가 이미 있었음) 와 새로 추가한 검증 모두 그린.
+
+> 비고: WSL2 + Windows mount(/mnt/c) + IntelliJ idea64.exe 점유 조합에서 기본 GRADLE_USER_HOME(/root/.gradle) + project-local `.gradle/` 에 file lock 충돌이 발생함 (`FileHasher` 생성 IOException). Linux 네이티브 경로(`/tmp/...`) 로 캐시를 우회하면 정상 빌드. 코드 변경과는 무관한 환경 문제.
+
+## 차단된 leak 매트릭스
+
+| Endpoint | 익명 호출 시 이전 동작 | 수정 후 동작 |
+|---|---|---|
+| GET /api/home | place=10 카드 `liked=true` (user=1 시드 like) | 모든 `liked=false` |
+| GET /api/places/{id} | `liked=true`, photos visibility 가 user=1 기준 | `liked=false`, PUBLIC 만 보임 |
+| GET /api/places/{id}/photos (gallery) | (이미 OrNull 적용돼 있었음) | 동일 — likeViewerId 변수 통합 |
+| GET /api/photos/{id} | `liked=true / saved=true / author.following=true` | 모두 false, isMe=false |
+| GET /api/photos/{id}/comments | PRIVATE 사진의 댓글 리스트가 user=1 기준으로 보임 | PUBLIC 만, PRIVATE/FOLLOWERS 는 PHOTO_NOT_FOUND |
+| GET /api/contents/{id} | `progress.collectedCount = user=1 의 stamp`, spots[*].visited 가 일부 true | collectedCount=0, 모든 visited=false |
+| GET /api/feed (모든 탭) | 데모 user=1 의 좋아요/저장/방문/팔로우 표시가 응답에 섞임 | liked/saved=false, visitedAt=null, author.following=false |
+| GET /api/feed/recommended-users | user=1 자기 제외 + user=1 follow 관계 표시 | 자기 제외 안 함, following=false |
+
+## 의사결정
+1. **demo fallback throw 변경**: 컨트롤러/필터 레이어에서 누가 인증 없이 `currentUserId()` 를 호출하면 즉시 500 으로 깨지게 하는 게 silent leak 보다 안전. 운영에서 같은 종류 leak 이 다시 들어오면 컴파일 / 첫 트래픽에서 잡힘.
+2. **"인증 강제 메서드는 손대지 않는다"**: SecurityConfig 매처상 authenticated() 인 엔드포인트는 JwtAuthenticationFilter 가 항상 principal 을 채우므로 영향 없음. 변경 위험 최소화.
+3. **JPQL visibility 절은 viewerId=null 안전**: `p.user.id = NULL` 은 false, `IN (SELECT … :viewerId)` 도 false 라 PUBLIC 만 통과 — 추가 분기 없이 그대로 viewerId=null 을 그대로 넘김.
+4. **테스트 갱신 vs 추가**: 기존 anonymous 호출이 user=1 의 liked=true 를 기대하던 두 케이스(HomeControllerTest, PlaceControllerTest)는 이번 fix 의 정확한 회귀 대상이라 갱신. 인증된 user=1 의 liked=true 는 새 케이스로 분리해 의미 보존.
+5. **frontend 변경 불필요**: `liked: false` 가 일관되게 떨어지면 PlaceCard 등 기존 렌더가 자동으로 회색 하트로 그려진다. (작업 지시서대로)
+
