@@ -100,8 +100,15 @@
                 data-testid="rt-detail-note"
                 @blur="onSaveNote"
               />
+              <button
+                type="button"
+                class="rt-detail-note-save"
+                data-testid="rt-detail-note-save"
+                :disabled="!noteDirty"
+                @click="onSaveNoteExplicit"
+              >저장하기</button>
               <p class="rt-detail-note-hint">
-                메모는 입력 칸에서 벗어나는 순간 자동 저장돼요.
+                저장하기 버튼을 누르거나 입력 칸에서 벗어나면 메모가 저장돼요.
               </p>
             </template>
           </div>
@@ -120,6 +127,7 @@ import FrChip from '@/components/ui/FrChip.vue';
 import RoutePlaceInfoRow from './RoutePlaceInfoRow.vue';
 import { useUploadStore } from '@/stores/upload';
 import type { TripPlace } from '@/stores/tripRoute';
+import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{
   open: boolean;
@@ -165,12 +173,28 @@ const visitedLabel = computed<string>(() => {
   return `${y}-${m}-${day}`;
 });
 
+/** 입력값이 props.note 와 달라졌는지 — 저장하기 버튼 disabled 토글에 사용. */
+const noteDirty = computed<boolean>(
+  () => noteDraft.value.trim() !== (props.note ?? '').trim(),
+);
+
 function onSaveNote(): void {
   const p = props.place;
   if (!p) return;
   const trimmed = noteDraft.value.trim();
   if (trimmed === (props.note ?? '').trim()) return;
   emit('save-note', { placeId: p.id, note: trimmed });
+}
+
+const { showInfo } = useToast();
+
+/** 저장하기 버튼 핸들러 — onSaveNote 와 동일하게 emit 하되 사용자에게 명시
+ *  토스트로 피드백. blur 자동 저장은 silent 인 게 자연스럽지만 명시 클릭은
+ *  "저장됐어요" 안내가 있어야 의도가 반영됐다는 확신을 줌. */
+async function onSaveNoteExplicit(): Promise<void> {
+  if (!noteDirty.value) return;
+  onSaveNote();
+  await showInfo('메모를 저장했어요');
 }
 
 const router = useRouter();
@@ -344,6 +368,28 @@ async function onCapture(): Promise<void> {
 .rt-detail-note:focus {
   border-color: var(--fr-primary);
   background: #ffffff;
+}
+.rt-detail-note-save {
+  margin-top: 10px;
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fr-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.rt-detail-note-save:active { opacity: 0.88; }
+.rt-detail-note-save:disabled {
+  background: var(--fr-bg-muted);
+  color: var(--fr-ink-4);
+  cursor: default;
 }
 .rt-detail-note-hint {
   margin: 8px 4px 0;
