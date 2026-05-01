@@ -57,6 +57,16 @@
             </button>
           </div>
 
+          <button
+            class="browse-link"
+            type="button"
+            data-testid="onboarding-browse"
+            @click="onBrowse"
+          >
+            로그인 없이 둘러보기
+            <ion-icon :icon="arrowForwardOutline" class="ic-14" />
+          </button>
+
           <div class="legal">
             계속하면 <a>이용약관</a>과 <a>개인정보처리방침</a>에<br />동의하는 것으로 간주돼요.
           </div>
@@ -74,8 +84,10 @@ import {
   logoGoogle,
   chatbubbleEllipsesOutline,
   mailOutline,
+  arrowForwardOutline,
 } from 'ionicons/icons';
 import { useRoute, useRouter } from 'vue-router';
+import { markOnboarded } from '@/composables/useOnboarding';
 
 const router = useRouter();
 const route = useRoute();
@@ -98,6 +110,16 @@ async function onEmail(): Promise<void> {
   const redirect = Array.isArray(q) ? q[0] : q;
   const query = typeof redirect === 'string' && redirect ? { redirect } : undefined;
   await router.push({ path: '/email-auth', query });
+}
+
+async function onBrowse(): Promise<void> {
+  // 로그인 없이 둘러보기 — anonymous 브라우징 진입. /home, /map, /place/:id,
+  // /content/:id 등 메인 surface 가 모두 requiresAuth 가 아니라 그대로 동작.
+  // 좋아요/북마크처럼 인증 필요 액션은 LoginPromptModal 이 다시 /onboarding
+  // 으로 안내. markOnboarded 는 사용자 경험 보존용 로컬 플래그(현재 사용
+  // 처는 없으나 onboarding 첫 진입 여부를 구분할 향후 use case 대비).
+  markOnboarded();
+  await router.push('/home');
 }
 </script>
 
@@ -296,11 +318,34 @@ ion-content.ob-content {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.browse-link {
+  margin-top: 14px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  opacity: 0.7;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  align-self: center;
+}
+.browse-link:hover,
+.browse-link:active {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 .legal {
   font-size: 11px;
   opacity: 0.5;
   text-align: center;
-  margin-top: 16px;
+  margin-top: 12px;
   line-height: 1.5;
   color: #ffffff;
 }
