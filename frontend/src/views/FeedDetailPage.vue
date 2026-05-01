@@ -66,7 +66,7 @@
                   @click="onOpenAuthor(p)"
                   @keyup.enter="onOpenAuthor(p)"
                 >
-                  {{ p.author.handle }}
+                  {{ p.author.nickname || `@${p.author.handle}` }}
                   <ion-icon v-if="p.author.verified" :icon="checkmarkCircle" class="ic-16 verified" />
                 </div>
                 <div
@@ -135,7 +135,7 @@
 
             <div class="post-caption">
               <div v-if="p.caption" class="caption-text">
-                <b>{{ p.author.handle }}</b> {{ p.caption }}
+                <b>{{ p.author.nickname || `@${p.author.handle}` }}</b> {{ p.caption }}
               </div>
               <div v-if="p.visitedAt" class="visit-chip">
                 <ion-icon :icon="checkmarkCircle" class="ic-16" />여기 다녀왔어요
@@ -159,7 +159,7 @@
                   <img v-if="u.avatarUrl" :src="u.avatarUrl" :alt="u.handle" />
                 </div>
                 <div class="body">
-                  <div class="t">{{ u.handle }}</div>
+                  <div class="t">{{ u.nickname || `@${u.handle}` }}</div>
                   <div class="s">{{ recoProgressText(u) }}</div>
                   <button
                     :class="['follow', u.following ? 'followed' : '']"

@@ -63,7 +63,7 @@
               </span>
               <div class="t">{{ featured.caption ?? featured.place.name }}</div>
               <div class="s">
-                {{ featured.author.handle }} · {{ featured.content.title }}
+                {{ featured.author.nickname || `@${featured.author.handle}` }} · {{ featured.content.title }}
                 <span class="dot" />♥ {{ formatCount(featured.likeCount) }}
               </div>
             </div>
