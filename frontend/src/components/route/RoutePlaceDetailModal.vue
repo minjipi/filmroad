@@ -87,7 +87,7 @@
                 data-testid="rt-detail-capture"
                 @click="onCapture"
               >
-                <ion-icon :icon="cameraOutline" class="ic-20" />
+                <ion-icon :icon="cameraOutline" class="ic-18" />
                 {{ place.visited ? '다시 인증하기' : '인증하기' }}
               </button>
             </template>
@@ -334,28 +334,35 @@ async function onCapture(): Promise<void> {
   /* 정보 탭 / 메모 탭 모두 같은 vertical 영역 차지 — 탭 전환 시 모달이
      높이를 바꿔 흔들리지 않도록 최소 높이 고정. info 탭의 InfoRow + CTA,
      note 탭의 textarea + 저장하기가 모두 이 안에 자연 정렬. */
-  min-height: 320px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
 }
+/* CTA 버튼 (인증하기) 과 저장하기 버튼은 같은 사양으로 통일 — 높이 44px,
+   font 14px/800, radius 12px, gap 6px. 두 탭에서 같은 위치(하단)에 같은
+   look-and-feel 로 노출되도록. */
 .rt-detail-cta {
   width: 100%;
-  margin-top: auto; /* flex column 안에서 하단 고정 — 메모 탭 저장하기 버튼과
-                      위치 통일. InfoRow 들이 적어도 빈 공간이 위쪽으로 빠짐. */
-  padding: 14px;
-  border-radius: 14px;
-  background: var(--fr-primary);
+  height: 44px;
+  margin-top: auto; /* flex column 안에서 하단 고정. */
+  padding: 0 14px;
   border: 0;
+  border-radius: 12px;
+  background: var(--fr-primary);
   color: #ffffff;
-  font-size: 15px;
-  font-weight: 700;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(20, 188, 237, 0.4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.rt-detail-cta:active { opacity: 0.88; }
 
 .rt-detail-note {
   width: 100%;
