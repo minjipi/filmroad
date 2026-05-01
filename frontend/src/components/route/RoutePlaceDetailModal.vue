@@ -331,10 +331,17 @@ async function onCapture(): Promise<void> {
   padding: 20px;
   overflow-y: auto;
   flex: 1;
+  /* 정보 탭 / 메모 탭 모두 같은 vertical 영역 차지 — 탭 전환 시 모달이
+     높이를 바꿔 흔들리지 않도록 최소 높이 고정. info 탭의 InfoRow + CTA,
+     note 탭의 textarea + 저장하기가 모두 이 안에 자연 정렬. */
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
 }
 .rt-detail-cta {
   width: 100%;
-  margin-top: 16px;
+  margin-top: auto; /* flex column 안에서 하단 고정 — 메모 탭 저장하기 버튼과
+                      위치 통일. InfoRow 들이 적어도 빈 공간이 위쪽으로 빠짐. */
   padding: 14px;
   border-radius: 14px;
   background: var(--fr-primary);
@@ -353,6 +360,9 @@ async function onCapture(): Promise<void> {
 .rt-detail-note {
   width: 100%;
   min-height: 140px;
+  /* flex column 안에서 남는 vertical 공간을 채워 메모 영역이 시원하게.
+     저장하기 버튼은 margin-top: auto 로 하단 고정. */
+  flex: 1;
   padding: 14px;
   border-radius: 14px;
   border: 1px solid var(--fr-line);
