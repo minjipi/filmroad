@@ -38,9 +38,13 @@ class AuthControllerTest {
     private JwtTokenService jwtTokenService;
 
     @Test
-    @DisplayName("POST /api/auth/logout returns 204 with Max-Age=0 cookies")
+    @DisplayName("POST /api/auth/logout — 쿠키 들고 호출 → 204 + Max-Age=0 으로 두 쿠키 모두 정리")
     void logout_clearsCookies() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/auth/logout"))
+        // 클라이언트가 ATOKEN/RTOKEN 둘 다 들고 와야 둘 다 정리된다 — 시그니처
+        // 검증은 logout 의 책임이 아니므로 더미 값으로도 충분.
+        MvcResult result = mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new Cookie("ATOKEN", "dummy-access"))
+                        .cookie(new Cookie("RTOKEN", "dummy-refresh")))
                 .andExpect(status().isNoContent())
                 .andReturn();
 
@@ -48,6 +52,18 @@ class AuthControllerTest {
         assertThat(setCookies).hasSize(2);
         assertThat(setCookies).anyMatch(h -> h.startsWith("ATOKEN=") && h.contains("Max-Age=0"));
         assertThat(setCookies).anyMatch(h -> h.startsWith("RTOKEN=") && h.contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/logout — 쿠키 없이 호출 (이미 익명) → 204 + Set-Cookie 헤더 없음")
+    void logout_withoutCookies_emitsNoSetCookieHeaders() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        // 정리할 쿠키가 없으므로 Set-Cookie 자체가 응답에 붙지 않아야 한다.
+        // (DevTools 에서 미인증 사용자에게 이상한 cookie 헤더가 노출되는 노이즈 차단.)
+        assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
     }
 
     @Test
@@ -188,19 +204,26 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/refresh — RTOKEN 쿠키 없음 → 401 INVALID_USER_INFO(20004)")
-    void refresh_missingRtoken_returns401() throws Exception {
-        mockMvc.perform(post("/api/auth/refresh"))
+    @DisplayName("POST /api/auth/refresh — 쿠키 없음 (익명 호출) → 401 + Set-Cookie 헤더 없음")
+    void refresh_missingRtoken_returns401AndNoSetCookie() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code", is(20004)));
+                .andExpect(jsonPath("$.code", is(20004)))
+                .andReturn();
+
+        // 익명 클라이언트 (쿠키 한 개도 안 보냄) 에는 정리할 쿠키가 없으므로
+        // Set-Cookie 헤더가 응답에 추가되지 않아야 한다.
+        assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
     }
 
     @Test
-    @DisplayName("POST /api/auth/refresh — 위조 RTOKEN → 401 + Max-Age=0 쿠키 2개")
+    @DisplayName("POST /api/auth/refresh — 위조 RTOKEN+ATOKEN → 401 + 두 쿠키 모두 Max-Age=0")
     void refresh_tamperedRtoken_returns401AndClearsCookies() throws Exception {
         String tampered = jwtTokenService.issueRefresh(1L) + "garbage";
 
+        // 클라이언트가 ATOKEN+RTOKEN 둘 다 들고 와야 둘 다 정리된다.
         MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("ATOKEN", "stale-access"))
                         .cookie(new Cookie("RTOKEN", tampered)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is(20004)))
@@ -209,6 +232,24 @@ class AuthControllerTest {
         java.util.List<String> setCookies = result.getResponse().getHeaders("Set-Cookie");
         assertThat(setCookies).anyMatch(h -> h.startsWith("ATOKEN=") && h.contains("Max-Age=0"));
         assertThat(setCookies).anyMatch(h -> h.startsWith("RTOKEN=") && h.contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/refresh — RTOKEN 만 위조됨 → 401 + RTOKEN 만 Max-Age=0")
+    void refresh_tamperedRtokenOnly_clearsOnlyRefresh() throws Exception {
+        String tampered = jwtTokenService.issueRefresh(1L) + "garbage";
+
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("RTOKEN", tampered)))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+
+        // 클라이언트가 RTOKEN 만 보냈으므로 RTOKEN 만 비우고 ATOKEN clear 는 굳이
+        // 추가하지 않는다.
+        java.util.List<String> setCookies = result.getResponse().getHeaders("Set-Cookie");
+        assertThat(setCookies).hasSize(1);
+        assertThat(setCookies).anyMatch(h -> h.startsWith("RTOKEN=") && h.contains("Max-Age=0"));
+        assertThat(setCookies).noneMatch(h -> h.startsWith("ATOKEN="));
     }
 
     @Test
