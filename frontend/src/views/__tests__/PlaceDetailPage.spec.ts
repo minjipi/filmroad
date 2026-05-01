@@ -154,6 +154,30 @@ function mountPlaceDetailPage(
       },
       kakaoInfo: kakaoInfoState,
       tourNearby: tourNearbyState,
+      // 대부분의 PlaceDetail 테스트는 인증된 viewer 로 동작 (좋아요/저장/공유 등
+      // 을 자유롭게 누를 수 있어야 함). 'authStore.isAuthenticated' 가드가
+      // 추가된 onToggleSave 등이 LoginPromptModal 로 빠지지 않게 default 로
+      // 익명이 아닌 더미 사용자를 시드. 익명 케이스 검증이 필요한 테스트는
+      // useAuthStore() 를 직접 가져와 user 를 null 로 덮어쓰면 됨.
+      auth: {
+        user: {
+          id: 1,
+          nickname: '테스트',
+          handle: 'test',
+          avatarUrl: '',
+          bio: '',
+          level: 1,
+          levelName: '입문 순례자',
+          points: 0,
+          streakDays: 0,
+          followersCount: 0,
+          followingCount: 0,
+        },
+        accessToken: 'test-token',
+        loading: false,
+        error: null,
+        sessionReady: Promise.resolve(),
+      },
     },
     stubs: {
       'ion-router-outlet': true,
@@ -642,6 +666,29 @@ describe('PlaceDetailPage.vue', () => {
     await bookmarkBtn!.trigger('click');
     // Unsaved place → picker opens, toggleSave not called directly.
     expect(pickerSpy).toHaveBeenCalledWith(fixture.place.id);
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('익명 viewer 가 bookmark 누르면 collection picker 대신 LoginPrompt 가 뜸', async () => {
+    const { useAuthStore } = await import('@/stores/auth');
+    const { useUiStore } = await import('@/stores/ui');
+    const { wrapper } = mountPlaceDetailPage();
+    await flushPromises();
+
+    // 익명으로 강제 — default fixture 의 auth user 를 비움.
+    useAuthStore().user = null;
+
+    const ui = useUiStore();
+    const pickerSpy = vi.spyOn(ui, 'openCollectionPicker');
+    const promptSpy = vi.spyOn(ui, 'showLoginPrompt');
+    const saved = useSavedStore();
+    const saveSpy = vi.spyOn(saved, 'toggleSave').mockResolvedValue();
+
+    const bookmarkBtn = wrapper.findAll('.act').find((b) => !b.classes('like'));
+    await bookmarkBtn!.trigger('click');
+
+    expect(promptSpy).toHaveBeenCalled();
+    expect(pickerSpy).not.toHaveBeenCalled();
     expect(saveSpy).not.toHaveBeenCalled();
   });
 

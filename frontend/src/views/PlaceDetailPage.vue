@@ -461,6 +461,7 @@ import { usePlaceDetailStore, type PlacePhoto } from '@/stores/placeDetail';
 import { useUploadStore } from '@/stores/upload';
 import { useMapStore } from '@/stores/map';
 import { useSavedStore } from '@/stores/saved';
+import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 import {
   useKakaoInfoStore,
@@ -479,6 +480,7 @@ const uploadStore = useUploadStore();
 const mapStore = useMapStore();
 const savedStore = useSavedStore();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
 const kakaoInfoStore = useKakaoInfoStore();
 const tourNearbyStore = useTourNearbyStore();
 const congestionStore = useCongestionStore();
@@ -856,6 +858,14 @@ async function onToggleLike(): Promise<void> {
 async function onToggleSave(): Promise<void> {
   if (!place.value) return;
   const pid = place.value.id;
+  // 익명 viewer → 컬렉션 피커 띄우기 전에 로그인 안내. picker 가 컬렉션
+  // 목록을 받아 보여줘봐야 그 다음 저장 mutation 이 401 로 깨질 흐름이라,
+  // 처음부터 LoginPromptModal 로 유도하는 게 사용자 의도에 부합. (좋아요 버튼
+  // 의 useAuthStore() 가드와 동일 패턴.)
+  if (!authStore.isAuthenticated) {
+    uiStore.showLoginPrompt('저장은 로그인 후 이용할 수 있어요.');
+    return;
+  }
   // Already saved → one-shot unsave (no picker). Fresh save → open the
   // collection picker so the user can file it (or skip into "기본").
   if (savedStore.isSaved(pid)) {
