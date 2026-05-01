@@ -44,7 +44,10 @@ public class PhotoDetailService {
 
     @Transactional(readOnly = true)
     public PhotoDetailResponse getPhoto(Long photoId) {
-        Long viewerId = currentUser.currentUserId();
+        // permitAll 엔드포인트라 viewerId 는 null 일 수 있다. 아래의 canView /
+        // liked / saved / authorFollowing 분기가 모두 viewerId == null 가드를 갖고 있어
+        // 비로그인 viewer 에게 PUBLIC 사진만 보이고 personalized flag 들은 false 로 떨어진다.
+        Long viewerId = currentUser.currentUserIdOrNull();
         PlacePhoto photo = placePhotoRepository.findById(photoId)
                 .orElseThrow(() -> BaseException.of(BaseResponseStatus.PHOTO_NOT_FOUND));
 

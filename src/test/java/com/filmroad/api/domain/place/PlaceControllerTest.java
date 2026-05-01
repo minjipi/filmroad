@@ -1,5 +1,7 @@
 package com.filmroad.api.domain.place;
 
+import com.filmroad.api.domain.auth.JwtTokenService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,9 +31,18 @@ class PlaceControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie userCookie(long userId) {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(userId));
+    }
+
     @Test
-    @DisplayName("GET /api/places/10 returns full place detail with photos and related list")
-    void getPlaceDetail_existingId_returnsFullPayload() throws Exception {
+    @DisplayName("GET /api/places/10 (anonymous) returns full place detail with liked=false")
+    void getPlaceDetail_existingId_anonymousViewerReturnsLikedFalse() throws Exception {
+        // Regression(#anonymous-like-leak): 익명 viewer 가 user=1 의 시드 place_like 를
+        // 그대로 받아 liked=true 로 보던 leak 차단. 인증 없이는 항상 false.
         mockMvc.perform(get("/api/places/10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -46,13 +57,21 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.results.place.scenes[0].imageUrl", notNullValue()))
                 .andExpect(jsonPath("$.results.place.scenes[0].orderIndex", is(0)))
                 .andExpect(jsonPath("$.results.place.reviewCount", greaterThan(0)))
-                // 좋아요(#46): place=10은 user=1 시드 place_like에 포함되어 liked=true.
-                .andExpect(jsonPath("$.results.place.liked", is(true)))
+                .andExpect(jsonPath("$.results.place.liked", is(false)))
                 .andExpect(jsonPath("$.results.photos", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.photos", hasSize(lessThanOrEqualTo(6))))
                 .andExpect(jsonPath("$.results.related", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.related[*].id", everyItem(not(is(10)))))
                 .andExpect(jsonPath("$.results.related[*].contentId", everyItem(is(1))));
+    }
+
+    @Test
+    @DisplayName("GET /api/places/10 (user=1 인증) liked=true — 시드 place_like 에 포함")
+    void getPlaceDetail_authenticatedUser1_seesOwnLike() throws Exception {
+        mockMvc.perform(get("/api/places/10").cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.place.liked", is(true)));
     }
 
     @Test

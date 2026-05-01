@@ -23,8 +23,10 @@ class ContentControllerTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("GET /api/contents/1 returns 도깨비 detail with progress and spots")
-    void getContent_existing_returnsDetail() throws Exception {
+    @DisplayName("GET /api/contents/1 (anonymous) returns 도깨비 detail with progress=0/N, spots all visited=false")
+    void getContent_existing_anonymousViewerHasZeroProgress() throws Exception {
+        // Regression(#anonymous-like-leak): 익명 viewer 가 user=1 의 stamp 진행률을
+        // 그대로 보던 leak 차단. 비로그인은 collectedCount=0, 모든 spot 이 visited=false.
         mockMvc.perform(get("/api/contents/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -34,7 +36,10 @@ class ContentControllerTest {
                 .andExpect(jsonPath("$.results.content.yearStart", is(2016)))
                 .andExpect(jsonPath("$.results.content.network", is("tvN")))
                 .andExpect(jsonPath("$.results.progress.totalCount", greaterThanOrEqualTo(2)))
-                .andExpect(jsonPath("$.results.spots", not(empty())));
+                .andExpect(jsonPath("$.results.progress.collectedCount", is(0)))
+                .andExpect(jsonPath("$.results.progress.percent", is(0)))
+                .andExpect(jsonPath("$.results.spots", not(empty())))
+                .andExpect(jsonPath("$.results.spots[*].visited", everyItem(is(false))));
     }
 
     @Test

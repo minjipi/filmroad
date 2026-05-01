@@ -298,9 +298,20 @@ class PhotoControllerTest {
                 .andExpect(jsonPath("$.results.author.following", is(false)));
     }
 
-    // 비로그인 anonymous 케이스는 따로 검증 안 함 — CurrentUser.currentUserId() 가
-    // 데모 폴백(user=1)을 반환해서 실제 anonymous 시나리오와 동일하지 않음. 폴백
-    // 제거 작업이 들어오기 전엔 author.following 도 user=1 의 관계로 채워진다.
+    @Test
+    @DisplayName("GET /api/photos/{id} — anonymous viewer: liked/saved/following 모두 false (데모 user=1 leak 차단)")
+    void getPhoto_anonymous_viewerSpecificFlagsAllFalse() throws Exception {
+        // Regression(#anonymous-like-leak): 익명 viewer 가 user=1 의 photo_like / saved_place /
+        // follow 관계를 그대로 받아 모두 true 로 나오던 leak. 이제는 인증 없이는 항상 false.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/photos/100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.results.id", is(100)))
+                .andExpect(jsonPath("$.results.liked", is(false)))
+                .andExpect(jsonPath("$.results.saved", is(false)))
+                .andExpect(jsonPath("$.results.author.isMe", is(false)))
+                .andExpect(jsonPath("$.results.author.following", is(false)));
+    }
 
     @Test
     @DisplayName("GET /api/photos/{id} — 내 PRIVATE 사진은 owner 본인에게 200")

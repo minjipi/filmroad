@@ -76,9 +76,12 @@ public class HomeService {
         }
 
         List<Long> placeIds = places.stream().map(Place::getId).toList();
-        Set<Long> likedPlaceIds = placeIds.isEmpty()
+        // 비로그인 viewer 는 좋아요 상태가 없음 — 빈 셋으로 통일해 PlaceCard 의 하트가
+        // 항상 꺼진 상태로 렌더되도록 한다 (이전엔 데모 user_id=1 의 좋아요가 새어 나왔음).
+        Long viewerId = currentUser.currentUserIdOrNull();
+        Set<Long> likedPlaceIds = (viewerId == null || placeIds.isEmpty())
                 ? Set.of()
-                : new HashSet<>(placeLikeRepository.findPlaceIdsLikedByUser(currentUser.currentUserId(), placeIds));
+                : new HashSet<>(placeLikeRepository.findPlaceIdsLikedByUser(viewerId, placeIds));
 
         List<PlaceSummaryDto> placeDtos = places.stream()
                 .map(p -> PlaceSummaryDto.from(p, likedPlaceIds.contains(p.getId())))

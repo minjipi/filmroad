@@ -1,5 +1,7 @@
 package com.filmroad.api.domain.home;
 
+import com.filmroad.api.domain.auth.JwtTokenService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,9 +31,18 @@ class HomeControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
+    private Cookie userCookie(long userId) {
+        return new Cookie("ATOKEN", jwtTokenService.issueAccess(userId));
+    }
+
     @Test
-    @DisplayName("GET /api/home (no params) returns seeded contents + places with hero")
-    void getHome_noParams_returnsSeedData() throws Exception {
+    @DisplayName("GET /api/home (anonymous) returns seeded contents + places with hero, liked=false everywhere")
+    void getHome_noParams_anonymousViewerSeesNoLeakedLikes() throws Exception {
+        // Regression(#anonymous-like-leak): 익명 viewer 가 user=1 의 place_like 시드 (place=10)
+        // 의 liked=true 를 보던 leak 이 있었음. 이제는 모든 카드의 liked 가 false 로 와야 한다.
         mockMvc.perform(get("/api/home"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -40,7 +51,16 @@ class HomeControllerTest {
                 .andExpect(jsonPath("$.results.places", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.results.places", hasSize(lessThanOrEqualTo(20))))
                 .andExpect(jsonPath("$.results.hero.contentId", notNullValue()))
-                // 좋아요(#46): place=10은 user=1 시드 place_like에 포함되어 liked=true.
+                .andExpect(jsonPath("$.results.places[?(@.id == 10)].liked", contains(false)))
+                .andExpect(jsonPath("$.results.places[*].liked", everyItem(is(false))));
+    }
+
+    @Test
+    @DisplayName("GET /api/home (user=1 인증) place=10 은 liked=true — 시드 place_like 에 포함")
+    void getHome_authenticatedUser1_seesOwnLike() throws Exception {
+        mockMvc.perform(get("/api/home").cookie(userCookie(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.results.places[?(@.id == 10)].liked", contains(true)));
     }
 
