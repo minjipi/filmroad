@@ -109,6 +109,20 @@ export const usePlaceDetailStore = defineStore('placeDetail', {
         this.loading = false;
       }
     },
+    /**
+     * /place/:id 사이를 이동할 때 직전 place 의 데이터(hero scenes, photos,
+     * related places, liked 상태) 가 fetch 가 끝나기 전까지 화면에 잔류하지
+     * 않도록 PlaceDetailPage 의 watch / onUnmounted 가 fetch 직전에 호출.
+     * 다른 detail store 들 (content/userProfile/collection/gallery) 와 동일
+     * 패턴.
+     */
+    reset(): void {
+      this.place = null;
+      this.photos = [];
+      this.related = [];
+      this.loading = false;
+      this.error = null;
+    },
     async toggleLike(): Promise<void> {
       const p = this.place;
       if (!p) return;
