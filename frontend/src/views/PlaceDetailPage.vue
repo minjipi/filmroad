@@ -337,6 +337,48 @@
             <div class="kakao-foot">카카오맵 정보 제공 · 실시간 동기화</div>
           </section>
 
+          <!-- 혼잡도 예측 — 백엔드 /api/places/:id/congestion 응답 (한국관광공사
+               TatsCnctrRateService) 가 available=true 일 때만 노출. 카카오 섹션
+               과는 별도 출처라 카카오 섹션 안에 끼워 넣지 않고 형제 섹션으로
+               분리. -->
+          <section
+            v-if="congestion?.available && congestion.forecasts.length > 0"
+            class="crowd-section"
+            data-testid="pd-crowd-section"
+          >
+            <div class="crowd-head">
+              <span class="crowd-title">
+                <ion-icon :icon="peopleOutline" class="ic-16" />혼잡도 예측
+              </span>
+              <span class="crowd-source">{{ congestion.source ?? '한국관광공사' }}</span>
+            </div>
+            <div class="crowd-chips">
+              <div
+                v-for="f in congestion.forecasts"
+                :key="f.key"
+                :class="['crowd-chip', `crowd-tx-${f.state.toLowerCase()}`]"
+                :data-testid="`pd-crowd-${f.key.toLowerCase()}`"
+              >
+                <div class="lbl">
+                  {{ f.label }}
+                  <span class="sub">· {{ f.dateLabel }}</span>
+                </div>
+                <div class="row">
+                  <span class="pct">
+                    {{ f.percent }}<span class="pct-unit">%</span>
+                  </span>
+                  <span class="state">{{ stateLabel(f.state) }}</span>
+                </div>
+                <div class="meter">
+                  <i
+                    :class="`crowd-bg-${f.state.toLowerCase()}`"
+                    :style="{ width: `${f.percent}%` }"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
           <div class="tail" />
         </div>
       </div>
@@ -389,6 +431,7 @@ import {
   globeOutline,
   openOutline,
   restaurantOutline,
+  peopleOutline,
 } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
@@ -403,6 +446,7 @@ import {
 } from '@/stores/kakaoInfo';
 // task #29: 카카오 nearby → 한국관광공사 TourAPI 기반 신규 store 로 교체.
 import { useTourNearbyStore, type TourNearbyRestaurant } from '@/stores/tourNearby';
+import { useCongestionStore, type CongestionState } from '@/stores/congestion';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 
@@ -416,6 +460,7 @@ const savedStore = useSavedStore();
 const uiStore = useUiStore();
 const kakaoInfoStore = useKakaoInfoStore();
 const tourNearbyStore = useTourNearbyStore();
+const congestionStore = useCongestionStore();
 const { place, photos, related, loading, error } = storeToRefs(detailStore);
 const { showError, showInfo } = useToast();
 
@@ -435,6 +480,13 @@ const kakaoInfo = computed(() => kakaoInfoStore.infoFor(placeId.value));
 const tourNearbyItems = computed<TourNearbyRestaurant[]>(() =>
   tourNearbyStore.itemsFor(placeId.value),
 );
+// 한국관광공사 혼잡도 예측 — null 또는 available=false 면 v-if 로 섹션 hide.
+const congestion = computed(() => congestionStore.infoFor(placeId.value));
+function stateLabel(s: CongestionState): string {
+  if (s === 'PACK') return '매우혼잡';
+  if (s === 'BUSY') return '혼잡';
+  return '보통';
+}
 const syncLabel = computed(() => {
   const at = kakaoInfo.value?.lastSyncedAt;
   if (!at) return '';
@@ -866,11 +918,12 @@ async function onOpenRelated(id: number): Promise<void> {
 }
 
 async function load(id: number): Promise<void> {
-  // 카카오 정보 + task #29: 한국관광공사 nearby — 둘 다 메인 place fetch 와
-  // 병렬. 보조 정보라 실패/지연이 place 본문 렌더를 막지 않게 한다. 각
-  // fetch 안에서 자체 try/catch 로 swallow.
+  // 카카오 정보 + task #29: 한국관광공사 nearby + 혼잡도 예측 — 모두 메인
+  // place fetch 와 병렬. 보조 정보라 실패/지연이 place 본문 렌더를 막지
+  // 않게 한다. 각 fetch 안에서 자체 try/catch 로 swallow.
   void kakaoInfoStore.fetch(id);
   void tourNearbyStore.fetch(id);
+  void congestionStore.fetch(id);
   await detailStore.fetch(id);
   if (error.value) {
     await showError(error.value);
@@ -1532,5 +1585,127 @@ ion-content.pd-content {
   font-size: 11px;
   color: var(--fr-ink-4);
   text-align: center;
+}
+
+/* ---------- 혼잡도 예측 (한국관광공사 TatsCnctrRateService) ---------- */
+.crowd-section {
+  padding: 22px 20px;
+  border-top: 1px solid var(--fr-line);
+}
+.crowd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.crowd-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fr-ink);
+}
+.crowd-title .ic-16 {
+  color: var(--fr-ink-3);
+}
+.crowd-source {
+  font-size: 10.5px;
+  color: var(--fr-ink-4);
+}
+.crowd-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.crowd-chip {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.crowd-chip .lbl {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fr-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crowd-chip .lbl .sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fr-ink-4);
+  opacity: 0.85;
+}
+.crowd-chip .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+.crowd-chip .pct {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.crowd-chip .pct-unit {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 1px;
+  opacity: 0.7;
+}
+.crowd-chip .state {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.crowd-chip .meter {
+  margin-top: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fr-bg-muted);
+  overflow: hidden;
+}
+.crowd-chip .meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* 상태별 텍스트(state, pct) 색상 */
+.crowd-tx-ok .pct,
+.crowd-tx-ok .state {
+  color: #16a34a;
+}
+.crowd-tx-busy .pct,
+.crowd-tx-busy .state {
+  color: #f59e0b;
+}
+.crowd-tx-pack .pct,
+.crowd-tx-pack .state {
+  color: #ef4444;
+}
+
+/* 상태별 meter 바 색상 */
+.crowd-bg-ok {
+  background: linear-gradient(90deg, #4ade80, #16a34a);
+}
+.crowd-bg-busy {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.crowd-bg-pack {
+  background: linear-gradient(90deg, #f87171, #ef4444);
 }
 </style>
