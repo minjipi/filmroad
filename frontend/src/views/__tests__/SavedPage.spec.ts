@@ -222,14 +222,30 @@ describe('SavedPage.vue', () => {
     expect(qsBody('[data-testid="new-coll-backdrop"]')).toBeNull();
   });
 
-  it('AI 루트 배너는 항상 렌더되고 디자인의 mock 문구를 표시한다', async () => {
-    const { wrapper } = mountSaved();
+  it('AI 루트 배너는 store.suggestion 이 있을 때만 렌더되고 그 문구를 그대로 사용한다', async () => {
+    const { wrapper } = mountSaved({
+      suggestion: {
+        title: '근처 성지 3곳, 하루에 돌 수 있어요',
+        subtitle: 'AI가 자동으로 루트를 짜드려요',
+        placeCount: 3,
+      },
+    });
     await flushPromises();
 
     const banner = wrapper.find('[data-testid="ai-route-banner"]');
     expect(banner.exists()).toBe(true);
-    expect(banner.text()).toContain('근처 성지 4곳');
+    expect(banner.text()).toContain('근처 성지 3곳');
     expect(banner.text()).toContain('AI가 자동으로 루트를 짜드려요');
+  });
+
+  it('store.suggestion 이 null 이면 AI 루트 배너를 숨긴다', async () => {
+    // Default state 의 suggestion 은 null — 백엔드가 lat/lng 를 못 받았거나
+    // 반경 내 saved place 가 2곳 미만이면 null 로 내려옴. 그땐 배너 자체가
+    // 보이지 않아야 한다 (이전엔 항상 "근처 성지 4곳" 가짜 문구가 떴음).
+    const { wrapper } = mountSaved();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="ai-route-banner"]').exists()).toBe(false);
   });
 
   it('saved-list renders one row per item with visited-specific action class', async () => {
