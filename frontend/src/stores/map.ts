@@ -18,6 +18,13 @@ export interface MapMarker {
    * 기본 `●` 으로 폴백. 일반 `/map` 마커는 미지정 → 기존 점 그대로.
    */
   orderIndex?: number;
+  /**
+   * 마커별 한국관광공사 오늘 혼잡도 state. 지정되면 KakaoMap 의 buildPinContent
+   * 가 .pin.crowd-{ok|busy|pack} 클래스를 부여해 bubble 색을 덮어쓴다.
+   * /route 처럼 각 marker 가 자체 혼잡도를 갖는 surface 가 사용. /map 은 선택된
+   * 마커만 selectedCrowdState prop 으로 색을 입히는 다른 흐름이라 미지정 가능.
+   */
+  crowdState?: 'OK' | 'BUSY' | 'PACK' | null;
 }
 
 export interface PlaceDetail {

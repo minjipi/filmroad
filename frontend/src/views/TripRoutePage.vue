@@ -10,6 +10,7 @@
           :user-location="userLocation"
           :route-path="routePath"
           :route-sections="routeSections"
+          :congestion-by-place="congestionByPlace"
           @marker-click="onMarkerClick"
         />
 
