@@ -1073,6 +1073,12 @@ ion-content.pd-content {
   width: 100%;
   height: 440px;
   background: #000;
+  /* iOS Safari 가 자식 .hero-track 의 will-change/transform 때문에 .hero 의
+     자손들 stacking 을 형제 sheet 와 섞어 그리는 현상이 있어 — .hero-grad
+     가 z-index auto 라 sheet 의 .info-row 까지 덮어 가리는 사고. .hero 에
+     명시 z-index 를 주어 자체 stacking context 를 만들고 (1) 내부 자식들이
+     절대 sheet (z-index: 3) 위로 새지 않도록 봉인. */
+  z-index: 1;
 }
 /* 가로 슬라이드 carousel — 외곽은 시야창(overflow:hidden) 역할.
    touch-action: pan-y 로 두면 세로 스크롤은 페이지(.pd-scroll)에 양보하고
@@ -1086,6 +1092,10 @@ ion-content.pd-content {
   -webkit-user-select: none;
   user-select: none;
   cursor: grab;
+  /* hero 안 stacking 명시화 — z-index 를 모든 형제에 명시해야 iOS Safari 의
+     transform-base 그리기 순서가 고정된다. carousel(이미지) 1 < grad 2 <
+     caption 4 < top 5 < dots/nav 6. */
+  z-index: 1;
 }
 .hero-carousel:active {
   cursor: grabbing;
@@ -1175,6 +1185,13 @@ ion-content.pd-content {
 
 .hero-grad {
   position: absolute; inset: 0;
+  /* iOS Safari 에서 z-index auto (= 0) 와 명시 z-index 가 섞이면 hero-grad 가
+     hero-caption (z=4) 위로 떠 카피를 가리는 사고가 있었음. carousel(1) 위에
+     깔리고 caption(4)/top(5)/dots(6) 보다는 아래에 오도록 명시. */
+  z-index: 2;
+  /* iOS Safari 가 그라데이션 overlay 를 클릭/탭 잡아챌 가능성 차단 — 어차피
+     순수 시각 요소라 pointer-events 도 비활성. */
+  pointer-events: none;
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.4) 0%,
