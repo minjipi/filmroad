@@ -88,8 +88,10 @@ kakao:
 
 app:
   domain:
-    server: "http://localhost:5173"
-    cookie: "localhost"
+    # 운영에서는 APP_DOMAIN_SERVER=https://www.filmroad.kro.kr 처럼 실 도메인 주입.
+    # OAuth2SuccessHandler 의 web 성공 redirect 베이스 URL.
+    server: ${APP_DOMAIN_SERVER:http://localhost:5173}
+    cookie: ${APP_DOMAIN_COOKIE:localhost}
   aes:
     key: ${AES_SECRET_KEY:devAesSecretKey1234567890123456}
   token:

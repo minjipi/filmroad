@@ -4,7 +4,9 @@ import com.filmroad.api.common.model.BaseResponse;
 import com.filmroad.api.common.model.BaseResponseStatus;
 import com.filmroad.api.domain.auth.CustomOAuth2UserService;
 import com.filmroad.api.domain.auth.JwtAuthenticationFilter;
+import com.filmroad.api.domain.auth.MobileAwareOAuth2AuthorizationRequestResolver;
 import com.filmroad.api.domain.auth.OAuth2SuccessHandler;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -35,6 +37,7 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oauth2SuccessHandler;
     private final ObjectMapper objectMapper;
+    private final ClientRegistrationRepository clientRegistrationRepository;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -95,6 +98,10 @@ public class SecurityConfig {
                         })
                 )
                 .oauth2Login(oauth -> oauth
+                        .authorizationEndpoint(ae -> ae.authorizationRequestResolver(
+                                new MobileAwareOAuth2AuthorizationRequestResolver(
+                                        clientRegistrationRepository,
+                                        "/oauth2/authorization")))
                         .userInfoEndpoint(ui -> ui.userService(customOAuth2UserService))
                         .successHandler(oauth2SuccessHandler)
                 )
@@ -118,7 +125,15 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://172.30.1.10:5173", "https://www.filmroad.kro.kr", "http://localhost:5174", "http://localhost"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://172.30.1.10:5173",
+                "https://www.filmroad.kro.kr",
+                "http://localhost:5174",
+                "http://localhost",
+                "https://localhost",       // Capacitor Android (androidScheme=https default)
+                "capacitor://localhost"    // Capacitor iOS
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

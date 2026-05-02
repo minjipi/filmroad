@@ -38,15 +38,21 @@ import './theme/utilities.css';
 import './assets/styles/filmroad.css';
 
 import { installImageFallback } from './utils/imageFallback';
+import { registerOAuthDeepLinkHandler } from './services/oauthDeepLink';
 
 // Swap any <img> that fails to load with a neutral demo placeholder.
 installImageFallback();
 
+const pinia = createPinia();
+
 const app = createApp(App)
   .use(IonicVue)
-  .use(createPinia())
+  .use(pinia)
   .use(router);
 
 router.isReady().then(() => {
   app.mount('#app');
+  // Pinia must be active before the listener can resolve the auth store.
+  // Fire-and-forget — registration is a no-op on web.
+  void registerOAuthDeepLinkHandler(router);
 });

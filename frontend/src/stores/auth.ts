@@ -157,6 +157,29 @@ export const useAuthStore = defineStore('auth', {
       this.accessToken = token;
       writeStoredToken(token);
     },
+    // Apply tokens delivered via OAuth deep link on native (Capacitor) flow.
+    // Custom Tabs and the in-app webview have separate cookie stores, so the
+    // backend can't write HttpOnly cookies that the webview will see. Instead
+    // the success handler appends tokens to a `filmroad://oauth/callback`
+    // deep link; here we mirror them into both localStorage (so the axios
+    // Bearer interceptor picks them up) and document.cookie (so the existing
+    // cookie-based /api/auth/refresh endpoint keeps working).
+    applyOAuthDeepLinkTokens(accessToken: string, refreshToken: string): void {
+      resetUserScopedStores();
+      this.setToken(accessToken);
+      if (typeof document !== 'undefined') {
+        // SameSite=Lax matches the dev/prod cookie format so the refresh call
+        // (same-origin GET/POST) carries them. HttpOnly cannot be set from JS;
+        // that's the documented trade-off of the deep-link flow.
+        const oneWeek = 7 * 24 * 3600;
+        const halfHour = 30 * 60;
+        document.cookie = `ATOKEN=${accessToken}; Path=/; SameSite=Lax; Secure; Max-Age=${halfHour}`;
+        document.cookie = `RTOKEN=${refreshToken}; Path=/; SameSite=Lax; Secure; Max-Age=${oneWeek}`;
+      }
+      // Reset the memoized session probe so /api/users/me runs again with the
+      // new credentials. fetchMe will be triggered by the next ensureSessionReady.
+      this.sessionReady = null;
+    },
     // Lazily kicks off — and caches — the first /api/users/me call so the
     // router guard and App.vue's onMounted share a single in-flight promise.
     // Subsequent callers receive the same resolved promise immediately.

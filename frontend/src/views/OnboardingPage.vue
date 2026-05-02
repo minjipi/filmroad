@@ -94,14 +94,37 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 
+function apiBase(): string {
+  const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
+  // Strip trailing slash so `${apiBase()}/oauth2/...` doesn't produce `//`,
+  // which window.location.href / Browser.open() leave un-normalized and
+  // Spring Security treats as a different (404) path.
+  return raw.replace(/\/+$/, '');
+}
+
+// On native (Capacitor) the OAuth flow runs in Custom Tabs and returns to the
+// app via the `filmroad://oauth/callback` deep link — see services/oauthDeepLink.ts.
+async function startOAuth(provider: 'google' | 'kakao'): Promise<void> {
+  const webUrl = `${apiBase()}/oauth2/authorization/${provider}`;
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url: `${webUrl}?app=mobile` });
+      return;
+    }
+  } catch {
+    // Capacitor not bundled (web-only build) — fall through to the redirect.
+  }
+  window.location.href = webUrl;
+}
+
 function onGoogle(): void {
-  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
-  window.location.href = `${base}/oauth2/authorization/google`;
+  void startOAuth('google');
 }
 
 function onKakao(): void {
-  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
-  window.location.href = `${base}/oauth2/authorization/kakao`;
+  void startOAuth('kakao');
 }
 
 async function onEmail(): Promise<void> {

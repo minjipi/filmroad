@@ -555,15 +555,40 @@ function onForgotPassword(): void {
 }
 
 function apiBase(): string {
-  return (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
+  const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8080';
+  // Trailing slashes here would produce `//oauth2/...` when concatenated with
+  // a leading-slash path, which window.location.href and Browser.open()
+  // (unlike axios) don't normalize — Spring Security then 404s the OAuth
+  // start endpoint.
+  return raw.replace(/\/+$/, '');
+}
+
+// Native Capacitor shells (Android/iOS) can't use a same-origin redirect for
+// OAuth — Custom Tabs/SFSafariViewController have separate cookie stores from
+// the in-app webview. We open the OAuth start URL in the system browser with
+// an `app=mobile` flag; the backend success handler then redirects to the
+// `filmroad://oauth/callback` deep link instead of the web success page.
+async function startOAuth(provider: 'google' | 'kakao'): Promise<void> {
+  const webUrl = `${apiBase()}/oauth2/authorization/${provider}`;
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url: `${webUrl}?app=mobile` });
+      return;
+    }
+  } catch {
+    // Capacitor not bundled (web-only build) — fall through to the redirect.
+  }
+  window.location.href = webUrl;
 }
 
 function onGoogle(): void {
-  window.location.href = `${apiBase()}/oauth2/authorization/google`;
+  void startOAuth('google');
 }
 
 function onKakao(): void {
-  window.location.href = `${apiBase()}/oauth2/authorization/kakao`;
+  void startOAuth('kakao');
 }
 
 function onApple(): void {

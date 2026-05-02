@@ -195,13 +195,33 @@ export function __resetRefreshState(): void {
   refreshInFlight = null;
 }
 
+// Backend serves uploaded media at relative `/uploads/...`. On the web that's
+// same-origin; in the Capacitor shell the webview origin is `https://localhost`
+// so an `<img src="/uploads/...">` would 404 against the local webview. Walk
+// each response and rewrite leading-`/uploads/` strings to absolute URLs.
+const UPLOADS_PREFIX = '/uploads/';
+const ABS_BASE = baseURL.replace(/\/+$/, '');
+function rewriteUploadsUrls(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.startsWith(UPLOADS_PREFIX) ? ABS_BASE + value : value;
+  }
+  if (Array.isArray(value)) return value.map(rewriteUploadsUrls);
+  if (value && typeof value === 'object') {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k in src) out[k] = rewriteUploadsUrls(src[k]);
+    return out;
+  }
+  return value;
+}
+
 // Unwrap { success, code, message, results } envelope; surface message on failure.
 api.interceptors.response.use(
   (response: AxiosResponse<ApiEnvelope<unknown>>) => {
     const body = response.data;
     if (body && typeof body === 'object' && 'success' in body) {
       if (body.success) {
-        return { ...response, data: body.results } as AxiosResponse<unknown>;
+        return { ...response, data: rewriteUploadsUrls(body.results) } as AxiosResponse<unknown>;
       }
       return Promise.reject(
         new ApiError(body.message || 'Request failed', response.status, body.code ?? null),
