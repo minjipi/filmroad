@@ -1061,6 +1061,11 @@ watch(
 <style scoped>
 ion-content.pd-content {
   --background: #ffffff;
+  /* iOS 다크모드 / system 테마에서 ion-content 의 --color 가 #ffffff 로
+     떨어져 .sheet 안의 h2 / .stat-chip 텍스트가 흰 배경에 흰 글자로 사라지는
+     사고. 명시적 ink 톤으로 봉인. .hero-caption 은 자체 color: #ffffff 를
+     박아두고 있어 이 토큰 변경에 영향 없음. */
+  --color: var(--fr-ink);
 }
 
 .pd-scroll {
@@ -1323,6 +1328,9 @@ ion-content.pd-content {
   font-size: 17px; font-weight: 800;
   margin: 0 0 10px;
   letter-spacing: -0.02em;
+  /* iOS Safari 가 부모 색상을 다르게 상속할 수 있어 명시 — 다크모드 / 테마
+     전환 어떤 케이스에서도 본문 ink 톤 보장. */
+  color: var(--fr-ink);
 }
 .section-head {
   display: flex;
@@ -1355,7 +1363,12 @@ ion-content.pd-content {
   padding: 12px;
   text-align: center;
 }
-.stat-chip .n { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+.stat-chip .n {
+  font-weight: 800; font-size: 17px; letter-spacing: -0.02em;
+  /* iOS 다크모드 회귀 방지 — 인증샷/주변맛집 카운트 숫자가 흰 chip 배경에
+     흰색으로 사라지지 않도록 명시 ink 톤. */
+  color: var(--fr-ink);
+}
 .stat-chip .l { font-size: 10.5px; color: var(--fr-ink-3); margin-top: 2px; }
 
 .cta-row { display: flex; gap: 10px; margin-top: 16px; }
