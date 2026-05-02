@@ -1199,6 +1199,9 @@ ion-content.pd-content {
   /* iOS Safari 가 그라데이션 overlay 를 클릭/탭 잡아챌 가능성 차단 — 어차피
      순수 시각 요소라 pointer-events 도 비활성. */
   pointer-events: none;
+  /* hero-caption 과 같은 GPU 레이어 path 로 promote — .hero-track 의
+     transform animation 이 활성일 때 z-index 가 흔들리지 않게. */
+  transform: translate3d(0, 0, 0);
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.4) 0%,
@@ -1215,6 +1218,8 @@ ion-content.pd-content {
   padding: 10px 16px;
   display: flex; justify-content: space-between; align-items: center;
   z-index: 5;
+  /* hero-caption / hero-grad 와 동일 — GPU 레이어 promote 로 z-index 보존. */
+  transform: translate3d(0, 0, 0);
 }
 .round-btn {
   width: 40px; height: 40px;
@@ -1232,6 +1237,13 @@ ion-content.pd-content {
   left: 20px; right: 20px; bottom: 44px;
   color: #ffffff;
   z-index: 4;
+  /* iOS Safari: .hero-track 가 transform 으로 슬라이드할 때 GPU composite
+     layer 로 promotion 되며, 같은 hero 안의 .hero-grad / .hero-caption 이
+     main-thread 에 남아있으면 z-index 가 무시되고 GPU 레이어가 그 위로 그려짐.
+     .hero-caption / .hero-grad / .hero-top 모두 no-op translate3d 로 GPU
+     레이어 promote 시켜 같은 compositing path 에서 z-index 가 정상 동작하도록.
+     성능 부담 없는 GPU hint — 캐러셀과 동일 패턴. */
+  transform: translate3d(0, 0, 0);
 }
 .hero-chips { display: flex; gap: 6px; }
 .content-chip { cursor: pointer; }
