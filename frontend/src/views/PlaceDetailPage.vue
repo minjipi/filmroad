@@ -1073,12 +1073,19 @@ ion-content.pd-content {
   width: 100%;
   height: 440px;
   background: #000;
-  /* iOS Safari 가 자식 .hero-track 의 will-change/transform 때문에 .hero 의
-     자손들 stacking 을 형제 sheet 와 섞어 그리는 현상이 있어 — .hero-grad
-     가 z-index auto 라 sheet 의 .info-row 까지 덮어 가리는 사고. .hero 에
-     명시 z-index 를 주어 자체 stacking context 를 만들고 (1) 내부 자식들이
-     절대 sheet (z-index: 3) 위로 새지 않도록 봉인. */
+  /* iOS Safari 의 stacking 사고 차단을 3중으로:
+     1) z-index: 1 — 자체 stacking context 형성 (sheet z=3 보다 항상 아래)
+     2) isolation: isolate — modern CSS. 자손이 어떤 transform/will-change/
+        opacity 를 가져도 stacking context 가 깨지지 않도록 hard-fix. 캐러셀
+        slide 가 transition 중일 때 .hero-track 이 composite layer 로 분리
+        되며 .hero-grad 가 .hero-caption / sheet 의 .info-row 위로 새던 회귀
+        를 isolation 으로 봉인.
+     3) overflow: hidden — 합성 layer 가 hero 바운드를 넘어 그려지는 iOS
+        Safari 의 또 다른 버그 케이스를 방어. hero 안의 어떤 요소도 디자인상
+        밖으로 나갈 일이 없어 hidden 으로 잘라도 영향 없음. */
   z-index: 1;
+  isolation: isolate;
+  overflow: hidden;
 }
 /* 가로 슬라이드 carousel — 외곽은 시야창(overflow:hidden) 역할.
    touch-action: pan-y 로 두면 세로 스크롤은 페이지(.pd-scroll)에 양보하고
@@ -1245,6 +1252,10 @@ ion-content.pd-content {
   margin-top: -28px;
   position: relative;
   z-index: 3;
+  /* hero 의 캐러셀 transform 이 만드는 composite layer 가 .sheet 위로 새지
+     않게 sheet 도 자체 isolation. hero(1) < sheet(3) z-index 보장 + 양쪽이
+     모두 isolated layer 라 cross-compositing 사고가 차단된다. */
+  isolation: isolate;
   padding: 18px 20px 0;
 }
 
